@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposed_scope">
+        <item>tv.danmaku.bili</item>
+        <item>com.tencent.wework</item>
+        <item>com.miui.securitycenter</item>
+        <item>com.tencent.mobileqq</item>
+        <item>com.twitter.android</item>
+    </string-array>
+</resources>
