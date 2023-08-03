@@ -6,5 +6,6 @@
         <item>com.miui.securitycenter</item>
         <item>com.tencent.mobileqq</item>
         <item>com.twitter.android</item>
+        <item>com.fooview.android.fooview</item>
     </string-array>
 </resources>
