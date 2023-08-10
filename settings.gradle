@@ -8,3 +8,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "MyInjector"
 include ':app'
+include ':hidden-api'

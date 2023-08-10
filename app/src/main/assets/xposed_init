@@ -5,3 +5,4 @@ five.ec1cff.myinjector.QQXposedHandler
 five.ec1cff.myinjector.TwitterXposedHandler
 # five.ec1cff.myinjector.StartActivityXposedHandler
 five.ec1cff.myinjector.FvXposedHandler
+five.ec1cff.myinjector.SystemUIHandler

@@ -7,5 +7,6 @@
         <item>com.tencent.mobileqq</item>
         <item>com.twitter.android</item>
         <item>com.fooview.android.fooview</item>
+        <item>com.android.systemui</item>
     </string-array>
 </resources>
