@@ -36,6 +36,9 @@ android {
 }
 
 dependencies {
+    implementation(libs.appcompat)
+    implementation(libs.material)
+    implementation(libs.constraintlayout)
     compileOnly(libs.xposed.api)
     implementation(libs.ezxhelper)
     compileOnly(project(":hidden-api"))
