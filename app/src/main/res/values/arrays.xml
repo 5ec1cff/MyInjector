@@ -8,5 +8,6 @@
         <item>com.twitter.android</item>
         <item>com.fooview.android.fooview</item>
         <item>com.android.systemui</item>
+        <item>org.telegram.messenger</item>
     </string-array>
 </resources>
