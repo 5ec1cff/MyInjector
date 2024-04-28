@@ -9,5 +9,6 @@
         <item>com.fooview.android.fooview</item>
         <item>com.android.systemui</item>
         <item>org.telegram.messenger</item>
+        <item>com.termux</item>
     </string-array>
 </resources>

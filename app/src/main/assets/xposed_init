@@ -7,3 +7,4 @@ five.ec1cff.myinjector.FvXposedHandler
 five.ec1cff.myinjector.SystemUIHandler
 # five.ec1cff.myinjector.DemoHandler
 five.ec1cff.myinjector.TelegramHandler
+five.ec1cff.myinjector.TermuxHandler
