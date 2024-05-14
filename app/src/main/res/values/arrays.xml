@@ -10,5 +10,6 @@
         <item>com.android.systemui</item>
         <item>org.telegram.messenger</item>
         <item>com.termux</item>
+        <item>com.lbe.security.miui</item>
     </string-array>
 </resources>
