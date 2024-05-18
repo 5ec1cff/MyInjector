@@ -38,9 +38,24 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
         moduleRes = XModuleResources.createInstance(modulePath, null)
         hookOpenLinkDialog(lpparam)
         hookMutualContact(lpparam)
+        hookContactPermission(lpparam)
     }
 
-    private fun hookMutualContact(lpparam: LoadPackageParam) {
+    private fun hookContactPermission(lpparam: LoadPackageParam) = kotlin.runCatching {
+        XposedBridge.hookAllMethods(
+            XposedHelpers.findClass("org.telegram.ui.ContactsActivity", lpparam.classLoader),
+            "onResume",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    XposedHelpers.setObjectField(param.thisObject, "checkPermission", false)
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "hookContactPermission", it)
+    }
+
+    private fun hookMutualContact(lpparam: LoadPackageParam) = kotlin.runCatching {
         val drawable = moduleRes.getDrawable(R.drawable.ic_mutual_contact)
         val tlUser =
             XposedHelpers.findClass("org.telegram.tgnet.TLRPC\$TL_user", lpparam.classLoader)
@@ -49,10 +64,10 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "update",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    Log.d(TAG, "afterHookedMethod: update")
+                    // Log.d(TAG, "afterHookedMethod: update")
                     val d = XposedHelpers.getObjectField(param.thisObject, "currentDrawable") as Int
                     if (d != 0) {
-                        Log.d(TAG, "afterHookedMethod: currentdrawable not 0: $d")
+                        // Log.d(TAG, "afterHookedMethod: currentdrawable not 0: $d")
                         return
                     }
                     val current = XposedHelpers.getObjectField(param.thisObject, "currentObject")
@@ -75,13 +90,13 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
                                 ).toInt()
                             leftMargin
                         }
-                        Log.d(TAG, "afterHookedMethod: set mutual contact $current")
+                        // Log.d(TAG, "afterHookedMethod: set mutual contact $current")
                     }
                 }
             }
         )
         Log.d(TAG, "hookMutualContact: done")
-    }
+    }.onFailure { Log.e(TAG, "hookMutualContact", it) }
 
     data class FixLink(
         val pos: Int,
@@ -89,7 +104,7 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
         var openRunnable: Runnable?
     )
 
-    private fun hookOpenLinkDialog(lpparam: LoadPackageParam) {
+    private fun hookOpenLinkDialog(lpparam: LoadPackageParam) = kotlin.runCatching {
         Log.d(TAG, "hookOpenLinkDialog")
         val classBaseFragment =
             XposedHelpers.findClass("org.telegram.ui.ActionBar.BaseFragment", lpparam.classLoader)
@@ -200,5 +215,7 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 }
             }
         )
+    }.onFailure {
+        Log.e(TAG, "hookOpenLinkDialog: ", it)
     }
 }
