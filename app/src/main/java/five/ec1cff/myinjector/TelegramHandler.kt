@@ -2,26 +2,85 @@ package five.ec1cff.myinjector
 
 import android.app.Dialog
 import android.content.DialogInterface
+import android.content.res.XModuleResources
 import android.graphics.Typeface
 import android.net.Uri
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.StyleSpan
 import android.util.Log
+import android.util.TypedValue
+import android.view.Gravity
+import android.widget.FrameLayout
+import android.widget.ImageView
+import androidx.core.view.isVisible
 import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
-class TelegramHandler : IXposedHookLoadPackage {
+class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
     companion object {
         private const val TAG = "TelegramHandler"
     }
 
+    private lateinit var modulePath: String
+    private lateinit var moduleRes: XModuleResources
+
+    override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
+        modulePath = startupParam.modulePath
+    }
+
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "org.telegram.messenger" || !lpparam.processName.startsWith("org.telegram.messenger")) return
+        moduleRes = XModuleResources.createInstance(modulePath, null)
         hookOpenLinkDialog(lpparam)
+        hookMutualContact(lpparam)
+    }
+
+    private fun hookMutualContact(lpparam: LoadPackageParam) {
+        val drawable = moduleRes.getDrawable(R.drawable.ic_mutual_contact)
+        val tlUser =
+            XposedHelpers.findClass("org.telegram.tgnet.TLRPC\$TL_user", lpparam.classLoader)
+        XposedBridge.hookAllMethods(
+            XposedHelpers.findClass("org.telegram.ui.Cells.UserCell", lpparam.classLoader),
+            "update",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    Log.d(TAG, "afterHookedMethod: update")
+                    val d = XposedHelpers.getObjectField(param.thisObject, "currentDrawable") as Int
+                    if (d != 0) {
+                        Log.d(TAG, "afterHookedMethod: currentdrawable not 0: $d")
+                        return
+                    }
+                    val current = XposedHelpers.getObjectField(param.thisObject, "currentObject")
+                    if (!tlUser.isInstance(current)) return
+                    val imageView =
+                        XposedHelpers.getObjectField(param.thisObject, "imageView") as ImageView
+                    val mutual = XposedHelpers.getObjectField(current, "mutual_contact") as Boolean
+                    if (mutual) {
+                        imageView.setImageDrawable(drawable)
+                        imageView.isVisible = true
+                        (imageView.layoutParams as FrameLayout.LayoutParams).apply {
+                            val resource = imageView.context.resources
+                            gravity =
+                                (gravity and Gravity.HORIZONTAL_GRAVITY_MASK.inv()) or Gravity.RIGHT
+                            rightMargin =
+                                TypedValue.applyDimension(
+                                    TypedValue.COMPLEX_UNIT_DIP,
+                                    8f,
+                                    resource.displayMetrics
+                                ).toInt()
+                            leftMargin
+                        }
+                        Log.d(TAG, "afterHookedMethod: set mutual contact $current")
+                    }
+                }
+            }
+        )
+        Log.d(TAG, "hookMutualContact: done")
     }
 
     data class FixLink(
