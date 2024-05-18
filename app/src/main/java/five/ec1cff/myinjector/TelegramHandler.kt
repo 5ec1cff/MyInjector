@@ -1,6 +1,9 @@
 package five.ec1cff.myinjector
 
+import android.app.AndroidAppHelper
 import android.app.Dialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.DialogInterface
 import android.content.res.XModuleResources
 import android.graphics.Typeface
@@ -13,6 +16,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.core.view.isVisible
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
@@ -20,6 +24,7 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.util.WeakHashMap
 
 class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
     companion object {
@@ -39,6 +44,7 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
         hookOpenLinkDialog(lpparam)
         hookMutualContact(lpparam)
         hookContactPermission(lpparam)
+        hookUserProfileShowId(lpparam)
     }
 
     private fun hookContactPermission(lpparam: LoadPackageParam) = kotlin.runCatching {
@@ -217,5 +223,130 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
         )
     }.onFailure {
         Log.e(TAG, "hookOpenLinkDialog: ", it)
+    }
+
+    data class ProfileActivityCtx(
+        var insertedId: Int = -1,
+        var userId: String = "",
+        var title: String = ""
+    )
+
+    private fun hookUserProfileShowId(lpparam: LoadPackageParam) = kotlin.runCatching {
+        // activity -> ctx
+        val ctxs = WeakHashMap<Any, ProfileActivityCtx>()
+        fun outerThis(obj: Any): Any {
+            return XposedHelpers.getObjectField(obj, "this\$0")
+        }
+
+        fun getCtx(obj: Any): ProfileActivityCtx? {
+            return ctxs.computeIfAbsent(obj) {
+                ProfileActivityCtx(-1)
+            }
+        }
+
+        fun getCtxForAdapter(obj: Any) = getCtx(outerThis(obj))
+        val profileActivityClass =
+            XposedHelpers.findClass("org.telegram.ui.ProfileActivity", lpparam.classLoader)
+        val listAdapterClass = XposedHelpers.findClass(
+            "org.telegram.ui.ProfileActivity\$ListAdapter",
+            lpparam.classLoader
+        )
+        val VIEW_TYPE_TEXT_DETAIL =
+            2 // XposedHelpers.getStaticIntField(listAdapterClass, "VIEW_TYPE_TEXT")
+        val rowFields = profileActivityClass.declaredFields.filter {
+            it.name.endsWith("Row") || it.name.endsWith("Row2")
+        }
+        rowFields.forEach {
+            it.isAccessible = true
+        }
+        XposedBridge.hookAllMethods(
+            profileActivityClass,
+            "updateRowsIds",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val ctx = getCtx(param.thisObject) ?: return
+                    var userId = XposedHelpers.getObjectField(param.thisObject, "userId")
+                    var isChat = false
+                    if (userId == 0L) {
+                        val chat = XposedHelpers.getObjectField(param.thisObject, "currentChat")
+                        if (chat != null) {
+                            userId = XposedHelpers.getObjectField(chat, "id")
+                            isChat = true
+                        }
+                    }
+                    if (userId == 0L) {
+                        ctx.insertedId = -1
+                        return
+                    }
+                    ctx.userId = userId.toString()
+                    ctx.title = if (isChat) "Chat Id" else "User Id"
+                    val headerId =
+                        XposedHelpers.getObjectField(param.thisObject, "infoHeaderRow") as Int
+                    val insertedId = if (headerId == -1) 1 else headerId + 1
+                    ctx.insertedId = insertedId
+                    rowFields.forEach {
+                        val v = it.get(param.thisObject) as Int
+                        if (v >= insertedId) it.set(param.thisObject, v + 1)
+                    }
+                    XposedHelpers.setObjectField(
+                        param.thisObject, "rowCount",
+                        XposedHelpers.getObjectField(param.thisObject, "rowCount") as Int + 1
+                    )
+                    // Log.d(TAG, "updateRowsIds: inserted=$insertedId")
+                }
+            }
+        )
+        XposedBridge.hookAllMethods(
+            listAdapterClass,
+            "onBindViewHolder",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val ctx = getCtxForAdapter(param.thisObject) ?: return
+                    if (ctx.insertedId == -1) return
+                    val pos = param.args[1] as Int
+                    if (pos == ctx.insertedId) {
+                        val detailCeil = XposedHelpers.getObjectField(param.args[0], "itemView")
+                        XposedHelpers.callMethod(
+                            detailCeil, "setTextAndValue", ctx.userId,
+                            ctx.title, false
+                        )
+                        param.result = null
+                    }
+                }
+            }
+        )
+        XposedBridge.hookAllMethods(
+            listAdapterClass,
+            "getItemViewType",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val ctx = getCtxForAdapter(param.thisObject) ?: return
+                    if (ctx.insertedId == -1) return
+                    val pos = param.args[0] as Int
+                    if (pos == ctx.insertedId) {
+                        param.result = VIEW_TYPE_TEXT_DETAIL
+                    }
+                }
+            }
+        )
+        XposedBridge.hookAllMethods(
+            profileActivityClass,
+            "processOnClickOrPress",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    Log.d(TAG, "processOnClickOrPress: ${param.args[0]}")
+                    val ctx = getCtx(param.thisObject) ?: return
+                    if (ctx.insertedId == -1) return
+                    if (param.args[0] == ctx.insertedId) {
+                        val context = AndroidAppHelper.currentApplication()
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newPlainText("", ctx.userId))
+                        Toast.makeText(context, "copied user id!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "hookUserProfileShowId: error", it)
     }
 }
