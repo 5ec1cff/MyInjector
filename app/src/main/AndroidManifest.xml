@@ -8,7 +8,7 @@
         android:supportsRtl="true"
         tools:ignore="MissingApplicationIcon">
 
-    <meta-data
+        <meta-data
             android:name="xposedmodule"
             android:value="true" />
         <meta-data

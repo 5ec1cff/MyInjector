@@ -1,26 +1,23 @@
 package five.ec1cff.myinjector
 
 import android.app.INotificationManager
+import android.content.Intent
 import android.content.res.Resources
 import android.os.ServiceManager
+import android.provider.Settings
 import android.service.notification.StatusBarNotification
 import android.util.TypedValue
-import android.view.ContextThemeWrapper
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.PopupWindow
+import android.widget.FrameLayout
 import android.widget.TextView
 import com.github.kyuubiran.ezxhelper.init.EzXHelperInit
-import com.github.kyuubiran.ezxhelper.utils.Log
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.getObject
 import com.github.kyuubiran.ezxhelper.utils.getObjectAs
-import com.github.kyuubiran.ezxhelper.utils.getObjectOrNull
 import com.github.kyuubiran.ezxhelper.utils.getObjectOrNullAs
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import com.github.kyuubiran.ezxhelper.utils.invokeMethod
-import com.google.android.material.card.MaterialCardView
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 
@@ -38,6 +35,66 @@ class SystemUIHandler : IXposedHookLoadPackage {
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
         }
+        findMethod("com.android.systemui.statusbar.notification.modal.ModalWindowView") {
+            name == "enterModal"
+        }.hookAfter { param ->
+            val modalWindowView = param.thisObject as FrameLayout
+            val parent = modalWindowView.parent as FrameLayout
+            val context = modalWindowView.context.applicationContext
+            if (parent.childCount == 1) {
+                parent.addView(
+                    FrameLayout(context).apply {
+                        setBackgroundColor(0x99ffffff.toInt())
+                        addView(
+                            TextView(context),
+                            ViewGroup.MarginLayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT
+                            ).apply {
+                                val px = 8.dp2px(context.resources).toInt()
+                                setMargins(px, px, px, px)
+                            }
+                        )
+                    },
+                    ViewGroup.MarginLayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        val px = 8.dp2px(context.resources).toInt()
+                        setMargins(px, px, px, px)
+                    }
+                )
+            }
+            val tv = (parent.getChildAt(1) as ViewGroup).getChildAt(0) as TextView
+            val sbn = param.args[0]
+                ?.getObjectOrNullAs<StatusBarNotification>("mSbn") ?: return@hookAfter
+            val channel = nm.getNotificationChannel(
+                "com.android.systemui",
+                sbn.getObject("user").invokeMethod("getIdentifier") as Int,
+                sbn.packageName,
+                sbn.notification.channelId
+            )
+            tv.text =
+                "channel=${sbn.notification.channelId} (${channel.name})\npkg=${sbn.packageName}\nopPkg=${sbn.opPkg}"
+            (tv.parent as View).setOnClickListener {
+                // https://cs.android.com/android/platform/superproject/main/+/main:packages/apps/Settings/src/com/android/settings/notification/app/NotificationSettings.java;l=121;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS
+                    )
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, sbn.packageName)
+                        .putExtra(Settings.EXTRA_CHANNEL_ID, sbn.notification.channelId)
+                        .putExtra("app_uid" /*Settings.EXTRA_APP_UID*/, sbn.getObjectAs<Int>("uid"))
+                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        }
+        // TODO: use resources
+        // https://github.com/yujincheng08/BiliRoaming/blame/637bd4312c366d1417ea7109f924d7e7aa51e99b/app/build.gradle.kts#L115
+        //     androidResources {
+        //        additionalParameters += arrayOf("--allow-reserved-package-id", "--package-id", "0x23")
+        //    }
+        /*
         findMethod("com.android.systemui.statusbar.notification.modal.ModalController") {
             name == "enterModal"
         }.hookAfter {
@@ -86,6 +143,6 @@ class SystemUIHandler : IXposedHookLoadPackage {
             )
             tv.text =
                 "channel=${sbn.notification.channelId} (${channel.name})\npkg=${sbn.packageName}\nopPkg=${sbn.opPkg}"
-        }
+        }*/
     }
 }
