@@ -44,7 +44,7 @@ class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
         hookOpenLinkDialog(lpparam)
         hookMutualContact(lpparam)
         hookContactPermission(lpparam)
-        hookUserProfileShowId(lpparam)
+        // hookUserProfileShowId(lpparam)
     }
 
     private fun hookContactPermission(lpparam: LoadPackageParam) = kotlin.runCatching {
