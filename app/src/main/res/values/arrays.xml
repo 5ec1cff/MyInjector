@@ -11,5 +11,6 @@
         <item>org.telegram.messenger</item>
         <item>com.termux</item>
         <item>com.lbe.security.miui</item>
+        <item>com.zhihu.android</item>
     </string-array>
 </resources>

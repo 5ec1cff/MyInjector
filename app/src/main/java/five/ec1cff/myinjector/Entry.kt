@@ -25,6 +25,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.tencent.wework" -> WeWorkXposedHandler()
             "com.android.systemui" -> SystemUIHandler()
             "com.tencent.mobileqq" -> QQXposedHandler()
+            "com.zhihu.android" -> ZhihuXposedHandler()
             else -> return
         }
         handler.handleLoadPackage(lpparam)
