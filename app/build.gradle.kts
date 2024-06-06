@@ -12,6 +12,9 @@ android {
         targetSdk = 33
         versionCode = 1
         versionName = "1.0"
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
     buildFeatures {
         buildConfig = true
@@ -41,5 +44,6 @@ dependencies {
     implementation(libs.constraintlayout)
     compileOnly(libs.xposed.api)
     implementation(libs.ezxhelper)
+    implementation(libs.dexkit)
     compileOnly(project(":hidden-api"))
 }
