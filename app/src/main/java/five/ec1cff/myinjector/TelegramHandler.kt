@@ -19,28 +19,21 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.view.isVisible
 import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import java.util.WeakHashMap
 
-class TelegramHandler : IXposedHookLoadPackage, IXposedHookZygoteInit {
+class TelegramHandler : IXposedHookLoadPackage {
     companion object {
         private const val TAG = "TelegramHandler"
     }
-
-    private lateinit var modulePath: String
     private lateinit var moduleRes: XModuleResources
-
-    override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
-        modulePath = startupParam.modulePath
-    }
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "org.telegram.messenger" || !lpparam.processName.startsWith("org.telegram.messenger")) return
-        moduleRes = XModuleResources.createInstance(modulePath, null)
+        moduleRes = XModuleResources.createInstance(Entry.modulePath, null)
         hookOpenLinkDialog(lpparam)
         hookMutualContact(lpparam)
         hookContactPermission(lpparam)
