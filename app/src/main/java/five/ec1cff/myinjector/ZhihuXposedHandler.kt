@@ -1,5 +1,7 @@
 package five.ec1cff.myinjector
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.util.Log
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -15,6 +17,7 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.zhihu.android") return
         hookDisableFeedAutoRefresh(lpparam)
+        hookClipboard()
     }
 
     private fun hookDisableFeedAutoRefresh(lpparam: XC_LoadPackage.LoadPackageParam) =
@@ -42,6 +45,21 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
                 }
             )
         }.onFailure {
-            Log.d(TAG, "hookDisableAutoRefresh: failed", it)
+            Log.e(TAG, "hookDisableAutoRefresh: failed", it)
         }
+
+    private fun hookClipboard() = kotlin.runCatching {
+        XposedBridge.hookAllMethods(
+            ClipboardManager::class.java,
+            "setPrimaryClip",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val clip = param.args[0] as ClipData
+                    if (clip.getItemAt(0).text.contains("?utm_psn=")) param.result = null
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "hookClipboard: ", it)
+    }
 }
