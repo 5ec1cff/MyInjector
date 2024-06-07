@@ -22,10 +22,12 @@ import android.widget.Toast
 import androidx.core.view.isVisible
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import java.util.WeakHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 fun View.findView(predicate: (View) -> Boolean): View? {
     if (predicate(this)) return this
@@ -53,6 +55,33 @@ class TelegramHandler : IXposedHookLoadPackage {
         // hookUserProfileShowId(lpparam)
         hookAutoCheckDeleteMessagesOptionAlso(lpparam)
         hookAutoUncheckSharePhoneNum(lpparam)
+        hookDisableVoiceVideoButton(lpparam)
+    }
+
+    private fun hookDisableVoiceVideoButton(lpparam: LoadPackageParam) = runCatching {
+        val subHookFound = AtomicBoolean(false)
+        XposedBridge.hookAllConstructors(
+            XposedHelpers.findClass(
+                "org.telegram.ui.Components.ChatActivityEnterView",
+                lpparam.classLoader
+            ),
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (subHookFound.get()) return
+                    val audioVideoButtonContainer =
+                        XposedHelpers.getObjectField(param.thisObject, "audioVideoButtonContainer")
+                            ?: return
+                    XposedBridge.hookAllMethods(
+                        audioVideoButtonContainer.javaClass,
+                        "onTouchEvent",
+                        XC_MethodReplacement.returnConstant(true)
+                    )
+                    subHookFound.set(true)
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "hookDisableVoiceVideoButton: failed", it)
     }
 
     private fun hookAutoUncheckSharePhoneNum(lpparam: LoadPackageParam) = runCatching {
