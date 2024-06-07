@@ -119,7 +119,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                             checkBoxCellClass.isInstance(it) &&
                                     XposedHelpers.callMethod(it, "isChecked") == false
                         }
-                        Log.d(TAG, "beforeHookedMethod: found view: $v")
+                        // Log.d(TAG, "beforeHookedMethod: found view: $v")
                         v?.performClick()
                     }
                 }
