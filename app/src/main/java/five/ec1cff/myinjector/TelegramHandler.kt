@@ -9,7 +9,9 @@ import android.content.res.XModuleResources
 import android.graphics.Typeface
 import android.net.Uri
 import android.text.Spannable
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.style.StyleSpan
 import android.util.Log
 import android.util.TypedValue
@@ -26,6 +28,7 @@ import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.lang.reflect.Proxy
 import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -56,6 +59,94 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookAutoCheckDeleteMessagesOptionAlso(lpparam)
         hookAutoUncheckSharePhoneNum(lpparam)
         hookDisableVoiceVideoButton(lpparam)
+        hookLongClickMention(lpparam)
+    }
+
+    private fun hookLongClickMention(lpparam: LoadPackageParam) = runCatching {
+        val longClickListenerClass = XposedHelpers.findClass(
+            "org.telegram.ui.Components.RecyclerListView\$OnItemLongClickListener",
+            lpparam.classLoader
+        )
+        val tlUser =
+            XposedHelpers.findClass("org.telegram.tgnet.TLRPC\$TL_user", lpparam.classLoader)
+        val userObjectClass =
+            XposedHelpers.findClass("org.telegram.messenger.UserObject", lpparam.classLoader)
+        val classURLSpanUserMention = XposedHelpers.findClass(
+            "org.telegram.ui.Components.URLSpanUserMention",
+            lpparam.classLoader
+        )
+        XposedBridge.hookAllMethods(
+            XposedHelpers.findClass("org.telegram.ui.ChatActivity", lpparam.classLoader),
+            "createView",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val obj = Object()
+                    val thiz = param.thisObject
+                    val mentionContainer = XposedHelpers.getObjectField(thiz, "mentionContainer")
+                    val listView = XposedHelpers.callMethod(
+                        mentionContainer,
+                        "getListView"
+                    ) // RecyclerListView
+                    XposedHelpers.callMethod(
+                        listView,
+                        "setOnItemLongClickListener",
+                        Proxy.newProxyInstance(
+                            lpparam.classLoader, arrayOf(longClickListenerClass)
+                        ) { _, method, args ->
+                            if (method.name == "onItemClick") {
+                                kotlin.runCatching {
+                                    var position = args[1] as Int
+                                    if (position == 0) return@newProxyInstance false
+                                    position--
+                                    val adapter =
+                                        XposedHelpers.callMethod(mentionContainer, "getAdapter")
+                                    val item =
+                                        XposedHelpers.callMethod(adapter, "getItem", position)
+                                    if (!tlUser.isInstance(item)) return@newProxyInstance false
+                                    val start =
+                                        XposedHelpers.callMethod(adapter, "getResultStartPosition")
+                                    val len = XposedHelpers.callMethod(adapter, "getResultLength")
+                                    val name = XposedHelpers.callStaticMethod(
+                                        userObjectClass,
+                                        "getFirstName",
+                                        item,
+                                        false
+                                    )
+                                    val spannable = SpannableString("$name ")
+                                    val span = XposedHelpers.newInstance(
+                                        classURLSpanUserMention,
+                                        XposedHelpers.getObjectField(item, "id").toString(),
+                                        3
+                                    )
+                                    spannable.setSpan(
+                                        span,
+                                        0,
+                                        spannable.length,
+                                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                    )
+                                    val chatActivityEnterView =
+                                        XposedHelpers.getObjectField(thiz, "chatActivityEnterView")
+                                    XposedHelpers.callMethod(
+                                        chatActivityEnterView,
+                                        "replaceWithText",
+                                        start,
+                                        len,
+                                        spannable,
+                                        false
+                                    )
+                                    return@newProxyInstance true
+                                }.onFailure { Log.e(TAG, "onItemLongClicked: error", it) }
+                                return@newProxyInstance false
+                            }
+                            return@newProxyInstance method.invoke(obj, args)
+                        }
+                    )
+                }
+            }
+        )
+        Log.d(TAG, "hookLongClickMention: Done")
+    }.onFailure {
+        Log.e(TAG, "hookLongClickMention: failed", it)
     }
 
     private fun hookDisableVoiceVideoButton(lpparam: LoadPackageParam) = runCatching {
