@@ -14,6 +14,8 @@ import android.text.style.StyleSpan
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
@@ -38,7 +40,73 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookMutualContact(lpparam)
         hookContactPermission(lpparam)
         // hookUserProfileShowId(lpparam)
+        hookAutoCheckDeleteMessagesOptionAlso(lpparam)
     }
+
+    private fun hookAutoCheckDeleteMessagesOptionAlso(lpparam: LoadPackageParam) =
+        kotlin.runCatching {
+            val isCreating = ThreadLocal<Boolean>()
+            val alertDialogClass = XposedHelpers.findClass(
+                "org.telegram.ui.ActionBar.AlertDialog",
+                lpparam.classLoader
+            )
+            val checkBoxCellClass =
+                XposedHelpers.findClass("org.telegram.ui.Cells.CheckBoxCell", lpparam.classLoader)
+            XposedBridge.hookAllMethods(
+                XposedHelpers.findClass(
+                    "org.telegram.ui.Components.AlertsCreator",
+                    lpparam.classLoader
+                ),
+                "createDeleteMessagesAlert",
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam?) {
+                        isCreating.set(true)
+                    }
+
+                    override fun afterHookedMethod(param: MethodHookParam?) {
+                        isCreating.set(false)
+                    }
+                }
+            )
+            XposedHelpers.findAndHookMethod(
+                XposedHelpers.findClass(
+                    "org.telegram.ui.ActionBar.BaseFragment",
+                    lpparam.classLoader
+                ),
+                "showDialog",
+                Dialog::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (isCreating.get() != true) return
+                        val dialog = param.args[0]
+                        if (!alertDialogClass.isInstance(dialog)) return
+                        val root = XposedHelpers.getObjectField(dialog, "customView") as? ViewGroup
+                            ?: return
+
+                        // TODO: find the checkbox correctly
+                        fun find(v: View): View? {
+                            if (checkBoxCellClass.isInstance(v)) {
+                                if (XposedHelpers.callMethod(v, "isChecked") == false)
+                                    return v
+                            }
+                            if (v is ViewGroup) {
+                                for (i in 0 until v.childCount) {
+                                    val retVal = find(v.getChildAt(i))
+                                    if (retVal != null) return retVal
+                                }
+                            }
+                            return null
+                        }
+
+                        val v = find(root)
+                        Log.d(TAG, "beforeHookedMethod: found view: $v")
+                        v?.performClick()
+                    }
+                }
+            )
+        }.onFailure {
+            Log.e(TAG, "hookAutoCheckDeleteMessagesOptionAlso: error", it)
+        }
 
     private fun hookContactPermission(lpparam: LoadPackageParam) = kotlin.runCatching {
         XposedBridge.hookAllMethods(
