@@ -27,6 +27,17 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import java.util.WeakHashMap
 
+fun View.findView(predicate: (View) -> Boolean): View? {
+    if (predicate(this)) return this
+    if (this is ViewGroup) {
+        for (i in 0 until childCount) {
+            val v = getChildAt(i).findView(predicate)
+            if (v != null) return v
+        }
+    }
+    return null
+}
+
 class TelegramHandler : IXposedHookLoadPackage {
     companion object {
         private const val TAG = "TelegramHandler"
@@ -41,6 +52,26 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookContactPermission(lpparam)
         // hookUserProfileShowId(lpparam)
         hookAutoCheckDeleteMessagesOptionAlso(lpparam)
+        hookAutoUncheckSharePhoneNum(lpparam)
+    }
+
+    private fun hookAutoUncheckSharePhoneNum(lpparam: LoadPackageParam) = runCatching {
+        XposedBridge.hookAllMethods(
+            XposedHelpers.findClass("org.telegram.ui.ContactAddActivity", lpparam.classLoader),
+            "createView",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val checkBox =
+                        XposedHelpers.getObjectField(param.thisObject, "checkBoxCell") as? View
+                            ?: return
+                    if (XposedHelpers.callMethod(checkBox, "isChecked") == true) {
+                        checkBox.performClick()
+                    }
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "hookAutoUncheckSharePhoneNum: failed", it)
     }
 
     private fun hookAutoCheckDeleteMessagesOptionAlso(lpparam: LoadPackageParam) =
@@ -84,21 +115,10 @@ class TelegramHandler : IXposedHookLoadPackage {
                             ?: return
 
                         // TODO: find the checkbox correctly
-                        fun find(v: View): View? {
-                            if (checkBoxCellClass.isInstance(v)) {
-                                if (XposedHelpers.callMethod(v, "isChecked") == false)
-                                    return v
-                            }
-                            if (v is ViewGroup) {
-                                for (i in 0 until v.childCount) {
-                                    val retVal = find(v.getChildAt(i))
-                                    if (retVal != null) return retVal
-                                }
-                            }
-                            return null
+                        val v = root.findView {
+                            checkBoxCellClass.isInstance(it) &&
+                                    XposedHelpers.callMethod(it, "isChecked") == false
                         }
-
-                        val v = find(root)
                         Log.d(TAG, "beforeHookedMethod: found view: $v")
                         v?.performClick()
                     }
