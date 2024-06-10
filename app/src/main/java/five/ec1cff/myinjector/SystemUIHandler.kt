@@ -23,6 +23,8 @@ import com.github.kyuubiran.ezxhelper.utils.invokeMethod
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.text.SimpleDateFormat
+import java.util.Date
 
 fun Float.dp2px(resources: Resources) =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, this, resources.displayMetrics)
@@ -84,17 +86,34 @@ class SystemUIHandler : IXposedHookLoadPackage {
             val tv = (parent.getChildAt(1) as ViewGroup).getChildAt(0) as TextView
             val entry = param.args[0] // NotificationEntry
             val sbn = entry?.getObjectOrNullAs<StatusBarNotification>("mSbn")
+            // MIUI will fake Sbn.getPackageName, so we should get the real package name from the original field
+            val field = XposedHelpers.findFieldIfExists(StatusBarNotification::class.java, "pkg")
+                .also { it.isAccessible = true }
             if (sbn != null) {
+                val realPkgName = field?.let { it.get(sbn) as String } ?: sbn.packageName
+                val pkgName = sbn.packageName
                 val channel = kotlin.runCatching {
                     nm.getNotificationChannel(
                         "com.android.systemui",
                         sbn.getObject("user").invokeMethod("getIdentifier") as Int,
-                        sbn.packageName,
+                        realPkgName,
                         sbn.notification.channelId
                     )
                 }.onFailure { Log.e("MyInjector", "getNotificationChannel", it) }.getOrNull()
-                tv.text =
-                    "channel=${sbn.notification.channelId} (${channel?.name})\npkg=${sbn.packageName}\nopPkg=${sbn.opPkg}"
+                tv.text = StringBuilder().apply {
+                    append("channelId=${sbn.notification.channelId}\n")
+                    if (channel != null) append("channel=${channel.name}\n")
+                    append("pkg=$pkgName\n")
+                    if (realPkgName != pkgName) append("realPkg=$realPkgName\n")
+                    append("opPkg=${sbn.opPkg}\n")
+                    append("id=${sbn.id}\n")
+                    append("initialPid=${XposedHelpers.getObjectField(sbn, "initialPid")}\n")
+                    append(
+                        "time=${sbn.postTime} (${
+                            SimpleDateFormat.getDateTimeInstance().format(Date(sbn.postTime))
+                        })"
+                    )
+                }
                 (tv.parent as View).setOnClickListener {
                     runCatching {
                         val dependencyClass = XposedHelpers.findClass(
@@ -138,13 +157,13 @@ class SystemUIHandler : IXposedHookLoadPackage {
                         Intent(
                             Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS
                         )
-                            .putExtra(Settings.EXTRA_APP_PACKAGE, sbn.packageName)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, realPkgName)
                             .putExtra(Settings.EXTRA_CHANNEL_ID, sbn.notification.channelId)
                             .putExtra(
                                 "app_uid" /*Settings.EXTRA_APP_UID*/,
                                 sbn.getObjectAs<Int>("uid")
                             )
-                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                     )
                 }
             } else {
