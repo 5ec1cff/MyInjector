@@ -105,7 +105,7 @@ class SystemUIHandler : IXposedHookLoadPackage {
                     if (channel != null) append("channel=${channel.name}\n")
                     append("pkg=$pkgName\n")
                     if (realPkgName != pkgName) append("realPkg=$realPkgName\n")
-                    append("opPkg=${sbn.opPkg}\n")
+                    if (sbn.opPkg != pkgName) append("opPkg=${sbn.opPkg}\n")
                     append("id=${sbn.id}\n")
                     append("initialPid=${XposedHelpers.getObjectField(sbn, "initialPid")}\n")
                     append(
