@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MyInjector</string>
+    <string name="asex_title">保持自启动</string>
+    <string name="asex_summary">阻止该应用的自启动被自动关闭</string>
 </resources>

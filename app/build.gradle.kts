@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    compileSdk = 33
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "five.ec1cff.myinjector"
         minSdk = 30
-        targetSdk = 33
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
         ndk {
@@ -28,6 +28,11 @@ android {
             )
         }
     }
+    androidResources.additionalParameters += listOf(
+        "--allow-reserved-package-id",
+        "--package-id",
+        "0x68"
+    )
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
