@@ -50,7 +50,6 @@ class TelegramHandler : IXposedHookLoadPackage {
     private lateinit var moduleRes: XModuleResources
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
-        if (lpparam.packageName != "org.telegram.messenger" || !lpparam.processName.startsWith("org.telegram.messenger")) return
         moduleRes = XModuleResources.createInstance(Entry.modulePath, null)
         hookOpenLinkDialog(lpparam)
         hookMutualContact(lpparam)
