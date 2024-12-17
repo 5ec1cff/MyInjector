@@ -12,5 +12,7 @@
         <item>com.termux</item>
         <item>com.lbe.security.miui</item>
         <item>com.zhihu.android</item>
+        <item>com.android.chrome</item>
+        <item>com.kiwibrowser.browser</item>
     </string-array>
 </resources>

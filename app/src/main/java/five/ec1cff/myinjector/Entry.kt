@@ -26,6 +26,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.android.systemui" -> SystemUIHandler()
             "com.tencent.mobileqq" -> QQXposedHandler()
             "com.zhihu.android" -> ZhihuXposedHandler()
+            "com.android.chrome", "com.kiwibrowser.browser" -> ChromeHandler()
             else -> return
         }
         handler.handleLoadPackage(lpparam)
