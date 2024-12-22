@@ -24,12 +24,11 @@ class BaiduIMEHandler : IXposedHookLoadPackage {
 
     override fun handleLoadPackage(param: XC_LoadPackage.LoadPackageParam) {
         lpparam = param
-        doFind()
-        doHookSplash()
-        doHookContactSuggestion()
+        hookSplash()
+        hookContactSuggestion()
     }
 
-    private fun doHookSplash() = runCatching {
+    private fun hookSplash() = runCatching {
         val splash =
             XposedHelpers.findClass("com.baidu.input.ImeAppMainActivity", lpparam.classLoader)
         XposedBridge.hookAllMethods(
@@ -60,15 +59,18 @@ class BaiduIMEHandler : IXposedHookLoadPackage {
         Log.e(TAG, "doHookSplash: ", it)
     }
 
-    private fun doHookContactSuggestion() {
+    private fun hookContactSuggestion() = runCatching {
+        findContactSuggestion()
         XposedBridge.hookAllMethods(
             XposedHelpers.findClass(
                 showMethodClass, lpparam.classLoader
             ), showMethodName, XC_MethodReplacement.DO_NOTHING
         )
+    }.onFailure {
+        Log.e(TAG, "hookContactSuggestion: ", it)
     }
 
-    private fun doFind() {
+    private fun findContactSuggestion() {
         val f = File(lpparam.appInfo.dataDir, "dexkit.tmp")
         cacheFile = f
         if (f.isFile) {
