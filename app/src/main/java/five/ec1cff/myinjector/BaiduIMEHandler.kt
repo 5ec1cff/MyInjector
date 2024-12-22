@@ -1,7 +1,10 @@
 package five.ec1cff.myinjector
 
+import android.app.Activity
+import android.content.Intent
 import android.util.Log
 import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -22,10 +25,42 @@ class BaiduIMEHandler : IXposedHookLoadPackage {
     override fun handleLoadPackage(param: XC_LoadPackage.LoadPackageParam) {
         lpparam = param
         doFind()
-        doHook()
+        doHookSplash()
+        doHookContactSuggestion()
     }
 
-    private fun doHook() {
+    private fun doHookSplash() = runCatching {
+        val splash =
+            XposedHelpers.findClass("com.baidu.input.ImeAppMainActivity", lpparam.classLoader)
+        XposedBridge.hookAllMethods(
+            splash,
+            "onCreate", object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val activity = param.thisObject as Activity
+                    val intent = activity.intent
+                        ?: Intent().also { activity.intent = it }
+                    intent.putExtra("is_no_ads", true)
+                }
+            }
+        )
+        XposedBridge.hookAllMethods(
+            splash,
+            "endAd", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val activity = param.thisObject as Activity
+                    val intent = activity.intent ?: return
+                    if (intent.hasExtra("ime.intent_keys.next_route_path")) {
+                        Log.d(TAG, "afterHookedMethod: finish it")
+                        activity.finish()
+                    }
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "doHookSplash: ", it)
+    }
+
+    private fun doHookContactSuggestion() {
         XposedBridge.hookAllMethods(
             XposedHelpers.findClass(
                 showMethodClass, lpparam.classLoader
