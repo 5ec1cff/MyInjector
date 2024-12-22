@@ -14,5 +14,6 @@
         <item>com.zhihu.android</item>
         <item>com.android.chrome</item>
         <item>com.kiwibrowser.browser</item>
+        <item>com.baidu.input</item>
     </string-array>
 </resources>
