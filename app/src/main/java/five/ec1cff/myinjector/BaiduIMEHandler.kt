@@ -94,11 +94,18 @@ class BaiduIMEHandler : IXposedHookLoadPackage {
         Log.d(TAG, "prepare: start deobf")
         System.loadLibrary("dexkit")
         val bridge = DexKitBridge.create(lpparam.classLoader, true)
-        val showMethod = bridge.findMethod {
+        val showMethod = bridge.findClass {
             matcher {
-                declaredClass {
-                    usingStrings("android.permission.READ_CONTACTS", "layout_inflater")
+                usingStrings("android.permission.READ_CONTACTS", "layout_inflater")
+                addMethod {
+                    addInvoke {
+                        name = "getWindowToken"
+                        declaredClass = "android.view.View"
+                    }
                 }
+            }
+        }.findMethod {
+            matcher {
                 addInvoke {
                     name = "getWindowToken"
                     declaredClass = "android.view.View"
