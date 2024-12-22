@@ -20,7 +20,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.lbe.security.miui" -> LbeHandler()
             "com.miui.securitycenter" -> MIUISecurityCenterHandler()
             "com.twitter.android" -> TwitterXposedHandler()
-            "org.telegram.messenger", "org.telegram.messenger.beta" -> TelegramHandler()
+            "org.telegram.messenger", "org.telegram.messenger.web","org.telegram.messenger.beta" -> TelegramHandler()
             "com.termux" -> TermuxHandler()
             "com.tencent.wework" -> WeWorkXposedHandler()
             "com.android.systemui" -> SystemUIHandler()
