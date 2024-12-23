@@ -21,7 +21,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
-import androidx.core.view.isVisible
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
@@ -283,7 +282,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                     val mutual = XposedHelpers.getObjectField(current, "mutual_contact") as Boolean
                     if (mutual) {
                         imageView.setImageDrawable(drawable)
-                        imageView.isVisible = true
+                        imageView.visibility = View.VISIBLE
                         (imageView.layoutParams as FrameLayout.LayoutParams).apply {
                             val resource = imageView.context.resources
                             gravity =
