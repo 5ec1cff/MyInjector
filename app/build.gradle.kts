@@ -101,7 +101,6 @@ android {
 
 dependencies {
     compileOnly(libs.xposed.api)
-    implementation(libs.ezxhelper)
     implementation(libs.dexkit)
     compileOnly(libs.androidx.annotation)
     compileOnly(project(":hidden-api"))

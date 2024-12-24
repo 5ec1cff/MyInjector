@@ -7,7 +7,6 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 
-
 class LbeHandler : IXposedHookLoadPackage {
     companion object {
         private const val TAG = "Demo"
@@ -16,33 +15,6 @@ class LbeHandler : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.lbe.security.miui") return
         Log.d(TAG, "handleLoadPackage")
-        /*
-        XposedBridge.hookAllConstructors(
-            XposedHelpers.findClass(
-                "com.miui.permission.PermissionManager\$2", lpparam.classLoader
-            ),
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    Log.e(TAG, "PermissionManager2 init", Throwable())
-                }
-            }
-        )
-        XposedHelpers.findAndHookMethod("com.lbe.security.service.provider.PermissionManagerProvider",
-            lpparam.classLoader,
-            "updatePackagePermission",
-            String::class.java,
-            Int::class.javaPrimitiveType,
-            Long::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType,
-            Boolean::class.javaPrimitiveType,
-            Boolean::class.javaPrimitiveType,
-            Boolean::class.javaPrimitiveType,
-            object : XC_MethodHook() {
-
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    Log.e(TAG, "updatePackagePermission ${param.args[0]}", Throwable())
-                }
-            })*/
         XposedBridge.hookAllMethods(
             XposedHelpers.findClass(
                 "com.miui.privacy.autostart.AutoRevokePermissionManager",

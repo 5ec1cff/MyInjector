@@ -6,33 +6,33 @@ import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.widget.CompoundButton
 import android.widget.LinearLayout
 import android.widget.Toast
-import com.github.kyuubiran.ezxhelper.init.EzXHelperInit
-import com.github.kyuubiran.ezxhelper.utils.Log
-import com.github.kyuubiran.ezxhelper.utils.findMethod
-import com.github.kyuubiran.ezxhelper.utils.hookAfter
-import com.github.kyuubiran.ezxhelper.utils.hookBefore
-import com.github.kyuubiran.ezxhelper.utils.invokeMethodAuto
-import com.github.kyuubiran.ezxhelper.utils.loadClass
 import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.lang.reflect.Method
 import kotlin.concurrent.thread
 
 class MIUISecurityCenterHandler : IXposedHookLoadPackage {
+    private lateinit var lpparam: XC_LoadPackage.LoadPackageParam
 
     companion object {
-        val URI = Uri.parse("content://com.lbe.security.miui.permmgr/active")
-        const val PERM_AUTO_START = 16384
+        private val URI = Uri.parse("content://com.lbe.security.miui.permmgr/active")
+        private const val PERM_AUTO_START = 16384
+        private const val TAG = "MyInjector-MIUISec"
     }
 
     private fun Context.addModuleAssets() {
-        resources.assets.invokeMethodAuto("addAssetPath", Entry.modulePath)
+        XposedHelpers.callMethod(resources.assets, "addAssetPath", Entry.modulePath)
     }
 
     private fun getPermissionFlags(contentResolver: ContentResolver, packageName: String): Int {
@@ -44,7 +44,7 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
             null
         )?.use { c ->
             if (c.moveToNext()) {
-                return c.getInt(0).also { Log.d("get $packageName flags $it") }
+                return c.getInt(0).also { Log.d(TAG, "get $packageName flags $it") }
             }
         }
         return 0
@@ -68,25 +68,54 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
     @SuppressLint("DiscouragedApi")
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName == "com.miui.securitycenter") {
-            EzXHelperInit.initHandleLoadPackage(lpparam)
-            findMethod("com.miui.permcenter.privacymanager.SpecialPermissionInterceptActivity", findSuper = true) {
-                name == "onCreate"
-            }.hookBefore {
-                val inst = it.thisObject as Activity
+            this.lpparam = lpparam
+            hookSkipWarning()
+            hookAddKeepAutoStart()
+        }
+    }
+
+    private fun hookSkipWarning() = runCatching {
+        val activityClass = XposedHelpers.findClass(
+            "com.miui.permcenter.privacymanager.SpecialPermissionInterceptActivity",
+            lpparam.classLoader
+        )
+        var method: Method? = null
+        var clz = activityClass
+        while (method == null) {
+            try {
+                method = clz.getDeclaredMethod("onCreate", Bundle::class.java)
+            } catch (_: NoSuchMethodException) {
+                clz = clz.superclass
+            }
+        }
+        XposedBridge.hookMethod(method, object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                val inst = param.thisObject as Activity
                 val permName = inst.intent.getStringExtra("permName")
+                // special case of adb
                 if (permName == "miui_open_debug") {
                     Settings.Global.putInt(inst.contentResolver, Settings.Global.ADB_ENABLED, 1)
                 }
                 inst.setResult(-1)
                 inst.finish()
             }
+        })
+    }.onFailure { Log.e(TAG, "hookSkipAdbWarning: ", it) }
 
-            val classAppDetailsActivity =
-                loadClass("com.miui.appmanager.ApplicationsDetailsActivity")
-            val classAppDetailCheckBoxView =
-                loadClass("com.miui.appmanager.widget.AppDetailCheckBoxView")
-            classAppDetailsActivity.findMethod { name == "initView" }.hookAfter {
-                val ctx = it.thisObject as Activity
+    private fun hookAddKeepAutoStart() = runCatching {
+        val classAppDetailsActivity =
+            XposedHelpers.findClass(
+                "com.miui.appmanager.ApplicationsDetailsActivity",
+                lpparam.classLoader
+            )
+        val classAppDetailCheckBoxView =
+            XposedHelpers.findClass(
+                "com.miui.appmanager.widget.AppDetailCheckBoxView",
+                lpparam.classLoader
+            )
+        XposedBridge.hookAllMethods(classAppDetailsActivity, "initView", object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                val ctx = param.thisObject as Activity
                 ctx.addModuleAssets()
                 val pkgName = ctx.packageName
                 val idAmDetailAs = ctx.resources.getIdentifier("am_detail_as", "id", pkgName)
@@ -97,9 +126,9 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                 val dimenAmMainPageMarginSe =
                     ctx.resources.getIdentifier("am_main_page_margin_se", "dimen", pkgName)
 
-                Log.d("id=$idAmDetailAs")
+                Log.d(TAG, "id=$idAmDetailAs")
                 val viewAmDetailAs = ctx.findViewById<View>(idAmDetailAs)
-                val container = viewAmDetailAs.parent as? LinearLayout ?: return@hookAfter
+                val container = viewAmDetailAs.parent as? LinearLayout ?: return
                 val idx = container.indexOfChild(viewAmDetailAs)
                 val currentPkgName = ctx.intent.getStringExtra("package_name")!!
                 (XposedHelpers.newInstance(
@@ -117,9 +146,10 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                     val dimensionPixelSize =
                         ctx.resources.getDimensionPixelSize(dimenAmMainPageMarginSe)
                     setPadding(dimensionPixelSize, 0, dimensionPixelSize, 0)
-                    invokeMethodAuto("setTitle", R.string.asex_title)
-                    invokeMethodAuto("setSummary", R.string.asex_summary)
-                    invokeMethodAuto(
+                    XposedHelpers.callMethod(this, "setTitle", R.string.asex_title)
+                    XposedHelpers.callMethod(this, "setSummary", R.string.asex_summary)
+                    XposedHelpers.callMethod(
+                        this,
                         "setSlideButtonChecked",
                         false // TODO
                     )
@@ -130,13 +160,14 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                                     PERM_AUTO_START
                                 ) != 0
                             ctx.runOnUiThread {
-                                invokeMethodAuto(
+                                XposedHelpers.callMethod(
+                                    this,
                                     "setSlideButtonChecked",
                                     checked
                                 )
                             }
                         }.onFailure {
-                            Log.e("failed to get autostart stable permission", it)
+                            Log.e(TAG, "failed to get autostart stable permission", it)
                             ctx.runOnUiThread {
                                 Toast.makeText(
                                     ctx,
@@ -153,7 +184,7 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                         }.onSuccess {
                             updateStatus()
                         }.onFailure {
-                            Log.e("failed to set autostart stable permission", it)
+                            Log.e(TAG, "failed to set autostart stable permission", it)
                             ctx.runOnUiThread {
                                 Toast.makeText(
                                     ctx,
@@ -163,7 +194,8 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                             }
                         }
                     }
-                    invokeMethodAuto(
+                    XposedHelpers.callMethod(
+                        this,
                         "setSlideButtonOnCheckedListener",
                         CompoundButton.OnCheckedChangeListener { _, isChecked ->
                             thread {
@@ -177,6 +209,6 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                     container.addView(this, idx + 1)
                 }
             }
-        }
-    }
+        })
+    }.onFailure { Log.e(TAG, "hookAddKeepAutoStart: ", it) }
 }

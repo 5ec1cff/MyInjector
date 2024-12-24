@@ -34,6 +34,7 @@ com.termux
 ```
 
 - 修复在 MIUI 上使用小窗时界面抽搐的问题
+- 阻止终端界面中密码自动填充自动显示
 
 ### Telegram
 
@@ -77,6 +78,7 @@ com.miui.securitycenter
 ```
 
 - 在 App 管理界面显示一个「保持自启动」按钮，启用可防止该 App 被权限管理服务自动移除自启动权限
+- 阻止各种危险设置的倒计时确认
 
 ### SystemUI（小米）
 
@@ -105,11 +107,3 @@ com.fooview.android.fooview
 ```
 
 - 帮助绕过 Hidden API 限制，可能解决无法使用小窗启动的问题
-
-### QQ
-
-```
-com.tencent.mobileqq
-```
-
-- 阻止启动 logcat  
