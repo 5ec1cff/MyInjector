@@ -1,5 +1,6 @@
 package five.ec1cff.myinjector
 
+import android.app.Activity
 import android.view.View
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -11,8 +12,24 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 class TermuxHandler : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.termux") return
+        val mainActivity =
+            XposedHelpers.findClass("com.termux.app.TermuxActivity", lpparam.classLoader)
+        XposedHelpers.findAndHookMethod(
+            Activity::class.java,
+            "finish",
+            object : XC_MethodReplacement() {
+                override fun replaceHookedMethod(param: MethodHookParam): Any? {
+                    if (param.thisObject.javaClass == mainActivity) {
+                        (param.thisObject as Activity).finishAndRemoveTask()
+                    }
+                    return null
+                }
+
+            }
+        )
+
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("com.termux.app.TermuxActivity", lpparam.classLoader),
+            mainActivity,
             "onCreate",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {

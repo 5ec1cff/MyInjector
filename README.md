@@ -35,6 +35,7 @@ com.termux
 
 - 修复在 MIUI 上使用小窗时界面抽搐的问题
 - 阻止终端界面中密码自动填充自动显示
+- 退出终端 Activity 后移除最近任务
 
 ### Telegram
 
