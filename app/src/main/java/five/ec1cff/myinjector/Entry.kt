@@ -25,6 +25,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.zhihu.android" -> ZhihuXposedHandler()
             "com.android.chrome", "com.kiwibrowser.browser" -> ChromeHandler()
             "com.baidu.input" -> BaiduIMEHandler()
+            "com.miui.home" -> MiuiHomeHandler()
             else -> return
         }
         handler.handleLoadPackage(lpparam)

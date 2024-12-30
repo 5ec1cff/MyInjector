@@ -13,5 +13,6 @@
         <item>com.android.chrome</item>
         <item>com.kiwibrowser.browser</item>
         <item>com.baidu.input</item>
+        <item>com.miui.home</item>
     </string-array>
 </resources>
