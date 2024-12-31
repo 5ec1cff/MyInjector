@@ -59,6 +59,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookDisableVoiceVideoButton(lpparam)
         hookLongClickMention(lpparam)
         hookFakeInstallPermission(lpparam)
+        hookDoNotInstallGoogleMaps(lpparam)
     }
 
     private fun hookLongClickMention(lpparam: LoadPackageParam) = runCatching {
@@ -558,5 +559,13 @@ class TelegramHandler : IXposedHookLoadPackage {
         )
     }.onFailure {
         Log.e(TAG, "hookFakeInstallPermission: ", it)
+    }
+
+    private fun hookDoNotInstallGoogleMaps(lpparam: LoadPackageParam) = runCatching {
+        XposedBridge.hookAllMethods(
+            XposedHelpers.findClass("org.telegram.messenger.AndroidUtilities", lpparam.classLoader),
+            "isMapsInstalled",
+            XC_MethodReplacement.returnConstant(true)
+        )
     }
 }
