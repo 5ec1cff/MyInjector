@@ -58,6 +58,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookAutoUncheckSharePhoneNum(lpparam)
         hookDisableVoiceVideoButton(lpparam)
         hookLongClickMention(lpparam)
+        hookFakeInstallPermission(lpparam)
     }
 
     private fun hookLongClickMention(lpparam: LoadPackageParam) = runCatching {
@@ -547,5 +548,15 @@ class TelegramHandler : IXposedHookLoadPackage {
         )
     }.onFailure {
         Log.e(TAG, "hookUserProfileShowId: error", it)
+    }
+
+    private fun hookFakeInstallPermission(lpparam: LoadPackageParam) = runCatching {
+        XposedHelpers.findAndHookMethod(
+            XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader),
+            "canRequestPackageInstalls",
+            XC_MethodReplacement.returnConstant(true)
+        )
+    }.onFailure {
+        Log.e(TAG, "hookFakeInstallPermission: ", it)
     }
 }
