@@ -1,4 +1,5 @@
 import com.android.build.gradle.tasks.PackageAndroidArtifact
+import com.google.protobuf.gradle.*
 import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.Properties
@@ -6,6 +7,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.protobuf)
 }
 
 val keystorePropertiesFile: File = rootProject.file("keystore.properties")
@@ -81,11 +83,11 @@ android {
         "0x68"
     )
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     namespace = "io.github.a13e300.myinjector"
     packaging {
@@ -99,9 +101,31 @@ android {
     }
 }
 
+protobuf {
+    protoc {
+        artifact = libs.protobuf.protoc.get().toString()
+    }
+
+    generateProtoTasks {
+        all().forEach { task ->
+            task.builtins {
+                id("java") {
+                    option("lite")
+                }
+                id("kotlin") {
+                    option("lite")
+                }
+            }
+        }
+    }
+}
+
 dependencies {
     compileOnly(libs.xposed.api)
     implementation(libs.dexkit)
     compileOnly(libs.androidx.annotation)
     compileOnly(project(":hidden-api"))
+    implementation(libs.protobuf.kotlin)
+    implementation(libs.protobuf.java)
+    compileOnly(libs.protobuf.protoc)
 }

@@ -14,5 +14,6 @@
         <item>com.kiwibrowser.browser</item>
         <item>com.baidu.input</item>
         <item>com.miui.home</item>
+        <item>android</item>
     </string-array>
 </resources>

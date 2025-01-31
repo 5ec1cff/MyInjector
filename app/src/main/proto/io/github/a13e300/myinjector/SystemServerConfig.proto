@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+package io.github.a13e300.myinjector;
+
+option java_package = "io.github.a13e300.myinjector";
+option java_outer_classname = "API";
+option java_multiple_files = true;
+option optimize_for = LITE_RUNTIME;
+
+message SystemServerConfig {
+  optional bool noWakePath = 1;
+  optional bool noMiuiIntent = 2;
+  optional bool clipboardWhitelist = 3;
+  repeated string clipboardWhitelistPackages = 4;
+  optional bool fixSync = 5;
+  optional bool xSpace = 6;
+}

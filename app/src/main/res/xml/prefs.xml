@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <Preference android:summary="MyInjector" />
+    <PreferenceCategory android:title="system">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="noWakePath"
+            android:summary="不要在 app 启动其他 app 的 activity 的时候询问"
+            android:title="禁用 MIUI wake path" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="noMiuiIntent"
+            android:summary="阻止某些打开方式被 MIUI 替换为通过系统应用打开"
+            android:title="禁用 MIUI intent 替换" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="clipboardWhitelist"
+            android:summary="允许特定 app 在后台访问剪切板"
+            android:title="剪切板白名单" />
+        <EditTextPreference
+            android:key="clipboardWhitelistPackages"
+            android:summary="用换行分隔"
+            android:title="剪切板白名单列表" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="fixSync"
+            android:summary="可能可以解决无障碍窗口存在的情况下深色模式切换缓慢的问题"
+            android:title="修复 WMS blast sync" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="xSpace"
+            android:summary="允许 shell 和 xmsf 打开多开用户 app"
+            android:title="MIUI 多开修复" />
+        <Preference
+            android:key="commit"
+            android:persistent="false"
+            android:summary="向系统同步修改"
+            android:title="提交修改" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
