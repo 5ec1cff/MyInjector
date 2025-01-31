@@ -1,4 +1,4 @@
 -dontobfuscate
 -dontoptimize
 
--keep class five.ec1cff.myinjector.Entry
+-keep class io.github.a13e300.myinjector.Entry

@@ -1,4 +1,4 @@
-package five.ec1cff.myinjector
+package io.github.a13e300.myinjector
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -15,7 +15,6 @@ import android.widget.CompoundButton
 import android.widget.LinearLayout
 import android.widget.Toast
 import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -88,7 +87,7 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                 clz = clz.superclass
             }
         }
-        XposedBridge.hookMethod(method, object : XC_MethodHook() {
+        XposedBridge.hookMethod(method, object : de.robv.android.xposed.XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 val inst = param.thisObject as Activity
                 val permName = inst.intent.getStringExtra("permName")
@@ -113,7 +112,10 @@ class MIUISecurityCenterHandler : IXposedHookLoadPackage {
                 "com.miui.appmanager.widget.AppDetailCheckBoxView",
                 lpparam.classLoader
             )
-        XposedBridge.hookAllMethods(classAppDetailsActivity, "initView", object : XC_MethodHook() {
+        XposedBridge.hookAllMethods(
+            classAppDetailsActivity,
+            "initView",
+            object : de.robv.android.xposed.XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
                 val ctx = param.thisObject as Activity
                 ctx.addModuleAssets()

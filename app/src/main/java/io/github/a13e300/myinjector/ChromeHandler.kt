@@ -1,4 +1,4 @@
-package five.ec1cff.myinjector
+package io.github.a13e300.myinjector
 
 import android.content.Context
 import android.util.Log

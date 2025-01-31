@@ -1,4 +1,4 @@
-package five.ec1cff.myinjector
+package io.github.a13e300.myinjector
 
 import android.app.AndroidAppHelper
 import android.app.Dialog
@@ -78,7 +78,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         XposedBridge.hookAllMethods(
             XposedHelpers.findClass("org.telegram.ui.ChatActivity", lpparam.classLoader),
             "createView",
-            object : XC_MethodHook() {
+            object : de.robv.android.xposed.XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val obj = Object()
                     val thiz = param.thisObject
@@ -156,7 +156,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                 "org.telegram.ui.Components.ChatActivityEnterView",
                 lpparam.classLoader
             ),
-            object : XC_MethodHook() {
+            object : de.robv.android.xposed.XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     if (subHookFound.get()) return
                     val audioVideoButtonContainer =
@@ -179,7 +179,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         XposedBridge.hookAllMethods(
             XposedHelpers.findClass("org.telegram.ui.ContactAddActivity", lpparam.classLoader),
             "createView",
-            object : XC_MethodHook() {
+            object : de.robv.android.xposed.XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val checkBox =
                         XposedHelpers.getObjectField(param.thisObject, "checkBoxCell") as? View
@@ -209,7 +209,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                     lpparam.classLoader
                 ),
                 "createDeleteMessagesAlert",
-                object : XC_MethodHook() {
+                object : de.robv.android.xposed.XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam?) {
                         isCreating.set(true)
                     }
@@ -226,7 +226,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                 ),
                 "showDialog",
                 Dialog::class.java,
-                object : XC_MethodHook() {
+                object : de.robv.android.xposed.XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         if (isCreating.get() != true) return
                         val dialog = param.args[0]

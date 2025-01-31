@@ -42,7 +42,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "five.ec1cff.myinjector"
+        applicationId = "io.github.a13e300.myinjector"
         minSdk = 30
         targetSdk = 35
         versionCode = 1
@@ -87,7 +87,7 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
-    namespace = "five.ec1cff.myinjector"
+    namespace = "io.github.a13e300.myinjector"
     packaging {
         resources {
             excludes += "**"

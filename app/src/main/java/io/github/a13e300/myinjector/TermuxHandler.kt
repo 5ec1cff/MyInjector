@@ -1,9 +1,8 @@
-package five.ec1cff.myinjector
+package io.github.a13e300.myinjector
 
 import android.app.Activity
 import android.view.View
 import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -17,7 +16,7 @@ class TermuxHandler : IXposedHookLoadPackage {
         XposedHelpers.findAndHookMethod(
             Activity::class.java,
             "finish",
-            object : XC_MethodReplacement() {
+            object : de.robv.android.xposed.XC_MethodReplacement() {
                 override fun replaceHookedMethod(param: MethodHookParam): Any? {
                     if (param.thisObject.javaClass == mainActivity) {
                         (param.thisObject as Activity).finishAndRemoveTask()
@@ -31,7 +30,7 @@ class TermuxHandler : IXposedHookLoadPackage {
         XposedBridge.hookAllMethods(
             mainActivity,
             "onCreate",
-            object : XC_MethodHook() {
+            object : de.robv.android.xposed.XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     (XposedHelpers.getObjectField(
                         param.thisObject,

@@ -1,4 +1,4 @@
-package five.ec1cff.myinjector
+package io.github.a13e300.myinjector
 
 import android.annotation.SuppressLint
 import android.app.INotificationManager
@@ -14,7 +14,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -42,7 +41,7 @@ class SystemUIHandler : IXposedHookLoadPackage {
                 lpparam.classLoader
             ),
             "enterModal",
-            object : XC_MethodHook() {
+            object : de.robv.android.xposed.XC_MethodHook() {
                 @SuppressLint("SetTextI18n")
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val modalWindowView = param.thisObject as FrameLayout
