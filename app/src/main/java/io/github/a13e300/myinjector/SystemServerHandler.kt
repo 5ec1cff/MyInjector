@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
 import android.os.Build
 import android.os.Handler
@@ -48,6 +49,7 @@ class SystemServerHandler : IXposedHookLoadPackage {
         hookClipboardWhitelist()
         hookFixSync()
         setXSpace()
+        hookForceNewTask()
         runConfigListener()
     }
 
@@ -200,6 +202,50 @@ class SystemServerHandler : IXposedHookLoadPackage {
             clear()
             Log.d(TAG, "clear publicActionList")
         }
+    }
+
+    private fun hookForceNewTask() = runCatching {
+        val activityStarter =
+            XposedHelpers.findClass("com.android.server.wm.ActivityStarter", lpparam.classLoader)
+        XposedBridge.hookAllMethods(activityStarter, "executeRequest", object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                if (!config.forceNewTask) return
+                val request = param.args[0]
+                // do not handle startActivityForResult
+                val requestCode = XposedHelpers.getObjectField(request, "requestCode") as Int
+                if (requestCode >= 0) return
+                val intent = XposedHelpers.getObjectField(
+                    request,
+                    "intent"
+                ) as? Intent ?: return
+                if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return
+                val source = XposedHelpers.getObjectField(request, "callingPackage") as? String
+                if (source == null) {
+                    Log.w(TAG, "forceNewTask: null source package!")
+                    return
+                }
+                val target = (XposedHelpers.getObjectField(
+                    request,
+                    "activityInfo"
+                ) as? ActivityInfo)?.packageName
+                if (target == null) {
+                    Log.w(TAG, "forceNewTask: null target package!")
+                    return
+                }
+                val selfStart = source == target
+                val match = config.forceNewTaskRulesList.any {
+                    val anySource = it.sourcePackage == "*" && !selfStart
+                    val anyTarget = it.targetPackage == "*" && !selfStart
+                    (it.sourcePackage == source || anySource) && (it.targetPackage == target || anyTarget)
+                }
+                if (match) {
+                    Log.d(TAG, "forceNewTask: matched $source -> $target")
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+        })
+    }.onFailure {
+        Log.e(TAG, "hookForceNewTask: ", it)
     }
 
     private fun runConfigListener() {

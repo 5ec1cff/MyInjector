@@ -31,6 +31,15 @@
             android:key="xSpace"
             android:summary="允许 shell 和 xmsf 打开多开用户 app"
             android:title="MIUI 多开修复" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="forceNewTask"
+            android:summary="强制 NEW_TASK"
+            android:title="强制某些 activity 通过 NEW_TASK 启动" />
+        <EditTextPreference
+            android:key="forceNewTaskRules"
+            android:summary="一行一个规则，形如[source]:[target]，可以用*表示除了自己之外的所有包"
+            android:title="强制 NEW_TASK 规则" />
         <Preference
             android:key="commit"
             android:persistent="false"

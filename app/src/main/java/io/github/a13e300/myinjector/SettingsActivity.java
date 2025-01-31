@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("deprecation")
@@ -89,6 +90,14 @@ public class SettingsActivity extends Activity {
                     .setFixSync(sp.getBoolean("fixSync", false))
                     .setXSpace(sp.getBoolean("xSpace", false))
                     .addAllClipboardWhitelistPackages(Arrays.stream(sp.getString("clipboardWhitelistPackages", "").trim().split("\n")).collect(Collectors.toList()))
+                    .setForceNewTask(sp.getBoolean("forceNewTask", false))
+                    .addAllForceNewTaskRules(Arrays.stream(sp.getString("forceNewTaskRules", "").trim().split("\n")).map(
+                            x -> {
+                                var parts = x.split(":");
+                                if (parts.length != 2) return null;
+                                return NewTaskRule.newBuilder().setSourcePackage(parts[0]).setTargetPackage(parts[1]).build();
+                            }
+                    ).filter(Objects::nonNull).collect(Collectors.toList()))
                     .build();
             intent.putExtra("EXTRA_CREDENTIAL", pendingIntent);
             intent.putExtra("EXTRA_CONFIG", config.toByteArray());
