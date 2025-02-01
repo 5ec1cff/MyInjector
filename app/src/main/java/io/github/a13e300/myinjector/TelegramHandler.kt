@@ -45,6 +45,42 @@ fun View.findView(predicate: (View) -> Boolean): View? {
 class TelegramHandler : IXposedHookLoadPackage {
     companion object {
         private const val TAG = "TelegramHandler"
+        private val emotionMap = """6177238186645787094:128522:良辰共此曲动态表情包_傲娇
+6177033303820866469:10067:良辰共此曲动态表情包_哈？
+6177141996558226404:128075:良辰共此曲动态表情包_鼓掌
+6174592156078969324:128105:良辰共此曲动态表情包_emo
+6177004269841945229:128105:良辰共此曲动态表情包_观察
+6174977380285682173:128105:良辰共此曲动态表情包_微笑
+6176959378843767052:128105:良辰共此曲动态表情包_rua猫
+6174981185626706785:128105:良辰共此曲动态表情包_探头
+6177111738513625463:128105:良辰共此曲动态表情包_生气
+6174978707430576848:128105:良辰共此曲动态表情包_瞪
+6177158764110548966:128298:良辰共此曲动态表情包_剪切
+6176700478215164551:128105:良辰共此曲动态表情包_比心
+6174547917915820011:128105:良辰共此曲动态表情包_逃跑
+6177098359690498494:128105:良辰共此曲动态表情 包_泣
+6177039660372464007:128105:良辰共此曲动态表情包_思考
+6174437850788926135:128563:Mygo表情包_害羞
+6177051956863831654:128548:Mygo表情包_生气
+6176975888698053206:128105:Mygo表情包_发送消息
+6177165941000900726:127861:Mygo表情包_抹茶芭菲
+6174668318734029132:128308:Mygo表情包_请点单
+6176874321311436983:128105:Mygo表情包_不要吵架
+6174484176306182483:128105:Mygo表情包_Love
+6177197174003078127:129303:Mygo表情包_让我看看
+6177009075910348984:128105:Mygo表情包_溜了溜了
+6177056788702040683:129303:Mygo表情包_那我呢？
+6177073762412794635:128105:Mygo表情包_创作中
+6174584652771105649:128100:Mygo表情包_探头
+6176716163435730260:129300:Mygo表情包_为什么！
+6176924800062066490:128105:Mygo表情包_刚睡醒
+6177113383486100732:128516:Mygo表情包_哈？
+6174728396736566571:128532:Mygo表情包_忧郁
+6176734902378042250:10067:Mygo表情包_不会吧？
+6174644503140374877:128105:Mygo表情包_大哭
+6174667206337500263:128105:Mygo表情包_有趣的女人
+6174571785049085622:128105:Mygo表情包_Block!
+        """.trim().split("\n").map { it.split(":") }.associateBy { it[2] }
     }
     private lateinit var moduleRes: XModuleResources
 
@@ -60,6 +96,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookLongClickMention(lpparam)
         hookFakeInstallPermission(lpparam)
         hookDoNotInstallGoogleMaps(lpparam)
+        hookEmoji(lpparam)
     }
 
     private fun hookLongClickMention(lpparam: LoadPackageParam) = runCatching {
@@ -568,4 +605,136 @@ class TelegramHandler : IXposedHookLoadPackage {
             XC_MethodReplacement.returnConstant(true)
         )
     }
+
+    private fun hookEmoji(lpparam: LoadPackageParam) = runCatching {
+        val emojiPacksAlert = XposedHelpers.findClass(
+            "org.telegram.ui.Components.EmojiPacksAlert",
+            lpparam.classLoader
+        )
+        val emojiPacksAlertEmojiPackHeader = XposedHelpers.findClass(
+            "org.telegram.ui.Components.EmojiPacksAlert\$EmojiPackHeader",
+            lpparam.classLoader
+        )
+        val customEmojiClass = XposedHelpers.findClass(
+            "org.telegram.tgnet.TLRPC\$TL_documentAttributeCustomEmoji",
+            lpparam.classLoader
+        )
+
+        XposedBridge.hookAllConstructors(
+            emojiPacksAlertEmojiPackHeader,
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val optionsButton =
+                        XposedHelpers.getObjectField(param.thisObject, "optionsButton") ?: return
+                    XposedHelpers.callMethod(optionsButton, "addSubItem", 3, "Dump")
+                }
+            }
+        )
+
+        XposedBridge.hookAllMethods(
+            emojiPacksAlert,
+            "onSubItemClick",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (param.args[0] != 3) return
+                    Log.d(TAG, "dump: clicked")
+                    val customEmojiPacks =
+                        XposedHelpers.getObjectField(param.thisObject, "customEmojiPacks")
+                    val stickerSets =
+                        XposedHelpers.getObjectField(customEmojiPacks, "stickerSets") as List<*>
+                    val str = StringBuilder()
+                    stickerSets.firstOrNull()?.let { tlMessagesStickerSet ->
+                        val set = XposedHelpers.getObjectField(tlMessagesStickerSet, "set")
+                        val title = XposedHelpers.getObjectField(set, "title")
+                        val id = XposedHelpers.getObjectField(set, "id")
+                        val shortName = XposedHelpers.getObjectField(set, "short_name")
+                        // Log.d(TAG, "dump: $title $id $shortName")
+                        str.append("title=")
+                            .append(title)
+                            .append("\nid=")
+                            .append(id)
+                            .append("\nshortName=")
+                            .append(shortName)
+
+                        val documents = XposedHelpers.getObjectField(
+                            tlMessagesStickerSet,
+                            "documents"
+                        ) as List<*>
+                        documents.forEachIndexed { i, doc ->
+                            val id = XposedHelpers.getObjectField(doc, "id")
+                            val alt = (XposedHelpers.getObjectField(
+                                doc,
+                                "attributes"
+                            ) as List<*>).firstOrNull {
+                                customEmojiClass.isInstance(it)
+                            }?.let { attr ->
+                                XposedHelpers.getObjectField(attr, "alt")
+                            } as? String
+                            // Log.d(TAG, "dump: $i id=$id alt=$alt")
+                            val altUnicode = alt?.firstUnicodeChar()
+                            str.append("\n$i=$id:$altUnicode")
+                        }
+
+                        AndroidAppHelper.currentApplication().getSystemService(
+                            ClipboardManager::class.java
+                        ).setPrimaryClip(ClipData.newPlainText("", str.toString()))
+                    }
+                }
+            }
+        )
+
+        XposedBridge.hookAllMethods(
+            ClipboardManager::class.java,
+            "getPrimaryClip",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    // Log.d(TAG, "afterHookedMethod: getPrimaryClip")
+                    val result = param.result as? ClipData ?: return
+                    val item = result.getItemAt(0)
+                    val origText = item.text
+                    var newText = origText
+                    var pos = 0
+                    // Log.d(TAG, "afterHookedMethod: $origText")
+                    while (true) {
+                        val firstIdx = newText.indexOf('[', pos)
+                        if (firstIdx == -1) break
+                        val lastIdx = newText.indexOf(']', firstIdx)
+                        if (lastIdx == -1) break
+                        // Log.d(TAG, "afterHookedMethod: $firstIdx $lastIdx")
+                        pos = lastIdx
+                        val kw = newText.substring(firstIdx + 1 until lastIdx)
+                        val replacement = emotionMap[kw]?.let {
+                            "<animated-emoji data-document-id=\"${it[0]}\">&#${it[1]};</animated-emoji>"
+                        } ?: continue
+                        newText = newText.replaceRange(firstIdx..lastIdx, replacement)
+                        // Log.d(TAG, "afterHookedMethod: replaced=$newText")
+                        pos = firstIdx + replacement.length
+                    }
+                    if (newText !== origText) {
+                        // Log.d(TAG, "replace: $newText")
+                        param.result = ClipData.newHtmlText(
+                            "",
+                            newText,
+                            newText.toString().replace("\n", "<br>")
+                        )
+                    }
+                }
+            }
+        )
+    }.onFailure {
+        Log.e(TAG, "emojiHandler: ", it)
+    }
+}
+
+private fun String.firstUnicodeChar(): Int {
+    val c = get(0).code
+    if (c >= 0xd800 && c <= 0xdfff) {
+        if (c < 0xdc00 && length >= 2) {
+            val d = get(1).code
+            if (d >= 0xdc00 && d <= 0xdfff) {
+                return 0x010000.or((c - 0xd800).shl(10)).or(d - 0xdc00)
+            }
+        }
+    }
+    return c
 }
