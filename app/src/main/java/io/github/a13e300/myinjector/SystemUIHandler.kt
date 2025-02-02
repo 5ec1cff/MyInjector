@@ -13,7 +13,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
+import dalvik.system.PathClassLoader
 import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -30,8 +33,38 @@ class SystemUIHandler : IXposedHookLoadPackage {
         private const val TAG = "myinjector-systemui"
     }
 
+    private fun hookPlugin(lpparam: XC_LoadPackage.LoadPackageParam) = runCatching {
+        val parentCLClass = XposedHelpers.findClass(
+            "com.android.systemui.shared.plugins.PluginManagerImpl\$ClassLoaderFilter",
+            lpparam.classLoader
+        )
+        XposedHelpers.findAndHookConstructor(
+            PathClassLoader::class.java,
+            String::class.java, String::class.java, ClassLoader::class.java,
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (param.args[2].javaClass != parentCLClass) return
+                    val cl = param.thisObject as ClassLoader
+
+                    Log.d(TAG, "in sysui plugin", Throwable())
+                    runCatching {
+                        XposedBridge.hookAllMethods(
+                            XposedHelpers.findClass(
+                                "com.android.systemui.miui.volume.MiuiVolumeDialogImpl\$SilenceModeObserver",
+                                cl
+                            ), "showToastOrStatusBar", XC_MethodReplacement.DO_NOTHING
+                        )
+                    }.onFailure {
+                        Log.e(TAG, "hook showToast", it)
+                    }
+                }
+            }
+        )
+    }.onFailure { Log.e(TAG, "hookCreatePkgContext: ", it) }
+
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.android.systemui") return
+        hookPlugin(lpparam)
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
         }
