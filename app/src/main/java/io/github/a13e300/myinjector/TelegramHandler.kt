@@ -58,7 +58,7 @@ class TelegramHandler : IXposedHookLoadPackage {
 6177158764110548966:128298:良辰共此曲动态表情包_剪切
 6176700478215164551:128105:良辰共此曲动态表情包_比心
 6174547917915820011:128105:良辰共此曲动态表情包_逃跑
-6177098359690498494:128105:良辰共此曲动态表情 包_泣
+6177098359690498494:128105:良辰共此曲动态表情包_泣
 6177039660372464007:128105:良辰共此曲动态表情包_思考
 6174437850788926135:128563:Mygo表情包_害羞
 6177051956863831654:128548:Mygo表情包_生气
@@ -97,6 +97,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         hookFakeInstallPermission(lpparam)
         hookDoNotInstallGoogleMaps(lpparam)
         hookEmoji(lpparam)
+        hookHasAppToOpen(lpparam)
     }
 
     private fun hookLongClickMention(lpparam: LoadPackageParam) = runCatching {
@@ -723,6 +724,18 @@ class TelegramHandler : IXposedHookLoadPackage {
         )
     }.onFailure {
         Log.e(TAG, "emojiHandler: ", it)
+    }
+
+    private fun hookHasAppToOpen(lpparam: LoadPackageParam) = runCatching {
+        XposedBridge.hookAllMethods(
+            XposedHelpers.findClass(
+                "org.telegram.messenger.browser.Browser", lpparam.classLoader
+            ),
+            "hasAppToOpen",
+            XC_MethodReplacement.returnConstant(true)
+        )
+    }.onFailure {
+        Log.e(TAG, "hookHasAppToOpen: ", it)
     }
 }
 
