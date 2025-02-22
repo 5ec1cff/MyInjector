@@ -32,6 +32,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 if (lpparam.processName == "android") SystemServerHandler()
                 else return
             }
+            "com.android.settings" -> SettingsHandler()
             else -> return
         }
         handler.handleLoadPackage(lpparam)

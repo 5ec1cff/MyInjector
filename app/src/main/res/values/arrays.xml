@@ -15,5 +15,6 @@
         <item>com.baidu.input</item>
         <item>com.miui.home</item>
         <item>android</item>
+        <item>com.android.settings</item>
     </string-array>
 </resources>
