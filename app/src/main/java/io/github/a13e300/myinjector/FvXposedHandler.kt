@@ -3,6 +3,7 @@ package io.github.a13e300.myinjector
 import android.os.Process
 import android.util.Log
 import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
@@ -34,6 +35,7 @@ class FvXposedHandler : IXposedHookLoadPackage {
     // 阻止 FV 发现系统的悬浮窗通知时应激哈气
     // 懒得写 dexkit 了
     private fun hookNoTipNotificationPerm() = runCatching {
+        val isTarget = ThreadLocal<Boolean>()
         // 自动返回桌面
         // 特征： android.intent.action.MAIN, android.intent.category.HOME, 调用 performGlobalAction(2)
         XposedBridge.hookAllMethods(
@@ -42,7 +44,14 @@ class FvXposedHandler : IXposedHookLoadPackage {
                 lpparam.classLoader
             ),
             "O0",
-            XC_MethodReplacement.DO_NOTHING
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (isTarget.get() == true) {
+                        isTarget.set(false)
+                        param.result = null
+                    }
+                }
+            }
         )
         // 远程调用 FooViewService 显示授权通知权限的窗口
         // binder 接口 f1, f1$a, f1$a$a, 特征 com.fooview.android.fooview.IMainUIService
@@ -55,7 +64,12 @@ class FvXposedHandler : IXposedHookLoadPackage {
                 lpparam.classLoader
             ),
             "F3",
-            XC_MethodReplacement.DO_NOTHING
+            object : XC_MethodReplacement() {
+                override fun replaceHookedMethod(param: MethodHookParam): Any? {
+                    isTarget.set(true)
+                    return null
+                }
+            }
         )
     }.onFailure {
         Log.e(TAG, "hookNoTipNotificationPerm: ", it)
