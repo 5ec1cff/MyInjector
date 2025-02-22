@@ -54,6 +54,7 @@ org.telegram.messenger.beta
 - 进入联系人页面不再显示联系人权限弹窗
 - 假装拥有请求安装权限（适用于你有别的安装器但是不想给请求安装权限的场景）
 - 无需安装 Google 地图即可使用定位功能（为啥非要安？）
+- 修复打开外部链接时可能会触发两次打开（后一次使用 chrome custom tab）的问题
 
 ### 知乎
 
@@ -100,6 +101,16 @@ com.miui.home
 - 最近任务卡片划动时悬停 700ms
   后再划动即可杀死进程（「清理任务」字样替换为「停止进程」，不会阻止系统的划卡杀，需要配合其他划卡杀白名单模块使用，如 [NoSwipeToKill](https://github.com/dantmnf/NoSwipeToKill)）
 
+### FV 悬浮球
+
+```
+com.fooview.android.fooview
+```
+
+- 帮助绕过 Hidden API 限制，可能解决无法使用小窗启动的问题
+- (1.6.0/160) 阻止无障碍服务发现「正在其他应用上层显示」通知时提示授予通知栏权限
+
+
 ## 过期功能
 
 长期未维护，可能不可用
@@ -111,11 +122,3 @@ com.twitter.android
 ```
 
 - 修复 bitwarden 在 twitter 的搜索页面中错误地显示自动填充的问题
-
-### FV 悬浮球
-
-```
-com.fooview.android.fooview
-```
-
-- 帮助绕过 Hidden API 限制，可能解决无法使用小窗启动的问题

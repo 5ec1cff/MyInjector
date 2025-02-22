@@ -726,6 +726,8 @@ class TelegramHandler : IXposedHookLoadPackage {
         Log.e(TAG, "emojiHandler: ", it)
     }
 
+    // 这构式逻辑谁写的？
+    // https://github.com/DrKLO/Telegram/blob/eee720ef5e48e1c434f4c5a83698dc4ada34aaa9/TMessagesProj/src/main/java/org/telegram/messenger/browser/Browser.java#L391
     private fun hookHasAppToOpen(lpparam: LoadPackageParam) = runCatching {
         XposedBridge.hookAllMethods(
             XposedHelpers.findClass(
