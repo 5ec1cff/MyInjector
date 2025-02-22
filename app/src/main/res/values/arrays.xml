@@ -18,5 +18,6 @@
         <item>com.android.settings</item>
         <item>app.landrop.landrop_flutter</item>
         <item>com.android.intentresolver</item>
+        <item>com.meizu.customizecenter</item>
     </string-array>
 </resources>

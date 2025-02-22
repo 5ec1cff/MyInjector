@@ -34,6 +34,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.android.settings" -> SettingsHandler()
             "app.landrop.landrop_flutter" -> LanDropHandler()
             "com.android.intentresolver" -> IntentResolverHandler()
+            "com.meizu.customizecenter" -> MeiZuCustomizerCenterHandler()
             else -> return
         }
         logPrefix = "[${handler::class.java.simpleName}] "

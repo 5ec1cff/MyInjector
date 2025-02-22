@@ -172,3 +172,11 @@ com.twitter.android
 ```
 
 - 修复 bitwarden 在 twitter 的搜索页面中错误地显示自动填充的问题
+
+### MeiZuCustomizerCenter
+
+```
+com.meizu.customizecenter
+```
+
+- 将本应用在 /sdcard 下创建的目录重定向到 /sdcard/Documents （不建议使用）
