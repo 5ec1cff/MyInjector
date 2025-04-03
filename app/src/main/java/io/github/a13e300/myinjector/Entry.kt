@@ -33,6 +33,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 else return
             }
             "com.android.settings" -> SettingsHandler()
+            "app.landrop.landrop_flutter" -> LanDropHandler()
             else -> return
         }
         handler.handleLoadPackage(lpparam)
