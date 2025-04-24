@@ -48,9 +48,17 @@ fun View.findView(predicate: (View) -> Boolean): View? {
     return null
 }
 
+fun Any?.getObj(name: String): Any? = XposedHelpers.getObjectField(this, name)
+
+fun Any?.call(name: String, vararg args: Any?): Any? = XposedHelpers.callMethod(this, name, *args)
+
+fun Class<*>.callS(name: String, vararg args: Any?): Any? = XposedHelpers.callStaticMethod(this, name, *args)
+
 class TelegramHandler : IXposedHookLoadPackage {
     companion object {
         private const val TAG = "TelegramHandler"
+        private const val MENU_DUMP = 301
+        private const val MENU_GET_PROFILE = 302
         // emoji name -> (emoji id, emoji)
     }
     private lateinit var moduleRes: XModuleResources
@@ -632,17 +640,47 @@ class TelegramHandler : IXposedHookLoadPackage {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val optionsButton =
                         XposedHelpers.getObjectField(param.thisObject, "optionsButton") ?: return
-                    XposedHelpers.callMethod(optionsButton, "addSubItem", 3, "Dump")
+                    XposedHelpers.callMethod(optionsButton, "addSubItem", MENU_DUMP, "Dump")
+                    XposedHelpers.callMethod(optionsButton, "addSubItem", MENU_GET_PROFILE, "Profile of admin")
                 }
             }
         )
+
+        val messagesController = XposedHelpers.findClass("org.telegram.messenger.MessagesController", lpparam.classLoader)
 
         XposedBridge.hookAllMethods(
             emojiPacksAlert,
             "onSubItemClick",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (param.args[0] != 3) return
+                    // https://github.com/NextAlone/Nagram/blob/c189a1af80016fd3d041be121143ede94b0fdcf4/TMessagesProj/src/main/java/org/telegram/ui/Components/EmojiPacksAlert.java#L1541
+                    if (param.args[0] == MENU_GET_PROFILE) {
+                        val stickerSet = (param.thisObject.getObj("customEmojiPacks").getObj("stickerSets") as List<*>)[0]
+                        val id = stickerSet.getObj("set").getObj("id") as Long
+                        var userId = id.shr(32)
+                        if (id.shr(16).and(0xff) == 0x3fL) {
+                            userId = userId.or(0x80000000L)
+                        }
+                        if (id.shr(24).and(0xff) != 0L) {
+                            userId += 0x100000000L;
+                        }
+                        val fragment = param.thisObject.getObj("fragment")
+                        if (fragment != null) {
+                            val user = fragment.call("getMessagesController").call("getUser", userId)
+                            val currentAccount = param.thisObject.getObj("currentAccount")
+                            if (user != null) {
+                                messagesController.callS("getInstance", currentAccount)
+                                    .call("openChatOrProfileWith", user, null, fragment, 0, false)
+                                return
+                            }
+                        }
+                        AndroidAppHelper.currentApplication().getSystemService(
+                            ClipboardManager::class.java
+                        ).setPrimaryClip(ClipData.newPlainText("", userId.toString()))
+                        Toast.makeText(AndroidAppHelper.currentApplication(), "User: " + userId.toString(),
+                            Toast.LENGTH_SHORT).show()
+                    }
+                    if (param.args[0] != MENU_DUMP) return
                     Log.d(TAG, "dump: clicked")
                     val customEmojiPacks =
                         XposedHelpers.getObjectField(param.thisObject, "customEmojiPacks")
@@ -723,6 +761,57 @@ class TelegramHandler : IXposedHookLoadPackage {
                             newText,
                             newText.toString().replace("\n", "<br>")
                         )
+                    }
+                }
+            }
+        )
+
+        val stickersAlert = XposedHelpers.findClass(
+            "org.telegram.ui.Components.StickersAlert",
+            lpparam.classLoader
+        )
+
+        // https://github.com/NextAlone/Nagram/blob/c189a1af80016fd3d041be121143ede94b0fdcf4/TMessagesProj/src/main/java/org/telegram/ui/Components/StickersAlert.java#L1485
+        XposedBridge.hookAllMethods(
+            stickersAlert, "init",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val optionsButton =
+                        XposedHelpers.getObjectField(param.thisObject, "optionsButton") ?: return
+                    XposedHelpers.callMethod(optionsButton, "addSubItem", MENU_GET_PROFILE, "Profile of admin")
+                }
+            }
+        )
+        XposedBridge.hookAllMethods(
+            stickersAlert,
+            "onSubItemClick",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (param.args[0] == MENU_GET_PROFILE) {
+                        val stickerSet = param.thisObject.getObj("stickerSet")
+                        val id = stickerSet.getObj("set").getObj("id") as Long
+                        var userId = id.shr(32)
+                        if (id.shr(16).and(0xff) == 0x3fL) {
+                            userId = userId.or(0x80000000L)
+                        }
+                        if (id.shr(24).and(0xff) != 0L) {
+                            userId += 0x100000000L;
+                        }
+                        val parentFragment = param.thisObject.getObj("parentFragment")
+                        if (parentFragment != null) {
+                            val user = parentFragment.call("getMessagesController").call("getUser", userId)
+                            val currentAccount = param.thisObject.getObj("currentAccount")
+                            if (user != null) {
+                                messagesController.callS("getInstance", currentAccount)
+                                    .call("openChatOrProfileWith", user, null, parentFragment, 0, false)
+                                return
+                            }
+                        }
+                        AndroidAppHelper.currentApplication().getSystemService(
+                            ClipboardManager::class.java
+                        ).setPrimaryClip(ClipData.newPlainText("", userId.toString()))
+                        Toast.makeText(AndroidAppHelper.currentApplication(), "User: " + userId.toString(),
+                            Toast.LENGTH_SHORT).show()
                     }
                 }
             }
