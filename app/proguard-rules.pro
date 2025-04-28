@@ -7,3 +7,7 @@
     public static void check*(...);
     public static void throw*(...);
 }
+
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
+  <fields>;
+}
