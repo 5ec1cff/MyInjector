@@ -5,26 +5,22 @@ import android.content.ComponentName
 import android.os.Handler
 import android.os.Looper
 import android.os.ServiceManager
-import android.util.Log
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.getObjAs
 
-class MiuiHomeHandler : IXposedHookLoadPackage {
-    companion object {
-        private const val TAG = "MyInjector-MIUIHomeHandler"
-    }
-
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        Log.d(TAG, "handleLoadPackage: hooked")
+class MiuiHomeHandler : IHook() {
+    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        logD("handleLoadPackage: hooked")
         runCatching {
-            val recentTouchHandlerClass = XposedHelpers.findClass(
-                "com.miui.home.recents.views.TaskStackViewTouchHandler", lpparam.classLoader
+            val recentTouchHandlerClass = findClass(
+                "com.miui.home.recents.views.TaskStackViewTouchHandler"
             )
 
             XposedBridge.hookAllMethods(
@@ -63,7 +59,7 @@ class MiuiHomeHandler : IXposedHookLoadPackage {
                     }
                 })
         }.onFailure {
-            Log.e(TAG, "handleLoadPackage: ", it)
+            logE("handleLoadPackage: ", it)
         }
     }
 
@@ -74,10 +70,8 @@ class MiuiHomeHandler : IXposedHookLoadPackage {
     private var mToBeKilled: View? = null
     private val ams by lazy { IActivityManager.Stub.asInterface(ServiceManager.getService("activity")) }
 
-    private fun findDismissView(): TextView {
-        val v = XposedHelpers.getObjectField(mCurrentView, "mHeaderView")
-        return XposedHelpers.getObjectField(v, "mDismissView") as TextView
-    }
+    private fun findDismissView(): TextView =
+        mCurrentView.getObj("mHeaderView").getObjAs<TextView>("mDismissView")
 
     private fun setupToBeKilled() {
         mCurrentView ?: return
@@ -100,20 +94,20 @@ class MiuiHomeHandler : IXposedHookLoadPackage {
     }
 
     private fun onDragCancelled(v: View) {
-        Log.d(TAG, "onDragCancelled: cancelled $mToBeKilled")
+        logD("onDragCancelled: cancelled $mToBeKilled")
         mToBeKilled = null
     }
 
     private fun onChildDismissedEnd(v: View) {
         if (mToBeKilled != v) {
-            Log.e(TAG, "onChildDismissedEnd: not target: $v $mToBeKilled")
+            logE("onChildDismissedEnd: not target: $v $mToBeKilled")
             return
         }
         mToBeKilled = null
-        val task = XposedHelpers.getObjectField(v, "mTask")
-        val key = XposedHelpers.getObjectField(task, "key")
-        val user = XposedHelpers.getObjectField(key, "userId") as Int
-        val topActivity = XposedHelpers.getObjectField(key, "topActivity") as ComponentName
+        val task = v.getObj("mTask")
+        val key = task.getObj("key")
+        val user = key.getObjAs<Int>("userId")
+        val topActivity = key.getObjAs<ComponentName>("topActivity")
         runCatching { ams.forceStopPackage(topActivity.packageName, user) }
             .onSuccess {
                 Toast.makeText(v.context, "killed ${topActivity.packageName}", Toast.LENGTH_SHORT)
@@ -126,7 +120,7 @@ class MiuiHomeHandler : IXposedHookLoadPackage {
                     Toast.LENGTH_SHORT
                 )
                     .show()
-                Log.e(TAG, "onChildDismissedEnd: ", it)
+                logE("onChildDismissedEnd: ", it)
             }
     }
 }

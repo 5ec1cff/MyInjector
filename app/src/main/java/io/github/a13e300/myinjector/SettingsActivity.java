@@ -1,5 +1,7 @@
 package io.github.a13e300.myinjector;
 
+import static io.github.a13e300.myinjector.LogKt.logD;
+
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
@@ -8,7 +10,6 @@ import android.graphics.Insets;
 import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceFragment;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -78,7 +79,7 @@ public class SettingsActivity extends Activity {
         }
 
         private void commit() {
-            Log.d("MyInjector", "commit");
+            logD("commit", null);
             var context = getContext();
             var intent = new Intent("io.github.a13e300.myinjector.UPDATE_SYSTEM_CONFIG");
             var pendingIntent = PendingIntent.getBroadcast(context, 1, intent, PendingIntent.FLAG_IMMUTABLE);

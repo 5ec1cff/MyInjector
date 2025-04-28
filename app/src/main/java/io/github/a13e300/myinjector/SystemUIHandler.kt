@@ -3,40 +3,34 @@ package io.github.a13e300.myinjector
 import android.annotation.SuppressLint
 import android.app.INotificationManager
 import android.content.Intent
-import android.content.res.Resources
 import android.os.ServiceManager
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
-import android.util.Log
-import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import dalvik.system.PathClassLoader
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.callS
+import io.github.a13e300.myinjector.arch.dp2px
+import io.github.a13e300.myinjector.arch.findClass
+import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.getObjAs
 import java.text.SimpleDateFormat
 import java.util.Date
 
-fun Float.dp2px(resources: Resources) =
-    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, this, resources.displayMetrics)
 
-fun Int.dp2px(resources: Resources) = toFloat().dp2px(resources)
-
-class SystemUIHandler : IXposedHookLoadPackage {
-    companion object {
-        private const val TAG = "myinjector-systemui"
-    }
-
-    private fun hookPlugin(lpparam: XC_LoadPackage.LoadPackageParam) = runCatching {
-        val parentCLClass = XposedHelpers.findClass(
-            "com.android.systemui.shared.plugins.PluginManagerImpl\$ClassLoaderFilter",
-            lpparam.classLoader
+class SystemUIHandler : IHook() {
+    private fun hookPlugin() = runCatching {
+        val parentCLClass = findClass(
+            "com.android.systemui.shared.plugins.PluginManagerImpl\$ClassLoaderFilter"
         )
         XposedHelpers.findAndHookConstructor(
             PathClassLoader::class.java,
@@ -46,35 +40,31 @@ class SystemUIHandler : IXposedHookLoadPackage {
                     if (param.args[2].javaClass != parentCLClass) return
                     val cl = param.thisObject as ClassLoader
 
-                    Log.d(TAG, "in sysui plugin", Throwable())
+                    logD("in sysui plugin", Throwable())
                     runCatching {
                         XposedBridge.hookAllMethods(
-                            XposedHelpers.findClass(
-                                "com.android.systemui.miui.volume.MiuiVolumeDialogImpl\$SilenceModeObserver",
-                                cl
+                            cl.findClass(
+                                "com.android.systemui.miui.volume.MiuiVolumeDialogImpl\$SilenceModeObserver"
                             ), "showToastOrStatusBar", XC_MethodReplacement.DO_NOTHING
                         )
                     }.onFailure {
-                        Log.e(TAG, "hook showToast", it)
+                        logE("hook showToast", it)
                     }
                 }
             }
         )
-    }.onFailure { Log.e(TAG, "hookCreatePkgContext: ", it) }
+    }.onFailure { logE("hookCreatePkgContext: ", it) }
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.android.systemui") return
-        hookPlugin(lpparam)
+        hookPlugin()
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
         }
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass(
-                "com.android.systemui.statusbar.notification.modal.ModalWindowView",
-                lpparam.classLoader
-            ),
+            findClass("com.android.systemui.statusbar.notification.modal.ModalWindowView"),
             "enterModal",
-            object : de.robv.android.xposed.XC_MethodHook() {
+            object : XC_MethodHook() {
                 @SuppressLint("SetTextI18n")
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val modalWindowView = param.thisObject as FrameLayout
@@ -132,7 +122,7 @@ class SystemUIHandler : IXposedHookLoadPackage {
                                 realPkgName,
                                 sbn.notification.channelId
                             )
-                        }.onFailure { Log.e("MyInjector", "getNotificationChannel", it) }
+                        }.onFailure { logE("getNotificationChannel", it) }
                             .getOrNull()
                         tv.text = StringBuilder().apply {
                             append("channelId=${sbn.notification.channelId}\n")
@@ -156,43 +146,30 @@ class SystemUIHandler : IXposedHookLoadPackage {
                                 })"
                             )
                         }
+                        val dependencyClass = findClass(
+                            "com.android.systemui.Dependency"
+                        )
+                        val modalControllerClass = findClass(
+                            "com.android.systemui.statusbar.notification.modal.ModalController"
+                        )
+                        val commandQueueClass = findClass(
+                            "com.android.systemui.statusbar.CommandQueue"
+                        )
                         (tv.parent as View).setOnClickListener {
                             runCatching {
-                                val dependencyClass = XposedHelpers.findClass(
-                                    "com.android.systemui.Dependency",
-                                    lpparam.classLoader
-                                )
-                                val modalControllerClass = XposedHelpers.findClass(
-                                    "com.android.systemui.statusbar.notification.modal.ModalController",
-                                    lpparam.classLoader
-                                )
-                                val commandQueueClass = XposedHelpers.findClass(
-                                    "com.android.systemui.statusbar.CommandQueue",
-                                    lpparam.classLoader
-                                )
-
-                                val mc = XposedHelpers.callStaticMethod(
-                                    dependencyClass,
-                                    "get",
-                                    modalControllerClass
-                                )
-                                XposedHelpers.callMethod(
-                                    mc,
+                                val mc = dependencyClass.callS("get", modalControllerClass)
+                                mc.call(
                                     "animExitModal",
                                     50L,
                                     true,
                                     "MORE" /*com.miui.systemui.events.ModalExitMode.MORE.name*/,
                                     false
                                 )
-                                val cq = XposedHelpers.callStaticMethod(
-                                    dependencyClass,
-                                    "get",
-                                    commandQueueClass
-                                )
-                                XposedHelpers.callMethod(cq, "animateCollapsePanels", 0, false)
+                                val cq = dependencyClass.callS("get", commandQueueClass)
+                                cq.call("animateCollapsePanels", 0, false)
                                 // com.android.systemui.statusbar.notification.row.MiuiNotificationMenuRow$$ExternalSyntheticLambda1
                             }.onFailure {
-                                Log.e("MyInjector", "exit modal: ", it)
+                                logE("exit modal: ", it)
                             }
                             // https://cs.android.com/android/platform/superproject/main/+/main:packages/apps/Settings/src/com/android/settings/notification/app/NotificationSettings.java;l=121;drc=d5137445c0d4067406cb3e38aade5507ff2fcd16
                             context.startActivity(
@@ -203,14 +180,14 @@ class SystemUIHandler : IXposedHookLoadPackage {
                                     .putExtra(Settings.EXTRA_CHANNEL_ID, sbn.notification.channelId)
                                     .putExtra(
                                         "app_uid" /*Settings.EXTRA_APP_UID*/,
-                                        XposedHelpers.getObjectField(sbn, "uid") as Int
+                                        sbn.getObjAs<Int>("uid")
                                     )
                                     .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                             )
                         }
                     } else {
                         tv.text = "Failed to get StatusBarNotification!\nentry=$entry mSbn=${
-                            XposedHelpers.getObjectField(entry, "mSbn")
+                            entry.getObj("mSbn")
                         }"
                     }
                 }

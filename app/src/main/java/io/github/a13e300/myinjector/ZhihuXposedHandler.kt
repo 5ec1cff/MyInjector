@@ -2,21 +2,17 @@ package io.github.a13e300.myinjector
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.util.Log
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.getObj
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.matchers.ClassMatcher
 import java.io.File
 
-class ZhihuXposedHandler : IXposedHookLoadPackage {
-    companion object {
-        private const val TAG = "MyInjector-zhihu"
-    }
-
+class ZhihuXposedHandler : IHook() {
     // Zhihu 10.2.0 (20214) sha256=0774c8c812232dd1d1c0a75e32f791f7171686a8c68ce280c6b3d9b82cdde5eb
     // class f$r implements com.zhihu.android.app.feed.ui2.feed.a.a<FeedList>
     // io.reactivex.subjects.ReplaySubject b
@@ -39,18 +35,18 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
                     localSourceClass = lines[1]
                     localSourceMethod = lines[2]
                     localSourceField = lines[3]
-                    Log.d(TAG, "prepare: use cached result")
+                    logD("prepare: use cached result")
                     return@runCatching
                 } else {
-                    Log.d(TAG, "prepare: need invalidate cache!")
+                    logD("prepare: need invalidate cache!")
                     f.delete()
                 }
             } catch (t: Throwable) {
-                Log.e(TAG, "prepare: failed to read", t)
+                logE("prepare: failed to read", t)
                 f.delete()
             }
         }
-        Log.d(TAG, "prepare: start deobf")
+        logD("prepare: start deobf")
         System.loadLibrary("dexkit")
         val bridge = DexKitBridge.create(lpparam.classLoader, true)
         val method = bridge.findMethod {
@@ -59,13 +55,13 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
                 usingStrings("FeedRepository", "use cache")
             }
         }[0]
-        Log.d(TAG, "prepare: found method: $method")
+        logD("prepare: found method: $method")
         val field = method.declaredClass!!.findField {
             matcher {
                 type(ClassMatcher().className("io.reactivex.subjects.ReplaySubject"))
             }
         }[0]
-        Log.d(TAG, "prepare: found field: $field")
+        logD("prepare: found field: $field")
         localSourceClass = method.className
         localSourceMethod = method.methodName
         localSourceField = field.fieldName
@@ -76,10 +72,10 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
             it.write("$localSourceField\n")
         }
     }.onFailure {
-        Log.e(TAG, "prepare: failed", it)
+        logE("prepare: failed", it)
     }
 
-    override fun handleLoadPackage(lpparam: LoadPackageParam) {
+    override fun onHook(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.zhihu.android") return
         prepare(lpparam)
         hookDisableFeedAutoRefresh(lpparam)
@@ -89,26 +85,17 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
     private fun hookDisableFeedAutoRefresh(lpparam: LoadPackageParam) =
         kotlin.runCatching {
             XposedBridge.hookAllMethods(
-                XposedHelpers.findClass(
-                    localSourceClass,
-                    lpparam.classLoader
-                ),
+                findClass(localSourceClass),
                 localSourceMethod,
                 object : XC_MethodHook() {
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        val b = XposedHelpers.getObjectField(
-                            param.thisObject,
-                            localSourceField
-                        ) // ReplaySubject
-                        XposedHelpers.callMethod(
-                            b,
-                            "onComplete"
-                        ) // call onComplete to prevent from update
+                        val b = param.thisObject.getObj(localSourceField) // ReplaySubject
+                        b.call("onComplete") // call onComplete to prevent from update
                     }
                 }
             )
         }.onFailure {
-            Log.e(TAG, "hookDisableAutoRefresh: failed", it)
+            logE("hookDisableAutoRefresh: failed", it)
             cacheFile?.delete()
         }
 
@@ -124,6 +111,6 @@ class ZhihuXposedHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookClipboard: ", it)
+        logE("hookClipboard: ", it)
     }
 }

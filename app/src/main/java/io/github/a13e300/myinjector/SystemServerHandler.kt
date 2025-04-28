@@ -14,11 +14,16 @@ import android.os.HandlerThread
 import android.os.ServiceManager
 import android.util.Log
 import android.view.View
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.getObjAsN
+import io.github.a13e300.myinjector.arch.getObjSAs
+import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import java.io.File
 import java.util.UUID
 
@@ -28,7 +33,7 @@ class SkipIf(private val cond: (p: MethodHookParam) -> Boolean) : XC_MethodHook(
     }
 }
 
-class SystemServerHandler : IXposedHookLoadPackage {
+class SystemServerHandler : IHook() {
     companion object {
         private const val CONFIG_PATH = "/data/misc"
         private const val CONFIG_PREFIX = "my_injector_system_"
@@ -36,14 +41,12 @@ class SystemServerHandler : IXposedHookLoadPackage {
     }
 
     private lateinit var config: SystemServerConfig
-    private lateinit var lpparam: XC_LoadPackage.LoadPackageParam
     private lateinit var thread: HandlerThread
     private lateinit var handler: Handler
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        Log.d(TAG, "handleLoadPackage: initialize")
+    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        logD("handleLoadPackage: initialize")
         config = readConfig()
-        this.lpparam = lpparam
         hookNoWakePath()
         hookNoMiuiIntent()
         hookClipboardWhitelist()
@@ -70,7 +73,7 @@ class SystemServerHandler : IXposedHookLoadPackage {
 
         if (file == null) {
             file = File(dir, "${CONFIG_PREFIX}${UUID.randomUUID()}")
-            Log.d(TAG, "findOrCreateConfigFile: created config $file")
+            logD("findOrCreateConfigFile: created config $file")
             file.createNewFile()
         }
 
@@ -85,7 +88,7 @@ class SystemServerHandler : IXposedHookLoadPackage {
                     runCatching {
                         return f.inputStream().use { SystemServerConfig.parseFrom(it) }
                     }.onFailure {
-                        Log.e(TAG, "findConfig: remove bad config", it)
+                        logE("findConfig: remove bad config", it)
                         f.delete()
                     }
                 }
@@ -97,23 +100,23 @@ class SystemServerHandler : IXposedHookLoadPackage {
     private fun hookNoWakePath() = runCatching {
         val hook = SkipIf { _ -> config.noWakePath }
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("miui.app.ActivitySecurityHelper", lpparam.classLoader),
+            findClass("miui.app.ActivitySecurityHelper"),
             "getCheckStartActivityIntent",
             hook
         )
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("miui.security.SecurityManager", lpparam.classLoader),
+            findClass("miui.security.SecurityManager"),
             "getCheckStartActivityIntent",
             hook
         )
     }.onFailure {
-        Log.e(TAG, "hookNoWakePath: ", it)
+        logE("hookNoWakePath: ", it)
     }
 
     private fun hookNoMiuiIntent() = runCatching {
         XposedHelpers.findAndHookMethod(
             "com.android.server.pm.PackageManagerServiceImpl",
-            lpparam.classLoader,
+            classLoader,
             "hookChooseBestActivity",
             Intent::class.java,
             String::class.java,
@@ -127,14 +130,13 @@ class SystemServerHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookNoMiuiIntent: ", it)
+        logE("hookNoMiuiIntent: ", it)
     }
 
     private fun hookClipboardWhitelist() = runCatching {
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass(
-                "com.android.server.clipboard.ClipboardService",
-                lpparam.classLoader
+            findClass(
+                "com.android.server.clipboard.ClipboardService"
             ),
             "clipboardAccessAllowed",
             object : XC_MethodHook() {
@@ -146,23 +148,22 @@ class SystemServerHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookClipboardWhitelist: ", it)
+        logE("hookClipboardWhitelist: ", it)
     }
 
     private fun hookFixSync() = runCatching {
         // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/services/core/java/com/android/server/wm/WindowState.java;l=5756;drc=4eb30271c338af7ee6abcbd2b7a9a0721db0595b
         // some gone accessibility windows does not get synced
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("com.android.server.wm.WindowState", lpparam.classLoader),
+            findClass("com.android.server.wm.WindowState"),
             "isSyncFinished",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     if (!config.fixSync) return
-                    if (XposedHelpers.getObjectField(
-                            param.thisObject,
+                    if (param.thisObject.getObj(
                             "mViewVisibility"
                         ) != View.VISIBLE
-                        && XposedHelpers.getObjectField(param.thisObject, "mActivityRecord") == null
+                        && param.thisObject.getObj("mActivityRecord") == null
                     ) {
                         // XposedBridge.log("no wait on " + param.thisObject);
                         param.setResult(true)
@@ -171,63 +172,58 @@ class SystemServerHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookFixSync: ", it)
+        logE("hookFixSync: ", it)
     }
 
     @Suppress("UNCHECKED_CAST")
     private fun setXSpace() {
         val enabled = config.xSpace
-        val classXSpaceManager = XposedHelpers.findClass(
-            "com.miui.server.xspace.XSpaceManagerServiceImpl",
-            lpparam.classLoader
+        val classXSpaceManager = findClass(
+            "com.miui.server.xspace.XSpaceManagerServiceImpl"
         );
-        (XposedHelpers.getStaticObjectField(
-            classXSpaceManager,
+        classXSpaceManager.getObjSAs<MutableList<String>?>(
             "sCrossUserCallingPackagesWhiteList"
-        ) as? MutableList<String>)?.run {
+        )?.run {
             if (enabled) {
                 add("com.android.shell")
                 add("com.xiaomi.xmsf")
-                Log.d(TAG, "add required packages to whitelist")
+                logD("add required packages to whitelist")
             } else {
                 remove("com.android.shell")
                 remove("com.xiaomi.xmsf")
-                Log.d(TAG, "remove required packages to whitelist")
+                logD("remove required packages to whitelist")
             }
         }
-        (XposedHelpers.getStaticObjectField(
-            classXSpaceManager,
+        classXSpaceManager.getObjSAs<MutableList<String>?>(
             "sPublicActionList"
-        ) as? MutableList<String>)?.run {
+        )?.run {
             clear()
-            Log.d(TAG, "clear publicActionList")
+            logD("clear publicActionList")
         }
     }
 
     private fun hookForceNewTask() = runCatching {
         val activityStarter =
-            XposedHelpers.findClass("com.android.server.wm.ActivityStarter", lpparam.classLoader)
+            findClass("com.android.server.wm.ActivityStarter")
         XposedBridge.hookAllMethods(activityStarter, "executeRequest", object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 if (!config.forceNewTask) return
                 val request = param.args[0]
                 // do not handle startActivityForResult
-                val requestCode = XposedHelpers.getObjectField(request, "requestCode") as Int
+                val requestCode = request.getObjAs<Int>("requestCode")
                 if (requestCode >= 0) return
-                val intent = XposedHelpers.getObjectField(
-                    request,
+                val intent = request.getObjAsN<Intent>(
                     "intent"
-                ) as? Intent ?: return
+                ) ?: return
                 if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return
-                val source = XposedHelpers.getObjectField(request, "callingPackage") as? String
+                val source = request.getObjAsN<String>("callingPackage")
                 if (source == null) {
                     Log.w(TAG, "forceNewTask: null source package!")
                     return
                 }
-                val target = (XposedHelpers.getObjectField(
-                    request,
+                val target = request.getObjAsN<ActivityInfo>(
                     "activityInfo"
-                ) as? ActivityInfo)?.packageName
+                )?.packageName
                 if (target == null) {
                     Log.w(TAG, "forceNewTask: null target package!")
                     return
@@ -239,13 +235,13 @@ class SystemServerHandler : IXposedHookLoadPackage {
                     (it.sourcePackage == source || anySource) && (it.targetPackage == target || anyTarget)
                 }
                 if (match) {
-                    Log.d(TAG, "forceNewTask: matched $source -> $target")
+                    logD("forceNewTask: matched $source -> $target")
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             }
         })
     }.onFailure {
-        Log.e(TAG, "hookForceNewTask: ", it)
+        logE("hookForceNewTask: ", it)
     }
 
     private fun runConfigListener() {
@@ -259,27 +255,24 @@ class SystemServerHandler : IXposedHookLoadPackage {
         override fun onReceive(context: Context, intent: Intent?) {
             intent ?: return
             runCatching {
-                val pendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra("EXTRA_CREDENTIAL", PendingIntent::class.java)
-                } else {
-                    intent.getParcelableExtra<PendingIntent>("EXTRA_CREDENTIAL")
-                }
+                val pendingIntent =
+                    intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
                 val caller = pendingIntent?.creatorPackage
                 var oldXSpace = config.xSpace
                 if (caller == BuildConfig.APPLICATION_ID) {
                     intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
                         config = SystemServerConfig.parseFrom(it)
                         findOrCreateConfigFile().writeBytes(it)
-                        Log.d(TAG, "onReceive: update config $config")
+                        logD("onReceive: update config $config")
                     }
                 } else {
-                    Log.e(TAG, "onReceive: invalid caller $caller")
+                    logE("onReceive: invalid caller $caller")
                 }
                 if (oldXSpace != config.xSpace) {
                     setXSpace()
                 }
             }.onFailure {
-                Log.e(TAG, "onReceive: ", it)
+                logE("onReceive: ", it)
             }
         }
     }
@@ -296,9 +289,9 @@ class SystemServerHandler : IXposedHookLoadPackage {
                 handler,
                 flags
             )
-            Log.d(TAG, "registerBroadcast: registered")
+            logD("registerBroadcast: registered")
         } catch (t: Throwable) {
-            Log.e(TAG, "registerBroadcast: ", t)
+            logE("registerBroadcast: ", t)
             handler.postDelayed(registerBroadcast, 1000)
         }
     }

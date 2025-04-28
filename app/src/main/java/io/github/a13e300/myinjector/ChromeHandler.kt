@@ -1,22 +1,17 @@
 package io.github.a13e300.myinjector
 
 import android.content.Context
-import android.util.Log
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.findClass
 import org.luckypray.dexkit.DexKitBridge
 import java.io.File
 
 // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java;l=293;drc=1b4216b712e68f7dc2b4b13e9d8e0c69203278e6
-class ChromeHandler : IXposedHookLoadPackage {
-    companion object {
-        private const val TAG = "MyInjector-ChromeHandler"
-    }
-
+class ChromeHandler : IHook() {
     private var cacheFile: File? = null
     private var swipeRefreshHandlerClassName = ""
     private var swipeRefreshHandlerMethodPull = ""
@@ -24,17 +19,17 @@ class ChromeHandler : IXposedHookLoadPackage {
 
     private lateinit var lpparam: XC_LoadPackage.LoadPackageParam
 
-    override fun handleLoadPackage(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         if (this::lpparam.isInitialized) return
         lpparam = param
         val name = lpparam.appInfo.className
-        Log.d(TAG, "app name $name")
+        logD("app name $name")
         // ensure split apk (split-chrome) is loaded, see:
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitCompatAppComponentFactory.java;l=136?q=SplitCompatAppComponentFactory&ss=chromium
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitChromeApplication.java;l=33?q=SplitChromeApplication&ss=chromium
         // LoadedApk$SplitDependencyLoaderImpl https://cs.android.com/android/platform/superproject/+/android14-qpr3-release:frameworks/base/core/java/android/app/LoadedApk.java;l=639;drc=c72510de9db33033259d7e32afe3cbaac2266649
         // Context.createContextForSplit
-        val appClz = XposedHelpers.findClass(name, lpparam.classLoader)
+        val appClz = findClass(name)
         val m = runCatching { appClz.getDeclaredMethod("onCreate") }.getOrNull()
         if (m != null) {
             XposedBridge.hookMethod(
@@ -43,10 +38,7 @@ class ChromeHandler : IXposedHookLoadPackage {
                     // real classloader will be available after onCreate
                     override fun afterHookedMethod(param: MethodHookParam) {
                         val loader = (param.thisObject as Context).classLoader
-                        Log.d(
-                            TAG,
-                            "afterHookedMethod: get classloader $loader"
-                        )
+                        logD("afterHookedMethod: get classloader $loader")
                         doHook(loader)
                     }
                 }
@@ -59,7 +51,7 @@ class ChromeHandler : IXposedHookLoadPackage {
     private fun doHook(loader: ClassLoader) {
         doFind(loader)
 
-        val clazz = XposedHelpers.findClass(swipeRefreshHandlerClassName, loader)
+        val clazz = loader.findClass(swipeRefreshHandlerClassName)
 
         XposedBridge.hookAllMethods(
             clazz, swipeRefreshHandlerMethodPull, XC_MethodReplacement.DO_NOTHING
@@ -81,18 +73,18 @@ class ChromeHandler : IXposedHookLoadPackage {
                     swipeRefreshHandlerClassName = lines[1]
                     swipeRefreshHandlerMethodPull = lines[2]
                     swipeRefreshHandlerMethodRelease = lines[3]
-                    Log.d(TAG, "prepare: use cached result")
+                    logD("prepare: use cached result")
                     return
                 } else {
-                    Log.d(TAG, "prepare: need invalidate cache!")
+                    logD("prepare: need invalidate cache!")
                     f.delete()
                 }
             } catch (t: Throwable) {
-                Log.e(TAG, "prepare: failed to read", t)
+                logE("prepare: failed to read", t)
                 f.delete()
             }
         }
-        Log.d(TAG, "prepare: start deobf")
+        logD("prepare: start deobf")
         System.loadLibrary("dexkit")
         val bridge = DexKitBridge.create(loader, true)
         val pullMethod = bridge.findMethod {
@@ -100,13 +92,13 @@ class ChromeHandler : IXposedHookLoadPackage {
                 usingStrings("SwipeRefreshHandler.pull")
             }
         }.single()
-        Log.d(TAG, "prepare: found method: $pullMethod")
+        logD("prepare: found method: $pullMethod")
         val releaseMethod = pullMethod.declaredClass!!.findMethod {
             matcher {
                 usingStrings("SwipeRefreshHandler.release")
             }
         }.single()
-        Log.d(TAG, "prepare: found method: $releaseMethod")
+        logD("prepare: found method: $releaseMethod")
         swipeRefreshHandlerClassName = pullMethod.className
         swipeRefreshHandlerMethodPull = pullMethod.methodName
         swipeRefreshHandlerMethodRelease = releaseMethod.methodName

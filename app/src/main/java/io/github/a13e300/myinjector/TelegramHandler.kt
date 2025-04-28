@@ -16,7 +16,6 @@ import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.StyleSpan
-import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -24,39 +23,28 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.callS
+import io.github.a13e300.myinjector.arch.findView
+import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.getObjAsN
+import io.github.a13e300.myinjector.arch.newInst
+import io.github.a13e300.myinjector.arch.setObj
 import org.json.JSONObject
 import java.io.File
-import java.io.InputStream
 import java.lang.reflect.Proxy
 import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
-fun View.findView(predicate: (View) -> Boolean): View? {
-    if (predicate(this)) return this
-    if (this is ViewGroup) {
-        for (i in 0 until childCount) {
-            val v = getChildAt(i).findView(predicate)
-            if (v != null) return v
-        }
-    }
-    return null
-}
-
-fun Any?.getObj(name: String): Any? = XposedHelpers.getObjectField(this, name)
-
-fun Any?.call(name: String, vararg args: Any?): Any? = XposedHelpers.callMethod(this, name, *args)
-
-fun Class<*>.callS(name: String, vararg args: Any?): Any? = XposedHelpers.callStaticMethod(this, name, *args)
-
-class TelegramHandler : IXposedHookLoadPackage {
+class TelegramHandler : IHook() {
     companion object {
-        private const val TAG = "TelegramHandler"
         private const val MENU_DUMP = 301
         private const val MENU_GET_PROFILE = 302
         // emoji name -> (emoji id, emoji)
@@ -87,7 +75,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                         try {
                             _emotionMap = loadEmotionMap(f.readText())
                         } catch (t: Throwable) {
-                            Log.e(TAG, "load emotion map from $f failed  ", t)
+                            logE("load emotion map from $f failed  ", t)
                             _emotionMap = emptyMap()
                         }
                     }
@@ -96,38 +84,30 @@ class TelegramHandler : IXposedHookLoadPackage {
             return _emotionMap!!
         }
 
-    override fun handleLoadPackage(lpparam: LoadPackageParam) {
+    override fun onHook(param: LoadPackageParam) {
         moduleRes = XModuleResources.createInstance(Entry.modulePath, null)
-        hookOpenLinkDialog(lpparam)
-        hookMutualContact(lpparam)
-        hookContactPermission(lpparam)
-        // hookUserProfileShowId(lpparam)
-        hookAutoCheckDeleteMessagesOptionAlso(lpparam)
-        hookAutoUncheckSharePhoneNum(lpparam)
-        hookDisableVoiceVideoButton(lpparam)
-        hookLongClickMention(lpparam)
-        hookFakeInstallPermission(lpparam)
-        hookDoNotInstallGoogleMaps(lpparam)
-        hookEmoji(lpparam)
-        hookEmojiManage(lpparam)
-        hookHasAppToOpen(lpparam)
+        hookOpenLinkDialog()
+        hookMutualContact()
+        hookContactPermission()
+        hookAutoCheckDeleteMessagesOptionAlso()
+        hookAutoUncheckSharePhoneNum()
+        hookDisableVoiceVideoButton()
+        hookLongClickMention()
+        hookFakeInstallPermission()
+        hookDoNotInstallGoogleMaps()
+        hookEmoji()
+        hookEmojiManage()
+        hookHasAppToOpen()
     }
 
-    private fun hookLongClickMention(lpparam: LoadPackageParam) = runCatching {
-        val longClickListenerClass = XposedHelpers.findClass(
-            "org.telegram.ui.Components.RecyclerListView\$OnItemLongClickListener",
-            lpparam.classLoader
-        )
-        val tlUser =
-            XposedHelpers.findClass("org.telegram.tgnet.TLRPC\$TL_user", lpparam.classLoader)
-        val userObjectClass =
-            XposedHelpers.findClass("org.telegram.messenger.UserObject", lpparam.classLoader)
-        val classURLSpanUserMention = XposedHelpers.findClass(
-            "org.telegram.ui.Components.URLSpanUserMention",
-            lpparam.classLoader
-        )
+    private fun hookLongClickMention() = runCatching {
+        val longClickListenerClass =
+            findClass("org.telegram.ui.Components.RecyclerListView\$OnItemLongClickListener")
+        val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
+        val userObjectClass = findClass("org.telegram.messenger.UserObject")
+        val classURLSpanUserMention = findClass("org.telegram.ui.Components.URLSpanUserMention")
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("org.telegram.ui.ChatActivity", lpparam.classLoader),
+            findClass("org.telegram.ui.ChatActivity"),
             "createView",
             object : de.robv.android.xposed.XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -142,30 +122,25 @@ class TelegramHandler : IXposedHookLoadPackage {
                         listView,
                         "setOnItemLongClickListener",
                         Proxy.newProxyInstance(
-                            lpparam.classLoader, arrayOf(longClickListenerClass)
+                            classLoader, arrayOf(longClickListenerClass)
                         ) { _, method, args ->
                             if (method.name == "onItemClick") {
                                 kotlin.runCatching {
                                     var position = args[1] as Int
                                     if (position == 0) return@newProxyInstance false
                                     position--
-                                    val adapter =
-                                        XposedHelpers.callMethod(mentionContainer, "getAdapter")
-                                    val item =
-                                        XposedHelpers.callMethod(adapter, "getItem", position)
+                                    val adapter = mentionContainer.call("getAdapter")
+                                    val item = adapter.call("getItem", position)
                                     if (!tlUser.isInstance(item)) return@newProxyInstance false
-                                    val start =
-                                        XposedHelpers.callMethod(adapter, "getResultStartPosition")
-                                    val len = XposedHelpers.callMethod(adapter, "getResultLength")
-                                    val name = XposedHelpers.callStaticMethod(
-                                        userObjectClass,
+                                    val start = adapter.call("getResultStartPosition")
+                                    val len = adapter.call("getResultLength")
+                                    val name = userObjectClass.callS(
                                         "getFirstName",
                                         item,
                                         false
                                     )
                                     val spannable = SpannableString("$name ")
-                                    val span = XposedHelpers.newInstance(
-                                        classURLSpanUserMention,
+                                    val span = classURLSpanUserMention.newInst(
                                         XposedHelpers.getObjectField(item, "id").toString(),
                                         3
                                     )
@@ -176,9 +151,8 @@ class TelegramHandler : IXposedHookLoadPackage {
                                         Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                                     )
                                     val chatActivityEnterView =
-                                        XposedHelpers.getObjectField(thiz, "chatActivityEnterView")
-                                    XposedHelpers.callMethod(
-                                        chatActivityEnterView,
+                                        thiz.getObj("chatActivityEnterView")
+                                    chatActivityEnterView.call(
                                         "replaceWithText",
                                         start,
                                         len,
@@ -186,7 +160,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                                         false
                                     )
                                     return@newProxyInstance true
-                                }.onFailure { Log.e(TAG, "onItemLongClicked: error", it) }
+                                }.onFailure { logE("onItemLongClicked: error", it) }
                                 return@newProxyInstance false
                             }
                             return@newProxyInstance method.invoke(obj, args)
@@ -195,24 +169,20 @@ class TelegramHandler : IXposedHookLoadPackage {
                 }
             }
         )
-        Log.d(TAG, "hookLongClickMention: Done")
+        logD("hookLongClickMention: Done")
     }.onFailure {
-        Log.e(TAG, "hookLongClickMention: failed", it)
+        logE("hookLongClickMention: failed", it)
     }
 
-    private fun hookDisableVoiceVideoButton(lpparam: LoadPackageParam) = runCatching {
+    private fun hookDisableVoiceVideoButton() = runCatching {
         val subHookFound = AtomicBoolean(false)
         XposedBridge.hookAllConstructors(
-            XposedHelpers.findClass(
-                "org.telegram.ui.Components.ChatActivityEnterView",
-                lpparam.classLoader
-            ),
-            object : de.robv.android.xposed.XC_MethodHook() {
+            findClass("org.telegram.ui.Components.ChatActivityEnterView"),
+            object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     if (subHookFound.get()) return
                     val audioVideoButtonContainer =
-                        XposedHelpers.getObjectField(param.thisObject, "audioVideoButtonContainer")
-                            ?: return
+                        param.thisObject.getObj("audioVideoButtonContainer") ?: return
                     XposedBridge.hookAllMethods(
                         audioVideoButtonContainer.javaClass,
                         "onTouchEvent",
@@ -223,116 +193,101 @@ class TelegramHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookDisableVoiceVideoButton: failed", it)
+        logE("hookDisableVoiceVideoButton: failed", it)
     }
 
-    private fun hookAutoUncheckSharePhoneNum(lpparam: LoadPackageParam) = runCatching {
+    private fun hookAutoUncheckSharePhoneNum() = runCatching {
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("org.telegram.ui.ContactAddActivity", lpparam.classLoader),
+            findClass("org.telegram.ui.ContactAddActivity"),
             "createView",
-            object : de.robv.android.xposed.XC_MethodHook() {
+            object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    val checkBox =
-                        XposedHelpers.getObjectField(param.thisObject, "checkBoxCell") as? View
-                            ?: return
-                    if (XposedHelpers.callMethod(checkBox, "isChecked") == true) {
+                    val checkBox = param.thisObject.getObj("checkBoxCell") as? View ?: return
+                    if (checkBox.call("isChecked") == true) {
                         checkBox.performClick()
                     }
                 }
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookAutoUncheckSharePhoneNum: failed", it)
+        logE("hookAutoUncheckSharePhoneNum: failed", it)
     }
 
-    private fun hookAutoCheckDeleteMessagesOptionAlso(lpparam: LoadPackageParam) =
+    private fun hookAutoCheckDeleteMessagesOptionAlso() =
         kotlin.runCatching {
             val isCreating = ThreadLocal<Boolean>()
-            val alertDialogClass = XposedHelpers.findClass(
-                "org.telegram.ui.ActionBar.AlertDialog",
-                lpparam.classLoader
-            )
-            val checkBoxCellClass =
-                XposedHelpers.findClass("org.telegram.ui.Cells.CheckBoxCell", lpparam.classLoader)
+            val alertDialogClass = findClass("org.telegram.ui.ActionBar.AlertDialog")
+            val checkBoxCellClass = findClass("org.telegram.ui.Cells.CheckBoxCell")
             XposedBridge.hookAllMethods(
-                XposedHelpers.findClass(
-                    "org.telegram.ui.Components.AlertsCreator",
-                    lpparam.classLoader
-                ),
+                findClass("org.telegram.ui.Components.AlertsCreator"),
                 "createDeleteMessagesAlert",
-                object : de.robv.android.xposed.XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam?) {
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
                         isCreating.set(true)
                     }
 
-                    override fun afterHookedMethod(param: MethodHookParam?) {
+                    override fun afterHookedMethod(param: MethodHookParam) {
                         isCreating.set(false)
                     }
                 }
             )
             XposedHelpers.findAndHookMethod(
-                XposedHelpers.findClass(
-                    "org.telegram.ui.ActionBar.BaseFragment",
-                    lpparam.classLoader
-                ),
+                findClass("org.telegram.ui.ActionBar.BaseFragment"),
                 "showDialog",
                 Dialog::class.java,
-                object : de.robv.android.xposed.XC_MethodHook() {
+                object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         if (isCreating.get() != true) return
                         val dialog = param.args[0]
                         if (!alertDialogClass.isInstance(dialog)) return
-                        val root = XposedHelpers.getObjectField(dialog, "customView") as? ViewGroup
-                            ?: return
+                        val root = dialog.getObjAsN<ViewGroup>("customView") ?: return
 
                         // TODO: find the checkbox correctly
                         val v = root.findView {
                             checkBoxCellClass.isInstance(it) &&
-                                    XposedHelpers.callMethod(it, "isChecked") == false
+                                    it.call("isChecked") == false
                         }
-                        // Log.d(TAG, "beforeHookedMethod: found view: $v")
+                        // logD("beforeHookedMethod: found view: $v")
                         v?.performClick()
                     }
                 }
             )
         }.onFailure {
-            Log.e(TAG, "hookAutoCheckDeleteMessagesOptionAlso: error", it)
+            logE("hookAutoCheckDeleteMessagesOptionAlso: error", it)
         }
 
-    private fun hookContactPermission(lpparam: LoadPackageParam) = kotlin.runCatching {
+    private fun hookContactPermission() = kotlin.runCatching {
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("org.telegram.ui.ContactsActivity", lpparam.classLoader),
+            findClass("org.telegram.ui.ContactsActivity"),
             "onResume",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    XposedHelpers.setObjectField(param.thisObject, "checkPermission", false)
+                    param.thisObject.setObj("checkPermission", false)
                 }
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookContactPermission", it)
+        logE("hookContactPermission", it)
     }
 
-    private fun hookMutualContact(lpparam: LoadPackageParam) = kotlin.runCatching {
+    private fun hookMutualContact() = kotlin.runCatching {
         val drawable = moduleRes.getDrawable(R.drawable.ic_mutual_contact)
-        val tlUser =
-            XposedHelpers.findClass("org.telegram.tgnet.TLRPC\$TL_user", lpparam.classLoader)
+        val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("org.telegram.ui.Cells.UserCell", lpparam.classLoader),
+            findClass("org.telegram.ui.Cells.UserCell"),
             "update",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    // Log.d(TAG, "afterHookedMethod: update")
-                    val d = XposedHelpers.getObjectField(param.thisObject, "currentDrawable") as Int
+                    // logD("afterHookedMethod: update")
+                    val d = param.thisObject.getObjAs<Int>("currentDrawable")
                     if (d != 0) {
-                        // Log.d(TAG, "afterHookedMethod: currentdrawable not 0: $d")
+                        // logD("afterHookedMethod: currentdrawable not 0: $d")
                         return
                     }
-                    val current = XposedHelpers.getObjectField(param.thisObject, "currentObject")
+                    val current = param.thisObject.getObj("currentObject")
                     if (!tlUser.isInstance(current)) return
-                    val imageView =
-                        XposedHelpers.getObjectField(param.thisObject, "imageView") as ImageView
-                    val mutual = XposedHelpers.getObjectField(current, "mutual_contact") as Boolean
+                    val imageView = param.thisObject.getObjAs<ImageView>("imageView")
+                    val mutual = current.getObjAs<Boolean>("mutual_contact")
                     if (mutual) {
                         imageView.setImageDrawable(drawable)
                         imageView.visibility = View.VISIBLE
@@ -348,13 +303,13 @@ class TelegramHandler : IXposedHookLoadPackage {
                                 ).toInt()
                             leftMargin
                         }
-                        // Log.d(TAG, "afterHookedMethod: set mutual contact $current")
+                        // logD("afterHookedMethod: set mutual contact $current")
                     }
                 }
             }
         )
-        Log.d(TAG, "hookMutualContact: done")
-    }.onFailure { Log.e(TAG, "hookMutualContact", it) }
+        logD("hookMutualContact: done")
+    }.onFailure { logE("hookMutualContact", it) }
 
     data class FixLink(
         val pos: Int,
@@ -362,20 +317,17 @@ class TelegramHandler : IXposedHookLoadPackage {
         var openRunnable: Runnable?
     )
 
-    private fun hookOpenLinkDialog(lpparam: LoadPackageParam) = kotlin.runCatching {
-        Log.d(TAG, "hookOpenLinkDialog")
-        val classBaseFragment =
-            XposedHelpers.findClass("org.telegram.ui.ActionBar.BaseFragment", lpparam.classLoader)
+    private fun hookOpenLinkDialog() = kotlin.runCatching {
+        logD("hookOpenLinkDialog")
+        val classBaseFragment = findClass("org.telegram.ui.ActionBar.BaseFragment")
 
         val fixLink = ThreadLocal<FixLink>()
         val regexTelegraph = Regex("^https?://telegra\\.ph")
         val escapeChars = Regex("[^!#\$&'*+\\(\\),-./:;%=\\?@_~0-9A-Za-z]")
-        val classBrowser =
-            XposedHelpers.findClass("org.telegram.messenger.browser.Browser", lpparam.classLoader)
-        val classChatActivity =
-            XposedHelpers.findClass("org.telegram.ui.ChatActivity", lpparam.classLoader)
+        val classBrowser = findClass("org.telegram.messenger.browser.Browser")
+        val classChatActivity = findClass("org.telegram.ui.ChatActivity")
 
-        Log.d(TAG, "hookOpenLinkDialog: start hook")
+        logD("hookOpenLinkDialog: start hook")
 
         XposedBridge.hookAllMethods(
             classChatActivity,
@@ -383,7 +335,7 @@ class TelegramHandler : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     val url = param.args[1] as String
-                    // Log.d(TAG, "processExternalUrl: $url")
+                    // logD("processExternalUrl: $url")
                     if (regexTelegraph.find(url) != null) return
                     val match = escapeChars.find(url) ?: return
                     val pos = match.range.first
@@ -395,10 +347,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         )
 
         XposedHelpers.findAndHookMethod(
-            XposedHelpers.findClass(
-                "org.telegram.ui.Components.AlertsCreator",
-                lpparam.classLoader
-            ),
+            findClass("org.telegram.ui.Components.AlertsCreator"),
             "showOpenUrlAlert",
             classBaseFragment, // 0 fragment
             String::class.java, // 1 url
@@ -407,29 +356,22 @@ class TelegramHandler : IXposedHookLoadPackage {
             Boolean::class.java, // 4 ask
             Boolean::class.java, // 5
             // 6 progress
-            XposedHelpers.findClass(
-                "org.telegram.messenger.browser.Browser\$Progress",
-                lpparam.classLoader
-            ),
+            findClass("org.telegram.messenger.browser.Browser\$Progress"),
             // 7
-            XposedHelpers.findClass(
-                "org.telegram.ui.ActionBar.Theme\$ResourcesProvider",
-                lpparam.classLoader
-            ),
+            findClass("org.telegram.ui.ActionBar.Theme\$ResourcesProvider"),
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     fixLink.get()?.let {
-                        // Log.d(TAG, "showOpenUrlAlert")
+                        // logD("showOpenUrlAlert")
                         it.openRunnable = Runnable {
                             val frag = param.args[0]
                             val inlineReturn = if (classChatActivity.isInstance(frag))
-                                XposedHelpers.callMethod(frag, "getInlineReturn")
+                                frag.call("getInlineReturn")
                             else 0
-                            Log.d(TAG, "open ${it.url}")
-                            XposedHelpers.callStaticMethod(
-                                classBrowser,
+                            logD("open ${it.url}")
+                            classBrowser.callS(
                                 "openUrl",
-                                XposedHelpers.callMethod(frag, "getParentActivity"),
+                                frag.call("getParentActivity"),
                                 Uri.parse(it.url),
                                 inlineReturn == 0,
                                 param.args[3], // tryTelegraph
@@ -448,18 +390,17 @@ class TelegramHandler : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     fixLink.get()?.let { fl ->
-                        // Log.d(TAG, "showDialog")
+                        // logD("showDialog")
                         fixLink.set(null)
                         val dialog = param.args[0]
-                        XposedHelpers.setObjectField(dialog, "neutralButtonText", "fix")
-                        XposedHelpers.setObjectField(
-                            dialog,
+                        dialog.setObj("neutralButtonText", "fix")
+                        dialog.setObj(
                             "neutralButtonListener",
                             DialogInterface.OnClickListener { _, _ ->
                                 fl.openRunnable?.run()
-                            })
-                        val message =
-                            XposedHelpers.getObjectField(dialog, "message") as CharSequence
+                            }
+                        )
+                        val message = dialog.getObjAs<CharSequence>("message")
                         val newMessage = SpannableStringBuilder(message)
                             .append("(")
                             .append(
@@ -468,13 +409,13 @@ class TelegramHandler : IXposedHookLoadPackage {
                                 Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                             )
                             .append(")")
-                        XposedHelpers.setObjectField(dialog, "message", newMessage)
+                        dialog.setObj("message", newMessage)
                     }
                 }
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookOpenLinkDialog: ", it)
+        logE("hookOpenLinkDialog: ", it)
     }
 
     data class ProfileActivityCtx(
@@ -483,11 +424,11 @@ class TelegramHandler : IXposedHookLoadPackage {
         var title: String = ""
     )
 
-    private fun hookUserProfileShowId(lpparam: LoadPackageParam) = kotlin.runCatching {
+    private fun hookUserProfileShowId() = kotlin.runCatching {
         // activity -> ctx
         val ctxs = WeakHashMap<Any, ProfileActivityCtx>()
         fun outerThis(obj: Any): Any {
-            return XposedHelpers.getObjectField(obj, "this\$0")
+            return obj.getObj("this\$0")!!
         }
 
         fun getCtx(obj: Any): ProfileActivityCtx? {
@@ -498,11 +439,8 @@ class TelegramHandler : IXposedHookLoadPackage {
 
         fun getCtxForAdapter(obj: Any) = getCtx(outerThis(obj))
         val profileActivityClass =
-            XposedHelpers.findClass("org.telegram.ui.ProfileActivity", lpparam.classLoader)
-        val listAdapterClass = XposedHelpers.findClass(
-            "org.telegram.ui.ProfileActivity\$ListAdapter",
-            lpparam.classLoader
-        )
+            findClass("org.telegram.ui.ProfileActivity")
+        val listAdapterClass = findClass("org.telegram.ui.ProfileActivity\$ListAdapter")
         val VIEW_TYPE_TEXT_DETAIL =
             2 // XposedHelpers.getStaticIntField(listAdapterClass, "VIEW_TYPE_TEXT")
         val rowFields = profileActivityClass.declaredFields.filter {
@@ -517,12 +455,12 @@ class TelegramHandler : IXposedHookLoadPackage {
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val ctx = getCtx(param.thisObject) ?: return
-                    var userId = XposedHelpers.getObjectField(param.thisObject, "userId")
+                    var userId = param.thisObject.getObj("userId")
                     var isChat = false
                     if (userId == 0L) {
-                        val chat = XposedHelpers.getObjectField(param.thisObject, "currentChat")
+                        val chat = param.thisObject.getObj("currentChat")
                         if (chat != null) {
-                            userId = XposedHelpers.getObjectField(chat, "id")
+                            userId = chat.getObj("id")
                             isChat = true
                         }
                     }
@@ -532,19 +470,18 @@ class TelegramHandler : IXposedHookLoadPackage {
                     }
                     ctx.userId = userId.toString()
                     ctx.title = if (isChat) "Chat Id" else "User Id"
-                    val headerId =
-                        XposedHelpers.getObjectField(param.thisObject, "infoHeaderRow") as Int
+                    val headerId = param.thisObject.getObjAs<Int>("infoHeaderRow")
                     val insertedId = if (headerId == -1) 1 else headerId + 1
                     ctx.insertedId = insertedId
                     rowFields.forEach {
                         val v = it.get(param.thisObject) as Int
                         if (v >= insertedId) it.set(param.thisObject, v + 1)
                     }
-                    XposedHelpers.setObjectField(
-                        param.thisObject, "rowCount",
-                        XposedHelpers.getObjectField(param.thisObject, "rowCount") as Int + 1
+                    param.thisObject.setObj(
+                        "rowCount",
+                        param.thisObject.getObjAs<Int>("rowCount") + 1
                     )
-                    // Log.d(TAG, "updateRowsIds: inserted=$insertedId")
+                    // logD("updateRowsIds: inserted=$insertedId")
                 }
             }
         )
@@ -557,9 +494,9 @@ class TelegramHandler : IXposedHookLoadPackage {
                     if (ctx.insertedId == -1) return
                     val pos = param.args[1] as Int
                     if (pos == ctx.insertedId) {
-                        val detailCeil = XposedHelpers.getObjectField(param.args[0], "itemView")
-                        XposedHelpers.callMethod(
-                            detailCeil, "setTextAndValue", ctx.userId,
+                        val detailCeil = param.args[0].getObj("itemView")
+                        detailCeil.call(
+                            "setTextAndValue", ctx.userId,
                             ctx.title, false
                         )
                         param.result = null
@@ -586,7 +523,7 @@ class TelegramHandler : IXposedHookLoadPackage {
             "processOnClickOrPress",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    Log.d(TAG, "processOnClickOrPress: ${param.args[0]}")
+                    logD("processOnClickOrPress: ${param.args[0]}")
                     val ctx = getCtx(param.thisObject) ?: return
                     if (ctx.insertedId == -1) return
                     if (param.args[0] == ctx.insertedId) {
@@ -599,54 +536,46 @@ class TelegramHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookUserProfileShowId: error", it)
+        logE("hookUserProfileShowId: error", it)
     }
 
-    private fun hookFakeInstallPermission(lpparam: LoadPackageParam) = runCatching {
+    private fun hookFakeInstallPermission() = runCatching {
         XposedHelpers.findAndHookMethod(
-            XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader),
+            findClass("android.app.ApplicationPackageManager"),
             "canRequestPackageInstalls",
             XC_MethodReplacement.returnConstant(true)
         )
     }.onFailure {
-        Log.e(TAG, "hookFakeInstallPermission: ", it)
+        logE("hookFakeInstallPermission: ", it)
     }
 
-    private fun hookDoNotInstallGoogleMaps(lpparam: LoadPackageParam) = runCatching {
+    private fun hookDoNotInstallGoogleMaps() = runCatching {
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass("org.telegram.messenger.AndroidUtilities", lpparam.classLoader),
+            findClass("org.telegram.messenger.AndroidUtilities"),
             "isMapsInstalled",
             XC_MethodReplacement.returnConstant(true)
         )
     }
 
-    private fun hookEmoji(lpparam: LoadPackageParam) = runCatching {
-        val emojiPacksAlert = XposedHelpers.findClass(
-            "org.telegram.ui.Components.EmojiPacksAlert",
-            lpparam.classLoader
-        )
-        val emojiPacksAlertEmojiPackHeader = XposedHelpers.findClass(
-            "org.telegram.ui.Components.EmojiPacksAlert\$EmojiPackHeader",
-            lpparam.classLoader
-        )
-        val customEmojiClass = XposedHelpers.findClass(
-            "org.telegram.tgnet.TLRPC\$TL_documentAttributeCustomEmoji",
-            lpparam.classLoader
-        )
+    private fun hookEmoji() = runCatching {
+        val emojiPacksAlert = findClass("org.telegram.ui.Components.EmojiPacksAlert")
+        val emojiPacksAlertEmojiPackHeader =
+            findClass("org.telegram.ui.Components.EmojiPacksAlert\$EmojiPackHeader")
+        val customEmojiClass =
+            findClass("org.telegram.tgnet.TLRPC\$TL_documentAttributeCustomEmoji")
 
         XposedBridge.hookAllConstructors(
             emojiPacksAlertEmojiPackHeader,
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    val optionsButton =
-                        XposedHelpers.getObjectField(param.thisObject, "optionsButton") ?: return
-                    XposedHelpers.callMethod(optionsButton, "addSubItem", MENU_DUMP, "Dump")
-                    XposedHelpers.callMethod(optionsButton, "addSubItem", MENU_GET_PROFILE, "Profile of admin")
+                    val optionsButton = param.thisObject.getObj("optionsButton") ?: return
+                    optionsButton.call("addSubItem", MENU_DUMP, "Dump")
+                    optionsButton.call("addSubItem", MENU_GET_PROFILE, "Profile of admin")
                 }
             }
         )
 
-        val messagesController = XposedHelpers.findClass("org.telegram.messenger.MessagesController", lpparam.classLoader)
+        val messagesController = findClass("org.telegram.messenger.MessagesController")
 
         XposedBridge.hookAllMethods(
             emojiPacksAlert,
@@ -681,18 +610,16 @@ class TelegramHandler : IXposedHookLoadPackage {
                             Toast.LENGTH_SHORT).show()
                     }
                     if (param.args[0] != MENU_DUMP) return
-                    Log.d(TAG, "dump: clicked")
-                    val customEmojiPacks =
-                        XposedHelpers.getObjectField(param.thisObject, "customEmojiPacks")
-                    val stickerSets =
-                        XposedHelpers.getObjectField(customEmojiPacks, "stickerSets") as List<*>
+                    logD("dump: clicked")
+                    val customEmojiPacks = param.thisObject.getObj("customEmojiPacks")
+                    val stickerSets = customEmojiPacks.getObj("stickerSets") as List<*>
                     val str = StringBuilder()
                     stickerSets.firstOrNull()?.let { tlMessagesStickerSet ->
-                        val set = XposedHelpers.getObjectField(tlMessagesStickerSet, "set")
-                        val title = XposedHelpers.getObjectField(set, "title")
-                        val id = XposedHelpers.getObjectField(set, "id")
-                        val shortName = XposedHelpers.getObjectField(set, "short_name")
-                        // Log.d(TAG, "dump: $title $id $shortName")
+                        val set = tlMessagesStickerSet.getObj("set")
+                        val title = set.getObj("title")
+                        val id = set.getObj("id")
+                        val shortName = set.getObj("short_name")
+                        // logD("dump: $title $id $shortName")
                         str.append("title=")
                             .append(title)
                             .append("\nid=")
@@ -700,21 +627,17 @@ class TelegramHandler : IXposedHookLoadPackage {
                             .append("\nshortName=")
                             .append(shortName)
 
-                        val documents = XposedHelpers.getObjectField(
-                            tlMessagesStickerSet,
+                        val documents = tlMessagesStickerSet.getObjAs<List<*>>(
                             "documents"
-                        ) as List<*>
+                        )
                         documents.forEachIndexed { i, doc ->
-                            val id = XposedHelpers.getObjectField(doc, "id")
-                            val alt = (XposedHelpers.getObjectField(
-                                doc,
+                            val id = doc.getObj("id")
+                            val alt = doc.getObjAs<List<*>>(
                                 "attributes"
-                            ) as List<*>).firstOrNull {
+                            ).firstOrNull {
                                 customEmojiClass.isInstance(it)
-                            }?.let { attr ->
-                                XposedHelpers.getObjectField(attr, "alt")
-                            } as? String
-                            // Log.d(TAG, "dump: $i id=$id alt=$alt")
+                            }?.getObjAsN<String>("alt")
+                            // logD("dump: $i id=$id alt=$alt")
                             val altUnicode = alt?.firstUnicodeChar()
                             str.append("\n$i=$id:$altUnicode")
                         }
@@ -732,30 +655,30 @@ class TelegramHandler : IXposedHookLoadPackage {
             "getPrimaryClip",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    // Log.d(TAG, "afterHookedMethod: getPrimaryClip")
+                    // logD("afterHookedMethod: getPrimaryClip")
                     val result = param.result as? ClipData ?: return
                     val item = result.getItemAt(0)
                     val origText = item.text
                     var newText = origText
                     var pos = 0
-                    // Log.d(TAG, "afterHookedMethod: $origText")
+                    // logD("afterHookedMethod: $origText")
                     while (true) {
                         val firstIdx = newText.indexOf('[', pos)
                         if (firstIdx == -1) break
                         val lastIdx = newText.indexOf(']', firstIdx)
                         if (lastIdx == -1) break
-                        // Log.d(TAG, "afterHookedMethod: $firstIdx $lastIdx")
+                        // logD("afterHookedMethod: $firstIdx $lastIdx")
                         pos = lastIdx
                         val kw = newText.substring(firstIdx..lastIdx)
                         val replacement = emotionMap[kw]?.let {
                             "<animated-emoji data-document-id=\"${it.first}\">&#${it.second.firstUnicodeChar()};</animated-emoji>"
                         } ?: continue
                         newText = newText.replaceRange(firstIdx..lastIdx, replacement)
-                        // Log.d(TAG, "afterHookedMethod: replaced=$newText")
+                        // logD("afterHookedMethod: replaced=$newText")
                         pos = firstIdx + replacement.length
                     }
                     if (newText !== origText) {
-                        // Log.d(TAG, "replace: $newText")
+                        // logD("replace: $newText")
                         param.result = ClipData.newHtmlText(
                             "",
                             newText,
@@ -766,19 +689,15 @@ class TelegramHandler : IXposedHookLoadPackage {
             }
         )
 
-        val stickersAlert = XposedHelpers.findClass(
-            "org.telegram.ui.Components.StickersAlert",
-            lpparam.classLoader
-        )
+        val stickersAlert = findClass("org.telegram.ui.Components.StickersAlert")
 
         // https://github.com/NextAlone/Nagram/blob/c189a1af80016fd3d041be121143ede94b0fdcf4/TMessagesProj/src/main/java/org/telegram/ui/Components/StickersAlert.java#L1485
         XposedBridge.hookAllMethods(
             stickersAlert, "init",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    val optionsButton =
-                        XposedHelpers.getObjectField(param.thisObject, "optionsButton") ?: return
-                    XposedHelpers.callMethod(optionsButton, "addSubItem", MENU_GET_PROFILE, "Profile of admin")
+                    val optionsButton = param.thisObject.getObj("optionsButton") ?: return
+                    optionsButton.call("addSubItem", MENU_GET_PROFILE, "Profile of admin")
                 }
             }
         )
@@ -817,20 +736,19 @@ class TelegramHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "emojiHandler: ", it)
+        logE("emojiHandler: ", it)
     }
 
-    private fun hookEmojiManage(lpparam: LoadPackageParam) = runCatching {
-        val chatActivityEnterView = XposedHelpers.findClass(
-            "org.telegram.ui.Components.ChatActivityEnterView",
-            lpparam.classLoader
+    private fun hookEmojiManage() = runCatching {
+        val chatActivityEnterView = findClass(
+            "org.telegram.ui.Components.ChatActivityEnterView"
         )
 
         val cst = chatActivityEnterView.declaredConstructors.maxBy { it.parameterCount }!!
             .also { it.isAccessible = true }
         XposedBridge.hookMethod(cst, object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                (XposedHelpers.getObjectField(param.thisObject, "emojiButton") as View)
+                param.thisObject.getObjAs<View>("emojiButton")
                     .setOnLongClickListener { v ->
                         Toast.makeText(v.context, "choose an emotion map json file", Toast.LENGTH_SHORT).show()
                         val activity = v.context as Activity
@@ -848,7 +766,7 @@ class TelegramHandler : IXposedHookLoadPackage {
         XposedBridge.hookAllMethods(Activity::class.java, "dispatchActivityResult", object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
                 if (param.args[1] == 114514) {
-                    // Log.d(TAG, "dispatchActivityResult: " + param.args[3])
+                    // logD("dispatchActivityResult: " + param.args[3])
                     val ctx = param.thisObject as Activity
                     (param.args[3] as? Intent)?.data?.let {
                         url ->
@@ -857,7 +775,7 @@ class TelegramHandler : IXposedHookLoadPackage {
                             val mp = try {
                                 loadEmotionMap(text)
                             } catch (t: Throwable) {
-                                Log.e(TAG, "loadEmotionMap: ", t)
+                                logE("loadEmotionMap: ", t)
                                 Toast.makeText(ctx, "load failed: $t", Toast.LENGTH_LONG).show()
                                 return
                             }
@@ -874,21 +792,19 @@ class TelegramHandler : IXposedHookLoadPackage {
             }
         })
     }.onFailure {
-        Log.e(TAG, "hookEmojiManage: ", it)
+        logE("hookEmojiManage: ", it)
     }
 
     // 这构式逻辑谁写的？
     // https://github.com/DrKLO/Telegram/blob/eee720ef5e48e1c434f4c5a83698dc4ada34aaa9/TMessagesProj/src/main/java/org/telegram/messenger/browser/Browser.java#L391
-    private fun hookHasAppToOpen(lpparam: LoadPackageParam) = runCatching {
+    private fun hookHasAppToOpen() = runCatching {
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass(
-                "org.telegram.messenger.browser.Browser", lpparam.classLoader
-            ),
+            findClass("org.telegram.messenger.browser.Browser"),
             "hasAppToOpen",
             XC_MethodReplacement.returnConstant(true)
         )
     }.onFailure {
-        Log.e(TAG, "hookHasAppToOpen: ", it)
+        logE("hookHasAppToOpen: ", it)
     }
 }
 

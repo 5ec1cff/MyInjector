@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector
 
-import android.util.Log
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -15,7 +14,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        Log.d("MyInjector", "handleLoadPackage: ${lpparam.packageName} ${lpparam.processName}")
+        logD("handleLoadPackage: ${lpparam.packageName} ${lpparam.processName}")
         val handler = when (lpparam.packageName) {
             "com.fooview.android.fooview" -> FvXposedHandler()
             "com.lbe.security.miui" -> LbeHandler()
@@ -36,6 +35,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "app.landrop.landrop_flutter" -> LanDropHandler()
             else -> return
         }
-        handler.handleLoadPackage(lpparam)
+        logPrefix = "[${handler::class.simpleName}] "
+        handler.hook(lpparam)
     }
 }

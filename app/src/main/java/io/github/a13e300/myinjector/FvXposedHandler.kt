@@ -1,31 +1,23 @@
 package io.github.a13e300.myinjector
 
 import android.os.Process
-import android.util.Log
-import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.arch.IHook
 
-class FvXposedHandler : IXposedHookLoadPackage {
-    companion object {
-        private const val TAG = "MyInjector-fooview"
-    }
-
-    private lateinit var lpparam: XC_LoadPackage.LoadPackageParam
-
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+class FvXposedHandler : IHook() {
+    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.fooview.android.fooview") return
-        this.lpparam = lpparam
-        Log.i(TAG, "inject fv, pid=${Process.myPid()}, processName=${lpparam.processName}")
+        logI("inject fv, pid=${Process.myPid()}, processName=${lpparam.processName}")
         try {
             val c = XposedHelpers.findClass("dalvik.system.VMRuntime", lpparam.classLoader)
             XposedHelpers.callMethod(XposedHelpers.callStaticMethod(c, "getRuntime"), "setHiddenApiExemptions", arrayOf("L"));
-            Log.d(TAG, "success to bypass")
+            logD("success to bypass")
         } catch (t: Throwable) {
-            Log.e(TAG, "failed to bypass", t)
+            logE("failed to bypass", t)
         }
 
         if (lpparam.processName.endsWith(":fv"))
@@ -39,9 +31,8 @@ class FvXposedHandler : IXposedHookLoadPackage {
         // 自动返回桌面
         // 特征： android.intent.action.MAIN, android.intent.category.HOME, 调用 performGlobalAction(2)
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass(
-                "com.fooview.android.fooview.fvprocess.FooAccessibilityService",
-                lpparam.classLoader
+            findClass(
+                "com.fooview.android.fooview.fvprocess.FooAccessibilityService"
             ),
             "O0",
             object : XC_MethodHook() {
@@ -59,9 +50,8 @@ class FvXposedHandler : IXposedHookLoadPackage {
         // authorize_floating_window_permission_desc 0x7f0e00d6 打开通知栏权限
         // remove_float_displaying_notification 0x7f0e0021 去除通知栏上“正在其他应用上层显示”的通知
         XposedBridge.hookAllMethods(
-            XposedHelpers.findClass(
-                "com.fooview.android.fooview.fvprocess.FooViewService",
-                lpparam.classLoader
+            findClass(
+                "com.fooview.android.fooview.fvprocess.FooViewService"
             ),
             "F3",
             object : XC_MethodReplacement() {
@@ -72,6 +62,6 @@ class FvXposedHandler : IXposedHookLoadPackage {
             }
         )
     }.onFailure {
-        Log.e(TAG, "hookNoTipNotificationPerm: ", it)
+        logE("hookNoTipNotificationPerm: ", it)
     }
 }
