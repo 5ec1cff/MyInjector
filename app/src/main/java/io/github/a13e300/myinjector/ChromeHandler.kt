@@ -1,6 +1,7 @@
 package io.github.a13e300.myinjector
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
@@ -16,13 +17,12 @@ class ChromeHandler : IHook() {
     private var swipeRefreshHandlerClassName = ""
     private var swipeRefreshHandlerMethodPull = ""
     private var swipeRefreshHandlerMethodRelease = ""
-
-    private lateinit var lpparam: XC_LoadPackage.LoadPackageParam
+    private lateinit var appInfo: ApplicationInfo
 
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
-        if (this::lpparam.isInitialized) return
-        lpparam = param
-        val name = lpparam.appInfo.className
+        if (param.processName.contains(":")) return
+        val name = param.appInfo.className
+        appInfo = param.appInfo
         logD("app name $name")
         // ensure split apk (split-chrome) is loaded, see:
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitCompatAppComponentFactory.java;l=136?q=SplitCompatAppComponentFactory&ss=chromium
@@ -44,7 +44,7 @@ class ChromeHandler : IHook() {
                 }
             )
         } else {
-            doHook(lpparam.classLoader)
+            doHook(classLoader)
         }
     }
 
@@ -63,13 +63,13 @@ class ChromeHandler : IHook() {
     }
 
     private fun doFind(loader: ClassLoader) {
-        val f = File(lpparam.appInfo.dataDir, "dexkit.tmp")
+        val f = File(appInfo.dataDir, "dexkit.tmp")
         cacheFile = f
         if (f.isFile) {
             try {
                 val lines = f.inputStream().use { f.readLines() }
                 val apkPath = lines[0]
-                if (apkPath == lpparam.appInfo.sourceDir) {
+                if (apkPath == appInfo.sourceDir) {
                     swipeRefreshHandlerClassName = lines[1]
                     swipeRefreshHandlerMethodPull = lines[2]
                     swipeRefreshHandlerMethodRelease = lines[3]
@@ -103,7 +103,7 @@ class ChromeHandler : IHook() {
         swipeRefreshHandlerMethodPull = pullMethod.methodName
         swipeRefreshHandlerMethodRelease = releaseMethod.methodName
         f.bufferedWriter().use {
-            it.write("${lpparam.appInfo.sourceDir}\n")
+            it.write("${appInfo.sourceDir}\n")
             it.write("$swipeRefreshHandlerClassName\n")
             it.write("$swipeRefreshHandlerMethodPull\n")
             it.write("$swipeRefreshHandlerMethodRelease\n")

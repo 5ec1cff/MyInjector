@@ -78,11 +78,11 @@ class ZhihuXposedHandler : IHook() {
     override fun onHook(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "com.zhihu.android") return
         prepare(lpparam)
-        hookDisableFeedAutoRefresh(lpparam)
+        hookDisableFeedAutoRefresh()
         hookClipboard()
     }
 
-    private fun hookDisableFeedAutoRefresh(lpparam: LoadPackageParam) =
+    private fun hookDisableFeedAutoRefresh() =
         kotlin.runCatching {
             XposedBridge.hookAllMethods(
                 findClass(localSourceClass),

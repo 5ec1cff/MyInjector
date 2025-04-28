@@ -6,17 +6,17 @@ var logPrefix: String = ""
 const val LOG_TAG = "MyInjector"
 
 fun logD(msg: String, t: Throwable? = null) {
-    logD("$logPrefix $msg", t)
+    Log.d(LOG_TAG, "$logPrefix$msg", t)
 }
 
 fun logE(msg: String, t: Throwable? = null) {
-    logE("$logPrefix $msg", t)
+    Log.e(LOG_TAG, "$logPrefix$msg", t)
 }
 
 fun logI(msg: String, t: Throwable? = null) {
-    Log.i(LOG_TAG, "$logPrefix $msg", t)
+    Log.i(LOG_TAG, "$logPrefix$msg", t)
 }
 
 fun logW(msg: String, t: Throwable? = null) {
-    Log.w(LOG_TAG, "$logPrefix $msg", t)
+    Log.w(LOG_TAG, "$logPrefix$msg", t)
 }
