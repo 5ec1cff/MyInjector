@@ -42,12 +42,18 @@ jobs:
 
       - name: Build with Gradle
         run: |
-          chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
       - name: Upload release
         uses: actions/upload-artifact@v4
         with:
           name: "MyInjector"
-          path: "./app/build/outputs/apk/debug/*.apk"
+          path: "./app/build/outputs/apk/release/*.apk"
+          compression-level: 9
+
+      - name: Upload mappings
+        uses: actions/upload-artifact@v4
+        with:
+          name: "MyInjector-mapping"
+          path: "./app/build/outputs/mapping/release"
           compression-level: 9

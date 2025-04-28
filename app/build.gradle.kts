@@ -1,5 +1,5 @@
 import com.android.build.gradle.tasks.PackageAndroidArtifact
-import com.google.protobuf.gradle.*
+import com.google.protobuf.gradle.id
 import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.Properties
@@ -59,7 +59,7 @@ android {
         buildConfig = true
     }
     buildTypes {
-        all {
+        release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -98,6 +98,10 @@ android {
     // https://stackoverflow.com/a/77745844
     tasks.withType<PackageAndroidArtifact> {
         doFirst { appMetadata.asFile.orNull?.writeText("") }
+    }
+
+    lint {
+        checkReleaseBuilds = false
     }
 }
 

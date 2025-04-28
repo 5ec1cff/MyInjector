@@ -35,7 +35,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "app.landrop.landrop_flutter" -> LanDropHandler()
             else -> return
         }
-        logPrefix = "[${handler::class.simpleName}] "
+        logPrefix = "[${handler::class.java.simpleName}] "
         handler.hook(lpparam)
     }
 }
