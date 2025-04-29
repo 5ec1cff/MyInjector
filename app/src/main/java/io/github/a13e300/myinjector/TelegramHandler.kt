@@ -659,30 +659,31 @@ class TelegramHandler : IHook() {
                     val result = param.result as? ClipData ?: return
                     val item = result.getItemAt(0)
                     val origText = item.text
-                    var newText = origText
+                    val newText = StringBuilder()
                     var pos = 0
                     // logD("afterHookedMethod: $origText")
                     while (true) {
-                        val firstIdx = newText.indexOf('[', pos)
+                        val firstIdx = origText.indexOf('[', pos)
                         if (firstIdx == -1) break
-                        val lastIdx = newText.indexOf(']', firstIdx)
+                        val lastIdx = origText.indexOf(']', firstIdx)
                         if (lastIdx == -1) break
                         // logD("afterHookedMethod: $firstIdx $lastIdx")
-                        pos = lastIdx
-                        val kw = newText.substring(firstIdx..lastIdx)
+                        val kw = origText.substring(firstIdx..lastIdx)
                         val replacement = emotionMap[kw]?.let {
                             "<animated-emoji data-document-id=\"${it.first}\">&#${it.second.firstUnicodeChar()};</animated-emoji>"
-                        } ?: continue
-                        newText = newText.replaceRange(firstIdx..lastIdx, replacement)
+                        } ?: kw.toHtml()
+                        newText.append(origText.substring(pos until firstIdx).toHtml())
+                        newText.append(replacement)
+                        pos = lastIdx + 1
                         // logD("afterHookedMethod: replaced=$newText")
-                        pos = firstIdx + replacement.length
                     }
-                    if (newText !== origText) {
+                    if (pos != 0) {
+                        if (pos < origText.length) newText.append(origText.substring(pos).toHtml())
                         // logD("replace: $newText")
                         param.result = ClipData.newHtmlText(
                             "",
                             newText,
-                            newText.toString().replace("\n", "<br>")
+                            newText.toString()
                         )
                     }
                 }
@@ -820,3 +821,17 @@ private fun String.firstUnicodeChar(): Int {
     }
     return c
 }
+
+// https://github.com/DrKLO/Telegram/blob/17067dfc6a1f69618a006b14e1741b75c64b276a/TMessagesProj/src/main/java/org/telegram/messenger/utils/CustomHtml.java#L248
+private fun String.toHtml(): String = StringBuilder().apply {
+    for (ch in this@toHtml) {
+        when (ch) {
+            ' ' -> append("&nbsp;")
+            '<' -> append("&lt;")
+            '>' -> append("&gt;")
+            '&' -> append("&amp;")
+            '\n' -> append("<br>")
+            else -> append(ch)
+        }
+    }
+}.toString()
