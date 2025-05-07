@@ -6,6 +6,7 @@ import android.content.ContentResolver
 import android.content.ContentValues
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemProperties
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -13,6 +14,7 @@ import android.widget.CompoundButton
 import android.widget.LinearLayout
 import android.widget.Toast
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -92,6 +94,23 @@ class MIUISecurityCenterHandler : IHook() {
                 inst.finish()
             }
         })
+        val adbInputActivity = findClass(
+            "com.miui.permcenter.install.AdbInputApplyActivity"
+        )
+        XposedHelpers.findAndHookMethod(
+            adbInputActivity,
+            "onCreate",
+            Bundle::class.java,
+            object : XC_MethodReplacement() {
+                override fun replaceHookedMethod(param: MethodHookParam): Any? {
+                    SystemProperties.set("persist.security.adbinput", "1")
+                    (param.thisObject as Activity).run {
+                        setResult(-1, null)
+                        finish()
+                    }
+                    return null
+                }
+            })
     }.onFailure { logE("hookSkipAdbWarning: ", it) }
 
     private fun hookAddKeepAutoStart() = runCatching {
