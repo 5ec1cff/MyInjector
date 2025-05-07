@@ -23,6 +23,7 @@ import io.github.a13e300.myinjector.arch.addModuleAssets
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.newInst
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import kotlin.concurrent.thread
 
 class MIUISecurityCenterHandler : IHook() {
@@ -118,14 +119,100 @@ class MIUISecurityCenterHandler : IHook() {
             findClass(
                 "com.miui.appmanager.ApplicationsDetailsActivity"
             )
+        val initView = classAppDetailsActivity.declaredMethods.find { it.name == "initView" }
+        if (initView == null) {
+            logI("hook new!!!")
+            val classAppDetailsFragment =
+                findClass("com.miui.appmanager.fragment.ApplicationsDetailsFragment")
+            val miuixCheckBoxPref = findClass("miuix.preference.CheckBoxPreference")
+            val prefChangeListenerClass = findClass("androidx.preference.Preference")
+                .declaredMethods.find { it.name == "setOnPreferenceChangeListener" }!!
+                .parameters[0].type
+
+            XposedBridge.hookAllMethods(
+                classAppDetailsFragment,
+                "onCreatePreferences",
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        logI("onCreatePreferences")
+                        val ctx = param.thisObject.call("getActivity") as Activity
+                        val currentPkgName = ctx.intent.getStringExtra("package_name")!!
+                        val ps = param.thisObject.call("getPreferenceScreen")
+                        val cat = ps.call("findPreference", "app_detail_perm_category")
+                        val pref = miuixCheckBoxPref.newInst(ctx)
+                        pref.call("setKey", "keep_autostart")
+                        pref.call("setTitle", "保持自启动")
+                        cat.call("addPreference", pref)
+                        fun updateStatus() {
+                            kotlin.runCatching {
+                                val checked =
+                                    getPermissionFlags(ctx.contentResolver, currentPkgName).and(
+                                        PERM_AUTO_START
+                                    ) != 0
+                                ctx.runOnUiThread {
+                                    pref.call(
+                                        "setChecked",
+                                        checked
+                                    )
+                                }
+                            }.onFailure {
+                                logE("failed to get autostart stable permission", it)
+                                ctx.runOnUiThread {
+                                    Toast.makeText(
+                                        ctx,
+                                        "获取保持自启动失败",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+
+                        fun modifyStatus(enabled: Boolean) {
+                            kotlin.runCatching {
+                                setAutoStartStable(ctx.contentResolver, currentPkgName, enabled)
+                            }.onSuccess {
+                                updateStatus()
+                            }.onFailure {
+                                logE("failed to set autostart stable permission", it)
+                                ctx.runOnUiThread {
+                                    Toast.makeText(
+                                        ctx,
+                                        "修改保持自启动失败",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+
+                        val listener = Proxy.newProxyInstance(
+                            prefChangeListenerClass.classLoader,
+                            arrayOf(prefChangeListenerClass)
+                        ) { _, m, args ->
+                            if (m.name == "onPreferenceChange") {
+                                val v = args[1] as Boolean
+                                thread {
+                                    modifyStatus(v)
+                                }
+                                return@newProxyInstance true
+                            }
+                            return@newProxyInstance null
+                        }
+                        pref.call("setOnPreferenceChangeListener", listener)
+
+                        thread {
+                            updateStatus()
+                        }
+                    }
+                }
+            )
+
+            return@runCatching
+        }
         val classAppDetailCheckBoxView =
             findClass(
                 "com.miui.appmanager.widget.AppDetailCheckBoxView"
             )
-        XposedBridge.hookAllMethods(
-            classAppDetailsActivity,
-            "initView",
-            object : XC_MethodHook() {
+        XposedBridge.hookMethod(initView, object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
                 val ctx = param.thisObject as Activity
                 ctx.addModuleAssets(Entry.modulePath)
