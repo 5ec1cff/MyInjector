@@ -98,6 +98,7 @@ class TelegramHandler : IHook() {
         hookEmoji()
         hookEmojiManage()
         hookHasAppToOpen()
+        hookDefaultSearchTab()
     }
 
     private fun hookLongClickMention() = runCatching {
@@ -806,6 +807,45 @@ class TelegramHandler : IHook() {
         )
     }.onFailure {
         logE("hookHasAppToOpen: ", it)
+    }
+
+    private fun hookDefaultSearchTab() = runCatching {
+        val chatActivity = findClass("org.telegram.ui.ChatActivity")
+        val viewPagerFixedTabsView =
+            findClass("org.telegram.ui.Components.ViewPagerFixed\$TabsView")
+        val inOpenHashTagSearch = ThreadLocal<Boolean>()
+        XposedHelpers.findAndHookMethod(
+            chatActivity,
+            "openHashtagSearch",
+            String::class.java, java.lang.Boolean.TYPE,
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    inOpenHashTagSearch.set(true)
+                }
+
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    inOpenHashTagSearch.set(false)
+                    param.thisObject.setObj("defaultSearchPage", 0)
+                }
+            }
+        )
+        XposedHelpers.findAndHookMethod(
+            viewPagerFixedTabsView,
+            "scrollToTab",
+            Integer.TYPE, Integer.TYPE,
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (inOpenHashTagSearch.get() == true) {
+                        if (param.thisObject.call("getCurrentPosition") != 0) {
+                            param.args[0] = 0
+                            param.args[1] = 0
+                        } else {
+                            param.result = null
+                        }
+                    }
+                }
+            }
+        )
     }
 }
 
