@@ -17,5 +17,6 @@
         <item>android</item>
         <item>com.android.settings</item>
         <item>app.landrop.landrop_flutter</item>
+        <item>com.android.intentresolver</item>
     </string-array>
 </resources>

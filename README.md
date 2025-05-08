@@ -129,6 +129,14 @@ app.landrop.landrop_flutter
 
 - 修复分享文本文件时会以文本形式发送路径而非发送原文件的 bug
 
+## IntentResolver
+
+```
+com.android.intentresolver
+```
+
+- 去除打开的 activity 的 EXCLUDE_FROM_RECENTS flag 。
+
 ## 过期功能
 
 长期未维护，可能不可用
