@@ -1,6 +1,7 @@
 package io.github.a13e300.myinjector
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.AndroidAppHelper
 import android.app.Dialog
 import android.content.ClipData
@@ -20,6 +21,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
@@ -99,6 +101,7 @@ class TelegramHandler : IHook() {
         hookEmojiManage()
         hookHasAppToOpen()
         hookDefaultSearchTab()
+        hookSetPosition()
     }
 
     private fun hookLongClickMention() = runCatching {
@@ -110,7 +113,7 @@ class TelegramHandler : IHook() {
         XposedBridge.hookAllMethods(
             findClass("org.telegram.ui.ChatActivity"),
             "createView",
-            object : de.robv.android.xposed.XC_MethodHook() {
+            object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val obj = Object()
                     val thiz = param.thisObject
@@ -592,7 +595,7 @@ class TelegramHandler : IHook() {
                             userId = userId.or(0x80000000L)
                         }
                         if (id.shr(24).and(0xff) != 0L) {
-                            userId += 0x100000000L;
+                            userId += 0x100000000L
                         }
                         val fragment = param.thisObject.getObj("fragment")
                         if (fragment != null) {
@@ -716,7 +719,7 @@ class TelegramHandler : IHook() {
                             userId = userId.or(0x80000000L)
                         }
                         if (id.shr(24).and(0xff) != 0L) {
-                            userId += 0x100000000L;
+                            userId += 0x100000000L
                         }
                         val parentFragment = param.thisObject.getObj("parentFragment")
                         if (parentFragment != null) {
@@ -841,6 +844,46 @@ class TelegramHandler : IHook() {
                             param.args[1] = 0
                         } else {
                             param.result = null
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    private fun hookSetPosition() = runCatching {
+        val caall = findClass("org.telegram.ui.Components.ChatAttachAlertLocationLayout")
+        XposedBridge.hookAllConstructors(
+            caall,
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val self = param.thisObject
+                    param.thisObject.getObjAs<ImageView>("locationButton").run {
+                        setOnLongClickListener {
+                            val ctx = it.context
+                            val et = EditText(ctx)
+                            AlertDialog.Builder(ctx)
+                                .setTitle("latitude,longitude")
+                                .setView(et)
+                                .setPositiveButton(android.R.string.ok) { _, _ ->
+                                    val l = et.text.toString().split(",", limit = 2)
+                                    if (l.size == 2) {
+                                        val la = l[0].trim().toDoubleOrNull()
+                                        val lo = l[1].trim().toDoubleOrNull()
+                                        if (la != null && lo != null) {
+                                            self.call("resetMapPosition", la, lo)
+                                            return@setPositiveButton
+                                        }
+                                    }
+                                    Toast.makeText(
+                                        ctx,
+                                        "wrong position",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                .setNegativeButton(android.R.string.cancel, null)
+                                .show()
+                            true
                         }
                     }
                 }
