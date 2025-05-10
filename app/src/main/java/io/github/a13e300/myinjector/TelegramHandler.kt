@@ -53,38 +53,50 @@ class TelegramHandler : IHook() {
     }
     private lateinit var moduleRes: XModuleResources
 
-    private var _emotionMap: Map<String, Pair<String, String>>? = null
-    private fun loadEmotionMap(json: String): Map<String, Pair<String, String>> {
+    data class EmotionMap(
+        val map: Map<String, Pair<String, String>>,
+        val regex: Regex
+    )
+
+    private var _emotionMap: EmotionMap? = null
+    private fun loadEmotionMap(json: String): EmotionMap {
         val data = JSONObject(json)
-        val result = mutableMapOf<String, Pair<String, String>>()
+        val mp = mutableMapOf<String, Pair<String, String>>()
         for (k in data.keys()) {
             val v = data.getJSONArray(k)
             val id = v.getString(0)
             val name = v.getJSONArray(1).getString(0)
-            result.put(k, Pair(id, name))
+            mp.put(k, Pair(id, name))
         }
-        return result
+        val regex = Regex(mp.keys.joinToString("|") { Regex.escape(it) })
+        return EmotionMap(mp, regex)
     }
     private fun Context.getEmotionMapFile(): File {
         return File(getExternalFilesDir(""), "emotion_map.json")
     }
-    private val emotionMap: Map<String, Pair<String, String>>
+    private val emotionMap: EmotionMap
         get() {
-            if (_emotionMap == null) {
+            val m = _emotionMap
+            if (m == null) {
                 synchronized(this) {
-                    if (_emotionMap == null) {
+                    val m2 = _emotionMap
+                    if (m2 == null) {
                         val f = AndroidAppHelper.currentApplication().getEmotionMapFile()
-                        try {
-                            _emotionMap = loadEmotionMap(f.readText())
+                        val mp = try {
+                            loadEmotionMap(f.readText())
                         } catch (t: Throwable) {
                             logE("load emotion map from $f failed  ", t)
-                            _emotionMap = emptyMap()
+                            EmotionMap(emptyMap(), Regex(""))
                         }
+                        _emotionMap = mp
+                        return mp
                     }
+                    return m2
                 }
             }
-            return _emotionMap!!
+            return m
         }
+
 
     override fun onHook(param: LoadPackageParam) {
         moduleRes = XModuleResources.createInstance(Entry.modulePath, null)
@@ -659,6 +671,8 @@ class TelegramHandler : IHook() {
             "getPrimaryClip",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
+                    Regex.escape("")
+                    Regex.escapeReplacement("")
                     // logD("afterHookedMethod: getPrimaryClip")
                     val result = param.result as? ClipData ?: return
                     val item = result.getItemAt(0)
@@ -666,19 +680,16 @@ class TelegramHandler : IHook() {
                     val newText = StringBuilder()
                     var pos = 0
                     // logD("afterHookedMethod: $origText")
+                    val mp = emotionMap
                     while (true) {
-                        val firstIdx = origText.indexOf('[', pos)
-                        if (firstIdx == -1) break
-                        val lastIdx = origText.indexOf(']', firstIdx)
-                        if (lastIdx == -1) break
-                        // logD("afterHookedMethod: $firstIdx $lastIdx")
-                        val kw = origText.substring(firstIdx..lastIdx)
-                        val replacement = emotionMap[kw]?.let {
+                        val r = mp.regex.find(origText, pos) ?: break
+                        val kw = r.value
+                        val replacement = mp.map[kw]?.let {
                             "<animated-emoji data-document-id=\"${it.first}\">&#${it.second.firstUnicodeChar()};</animated-emoji>"
                         } ?: kw.toHtml()
-                        newText.append(origText.substring(pos until firstIdx).toHtml())
+                        newText.append(origText.substring(pos until r.range.first).toHtml())
                         newText.append(replacement)
-                        pos = lastIdx + 1
+                        pos = r.range.last + 1
                         // logD("afterHookedMethod: replaced=$newText")
                     }
                     if (pos != 0) {
