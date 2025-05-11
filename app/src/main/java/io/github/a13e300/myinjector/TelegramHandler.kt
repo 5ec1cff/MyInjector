@@ -11,6 +11,7 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.res.XModuleResources
 import android.graphics.Typeface
+import android.location.Location
 import android.net.Uri
 import android.text.Spannable
 import android.text.SpannableString
@@ -883,6 +884,49 @@ class TelegramHandler : IHook() {
                                         val lo = l[1].trim().toDoubleOrNull()
                                         if (la != null && lo != null) {
                                             self.call("resetMapPosition", la, lo)
+                                            return@setPositiveButton
+                                        }
+                                    }
+                                    Toast.makeText(
+                                        ctx,
+                                        "wrong position",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                .setNegativeButton(android.R.string.cancel, null)
+                                .show()
+                            true
+                        }
+                    }
+                }
+            }
+        )
+
+        val la = findClass("org.telegram.ui.LocationActivity")
+        XposedHelpers.findAndHookMethod(
+            la, "createView", Context::class.java,
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val self = param.thisObject
+                    param.thisObject.getObjAs<ImageView>("locationButton").run {
+                        setOnLongClickListener {
+                            val ctx = it.context
+                            val et = EditText(ctx)
+                            AlertDialog.Builder(ctx)
+                                .setTitle("latitude,longitude")
+                                .setView(et)
+                                .setPositiveButton(android.R.string.ok) { _, _ ->
+                                    val l = et.text.toString().split(",", limit = 2)
+                                    if (l.size == 2) {
+                                        val la = l[0].trim().toDoubleOrNull()
+                                        val lo = l[1].trim().toDoubleOrNull()
+                                        if (la != null && lo != null) {
+                                            self.call(
+                                                "positionMarker",
+                                                Location(null).apply {
+                                                    latitude = la
+                                                    longitude = lo
+                                                })
                                             return@setPositiveButton
                                         }
                                     }
