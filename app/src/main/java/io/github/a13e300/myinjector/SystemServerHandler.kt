@@ -12,13 +12,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ServiceManager
-import android.util.Log
 import android.view.View
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -33,11 +33,18 @@ class SkipIf(private val cond: (p: MethodHookParam) -> Boolean) : XC_MethodHook(
     }
 }
 
+fun matchSimple(p: String, s: String?): Boolean {
+    if (s == null) return false
+    if (p.last() == '*') {
+        return s.startsWith(p.removeSuffix("*"))
+    }
+    return p == s
+}
+
 class SystemServerHandler : IHook() {
     companion object {
         private const val CONFIG_PATH = "/data/misc"
         private const val CONFIG_PREFIX = "my_injector_system_"
-        private const val TAG = "myinjector-system"
     }
 
     private lateinit var config: SystemServerConfig
@@ -180,7 +187,7 @@ class SystemServerHandler : IHook() {
         val enabled = config.xSpace
         val classXSpaceManager = findClass(
             "com.miui.server.xspace.XSpaceManagerServiceImpl"
-        );
+        )
         classXSpaceManager.getObjSAs<MutableList<String>?>(
             "sCrossUserCallingPackagesWhiteList"
         )?.run {
@@ -205,38 +212,61 @@ class SystemServerHandler : IHook() {
     private fun hookForceNewTask() = runCatching {
         val activityStarter =
             findClass("com.android.server.wm.ActivityStarter")
+        val activityRecordClass = findClass("com.android.server.wm.ActivityRecord")
         XposedBridge.hookAllMethods(activityStarter, "executeRequest", object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
-                if (!config.forceNewTask) return
+                if (!config.forceNewTask && !config.forceNewTaskDebug) return
                 val request = param.args[0]
-                // do not handle startActivityForResult
                 val requestCode = request.getObjAs<Int>("requestCode")
-                if (requestCode >= 0) return
-                val intent = request.getObjAsN<Intent>(
-                    "intent"
-                ) ?: return
-                if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return
+                val intent = request.getObjAsN<Intent>("intent")
                 val source = request.getObjAsN<String>("callingPackage")
+                val targetInfo = request.getObjAsN<ActivityInfo>("activityInfo")
+                val resultTo = request.getObj("resultTo")
+                val sourceRecord = activityRecordClass.callS("isInAnyTask", resultTo)
+                val sourceInfo = sourceRecord?.getObjAsN<ActivityInfo>("info")
+                if (config.forceNewTaskDebug) {
+                    val resultWho = request.getObj("resultWho")
+                    logD("new intent start requestCode=$requestCode intent=$intent resultWho=$resultWho source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
+                }
+                if (intent == null) return
+                if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return
                 if (source == null) {
-                    Log.w(TAG, "forceNewTask: null source package!")
+                    logW("forceNewTask: null source package!")
                     return
                 }
-                val target = request.getObjAsN<ActivityInfo>(
-                    "activityInfo"
-                )?.packageName
-                if (target == null) {
-                    Log.w(TAG, "forceNewTask: null target package!")
+                if (targetInfo == null) {
+                    logW("forceNewTask: null target package!")
                     return
                 }
-                val selfStart = source == target
-                val match = config.forceNewTaskRulesList.any {
+                val selfStart = source == targetInfo.packageName
+                config.forceNewTaskRulesList.forEach {
+                    // TODO: support components
                     val anySource = it.sourcePackage == "*" && !selfStart
                     val anyTarget = it.targetPackage == "*" && !selfStart
-                    (it.sourcePackage == source || anySource) && (it.targetPackage == target || anyTarget)
-                }
-                if (match) {
-                    logD("forceNewTask: matched $source -> $target")
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val match = (it.sourcePackage == source || anySource)
+                            && (it.sourceComponent.isEmpty() || matchSimple(
+                        it.sourceComponent,
+                        sourceInfo?.name
+                    ))
+                            && (it.targetPackage == targetInfo.packageName || anyTarget)
+                            && (it.targetComponent.isEmpty() || matchSimple(
+                        it.targetComponent,
+                        targetInfo.name
+                    ))
+                    if (match) {
+                        // do not handle startActivityForResult, except user forced.
+                        val requestCode = request.getObjAs<Int>("requestCode")
+                        if (requestCode >= 0 && !it.ignoreResult) {
+                            logD("not handling requestCode >= 0: $requestCode")
+                            return@forEach
+                        }
+                        if (config.forceNewTaskDebug) logI("forceNewTask: matched $it")
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        if (it.useNewDocument) {
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+                        }
+                        return
+                    }
                 }
             }
         })

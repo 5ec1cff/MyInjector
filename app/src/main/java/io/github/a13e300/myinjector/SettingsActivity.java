@@ -95,10 +95,51 @@ public class SettingsActivity extends Activity {
                     .addAllForceNewTaskRules(Arrays.stream(sp.getString("forceNewTaskRules", "").trim().split("\n")).map(
                             x -> {
                                 var parts = x.split(":");
-                                if (parts.length != 2) return null;
-                                return NewTaskRule.newBuilder().setSourcePackage(parts[0]).setTargetPackage(parts[1]).build();
+                                boolean ignoreResult = false;
+                                boolean useNewDoc = false;
+                                if (parts.length == 3) {
+                                    var options = parts[2].split(",");
+                                    for (var o : options) {
+                                        if ("ir".equals(o)) {
+                                            ignoreResult = true;
+                                        } else if ("nd".equals(o)) {
+                                            useNewDoc = true;
+                                        }
+                                    }
+                                } else if (parts.length != 2) return null;
+                                var sourcePackage = parts[0];
+                                var targetPackage = parts[1];
+                                var sourceComponent = "";
+                                var targetComponent = "";
+                                if (sourcePackage.contains("/")) {
+                                    var l = sourcePackage.split("/");
+                                    if (l.length == 2) {
+                                        sourcePackage = l[0];
+                                        sourceComponent = l[1];
+                                        if (sourceComponent.startsWith("."))
+                                            sourceComponent = l[0] + l[1];
+                                    }
+                                }
+                                if (targetPackage.contains("/")) {
+                                    var l = targetPackage.split("/");
+                                    if (l.length == 2) {
+                                        targetPackage = l[0];
+                                        targetComponent = l[1];
+                                        if (targetComponent.startsWith("."))
+                                            targetComponent = l[0] + l[1];
+                                    }
+                                }
+                                return NewTaskRule.newBuilder()
+                                        .setSourcePackage(sourcePackage)
+                                        .setTargetPackage(targetPackage)
+                                        .setSourceComponent(sourceComponent)
+                                        .setTargetComponent(targetComponent)
+                                        .setUseNewDocument(useNewDoc)
+                                        .setIgnoreResult(ignoreResult)
+                                        .build();
                             }
                     ).filter(Objects::nonNull).collect(Collectors.toList()))
+                    .setForceNewTaskDebug(sp.getBoolean("forceNewTaskDebug", false))
                     .build();
             intent.putExtra("EXTRA_CREDENTIAL", pendingIntent);
             intent.putExtra("EXTRA_CONFIG", config.toByteArray());

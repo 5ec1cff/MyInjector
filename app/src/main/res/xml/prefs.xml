@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <Preference android:summary="MyInjector" />
     <PreferenceCategory android:title="system">
         <SwitchPreference
             android:defaultValue="false"
@@ -38,8 +37,13 @@
             android:title="强制某些 activity 通过 NEW_TASK 启动" />
         <EditTextPreference
             android:key="forceNewTaskRules"
-            android:summary="一行一个规则，形如[source]:[target]，可以用*表示除了自己之外的所有包"
+            android:summary="一行一个规则，形如&lt;source&gt;:&lt;target&gt;[:options]，source/target可以是包名或组件名(用/分隔)，可以用*表示除了自己之外的所有包。options用逗号分割，支持的选项包含ir(ignoreResult，允许startActivityForResult也使用NEW_TASK，这会导致返回值失效)和nd(newDocument，默认使用新窗口打开)"
             android:title="强制 NEW_TASK 规则" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="forceNewTaskDebug"
+            android:summary="见日志 TAG MyInjector"
+            android:title="调试 NEW_TASK 规则" />
         <Preference
             android:key="commit"
             android:persistent="false"

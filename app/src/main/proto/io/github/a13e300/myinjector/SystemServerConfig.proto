@@ -12,6 +12,10 @@ option optimize_for = LITE_RUNTIME;
 message NewTaskRule {
   string sourcePackage = 1;
   string targetPackage = 2;
+  optional bool ignoreResult = 3;
+  optional bool useNewDocument = 4;
+  optional string sourceComponent = 5;
+  optional string targetComponent = 6;
 }
 
 message SystemServerConfig {
@@ -23,4 +27,5 @@ message SystemServerConfig {
   optional bool xSpace = 6;
   optional bool forceNewTask = 7;
   repeated NewTaskRule forceNewTaskRules = 8;
+  optional bool forceNewTaskDebug = 9;
 }
