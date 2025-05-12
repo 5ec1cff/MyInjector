@@ -25,7 +25,8 @@ android
   newDocument，默认使用新窗口打开，效果取决于目标 activity 的类型)
 - 例 1： `com.tencent.mm/com.tencent.mm.plugin.appbrand.ui.AppBrandUI*:com.android.contacts:ir`
   表示微信小程序打开电话时设置 new task ，忽略结果
-- 例 2： `*:tv.danmaku.bili:nd` 任何 app 打开哔哩哔哩都使用 new task + new document
+- 例 2： `tv.danmaku.bili/tv.danmaku.bili.ui.intent.IntentHandlerActivity:tv.danmaku.bili:nd` 哔哩哔哩内部
+  intent 分发器打开自身都使用 new task + new document
 - 剪切板白名单（允许某些 app 后台监听剪切板）
 - 允许关闭 miui wakepath 功能（即跨 app 打开启动可能弹出的询问）
 - 允许移除某些 miui 锁定的 intent
