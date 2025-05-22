@@ -18,11 +18,11 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.dp2px
 import io.github.a13e300.myinjector.arch.findClass
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.getObjS
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -155,9 +155,10 @@ class SystemUIHandler : IHook() {
                         val commandQueueClass = findClass(
                             "com.android.systemui.statusbar.CommandQueue"
                         )
+                        val dep by lazy { dependencyClass.getObjS("sDependency") }
                         (tv.parent as View).setOnClickListener {
                             runCatching {
-                                val mc = dependencyClass.callS("get", modalControllerClass)
+                                val mc = dep.call("getDependencyInner", modalControllerClass)
                                 mc.call(
                                     "animExitModal",
                                     50L,
@@ -165,7 +166,7 @@ class SystemUIHandler : IHook() {
                                     "MORE" /*com.miui.systemui.events.ModalExitMode.MORE.name*/,
                                     false
                                 )
-                                val cq = dependencyClass.callS("get", commandQueueClass)
+                                val cq = dep.call("getDependencyInner", commandQueueClass)
                                 cq.call("animateCollapsePanels", 0, false)
                                 // com.android.systemui.statusbar.notification.row.MiuiNotificationMenuRow$$ExternalSyntheticLambda1
                             }.onFailure {
