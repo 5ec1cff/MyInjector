@@ -68,17 +68,29 @@ public class SettingsActivity extends Activity {
             });
             super.onViewCreated(view, savedInstanceState);
             findPreference("commit").setOnPreferenceClickListener((x) -> {
-                commit();
+                commitSystem();
+                return true;
+            });
+            findPreference("commitSysUI").setOnPreferenceClickListener((x) -> {
+                commitSystemUI();
                 return true;
             });
         }
 
         @Override
         public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            commit();
+            var p = findPreference(key);
+            if (p == null) return;
+            var pr = p.getParent();
+            if (pr == null) return;
+            if ("system".equals(pr.getKey())) {
+                commitSystem();
+            } else if ("systemui".equals(pr.getKey())) {
+                commitSystemUI();
+            }
         }
 
-        private void commit() {
+        private void commitSystem() {
             logD("commit", null);
             var context = getContext();
             var intent = new Intent("io.github.a13e300.myinjector.UPDATE_SYSTEM_CONFIG");
@@ -140,6 +152,22 @@ public class SettingsActivity extends Activity {
                             }
                     ).filter(Objects::nonNull).collect(Collectors.toList()))
                     .setForceNewTaskDebug(sp.getBoolean("forceNewTaskDebug", false))
+                    .build();
+            intent.putExtra("EXTRA_CREDENTIAL", pendingIntent);
+            intent.putExtra("EXTRA_CONFIG", config.toByteArray());
+            context.sendBroadcast(intent);
+        }
+
+        private void commitSystemUI() {
+            logD("commitSystemUI", null);
+            var context = getContext();
+            var intent = new Intent("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG");
+            var pendingIntent = PendingIntent.getBroadcast(context, 1, intent, PendingIntent.FLAG_IMMUTABLE);
+            var sp = getPreferenceManager().getSharedPreferences();
+            var config = SystemUIConfig.newBuilder()
+                    .setAlwaysExpandNotification(sp.getBoolean("alwaysExpandNotification", false))
+                    .setNoDndNotification(sp.getBoolean("noDndNotification", false))
+                    .setShowNotificationDetail(sp.getBoolean("showNotificationDetail", false))
                     .build();
             intent.putExtra("EXTRA_CREDENTIAL", pendingIntent);
             intent.putExtra("EXTRA_CONFIG", config.toByteArray());

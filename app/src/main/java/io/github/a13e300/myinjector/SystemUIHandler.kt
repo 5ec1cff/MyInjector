@@ -1,8 +1,14 @@
 package io.github.a13e300.myinjector
 
 import android.annotation.SuppressLint
+import android.app.ActivityThread
 import android.app.INotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.ServiceManager
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
@@ -12,22 +18,25 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import dalvik.system.PathClassLoader
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.SkipIf
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.dp2px
 import io.github.a13e300.myinjector.arch.findClassOf
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjS
+import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 
 
 class SystemUIHandler : IHook() {
+    private lateinit var config: SystemUIConfig
     private fun hookPlugin() = runCatching {
         val parentCLClass = findClass(
             "com.android.systemui.shared.plugins.PluginManagerImpl\$ClassLoaderFilter"
@@ -48,7 +57,7 @@ class SystemUIHandler : IHook() {
                             cl.findClassOf(
                                 "com.android.systemui.miui.volume.VolumePanelViewController\$SilenceModeObserver",
                                 "com.android.systemui.miui.volume.MiuiVolumeDialogImpl\$SilenceModeObserver"
-                            ), "showToastOrStatusBar", XC_MethodReplacement.DO_NOTHING
+                            ), "showToastOrStatusBar", SkipIf { config.noDndNotification }
                         )
                     }.onFailure {
                         logE("hook showToast", it)
@@ -58,8 +67,24 @@ class SystemUIHandler : IHook() {
         )
     }.onFailure { logE("hookCreatePkgContext: ", it) }
 
+    private lateinit var configPath: File
+
+    private fun loadConfig() = runCatching {
+        if (configPath.isFile) {
+            config = configPath.inputStream().use { SystemUIConfig.parseFrom(it) }
+            logD("loaded config $config")
+        } else {
+            config = SystemUIConfig.getDefaultInstance()
+            logD("use default config")
+        }
+    }.onFailure {
+        logE("failed to load config from $configPath", it)
+    }
+
     override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != "com.android.systemui") return
+        configPath = File(lpparam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
+        loadConfig()
         hookPlugin()
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
@@ -72,9 +97,11 @@ class SystemUIHandler : IHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val modalWindowView = param.thisObject as FrameLayout
                     val parent = modalWindowView.parent as FrameLayout
-                    parent.translationY
                     val context = modalWindowView.context.applicationContext
                     if (parent.childCount == 1) {
+                        if (!config.showNotificationDetail) {
+                            return
+                        }
                         parent.addView(
                             FrameLayout(context).apply {
                                 setBackgroundColor(0x99ffffff.toInt())
@@ -100,7 +127,15 @@ class SystemUIHandler : IHook() {
                         )
                     }
 
-                    val tv = (parent.getChildAt(1) as ViewGroup).getChildAt(0) as TextView
+                    val root = parent.getChildAt(1) as ViewGroup
+                    if (!config.showNotificationDetail) {
+                        root.visibility = View.GONE
+                        return
+                    } else {
+                        root.visibility = View.VISIBLE
+                    }
+
+                    val tv = root.getChildAt(0) as TextView
                     val entry = param.args[0] // NotificationEntry
                     val sbn = entry?.let {
                         XposedHelpers.getObjectField(
@@ -199,6 +234,7 @@ class SystemUIHandler : IHook() {
         )
 
         hookExpandNotification()
+        registerBroadcast()
     }
 
     private fun hookExpandNotification() = runCatching {
@@ -209,6 +245,7 @@ class SystemUIHandler : IHook() {
             clz, "isExpanded",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (!config.alwaysExpandNotification) return
                     if ((param.thisObject as View).rootView.javaClass == rootViewClz) {
                         param.result = param.thisObject.call("isExpandable$1")
                     }
@@ -217,5 +254,45 @@ class SystemUIHandler : IHook() {
         )
     }.onFailure {
         logE("hookExpandNotification", it)
+    }
+
+    private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            intent ?: return
+            runCatching {
+                val pendingIntent =
+                    intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
+                val caller = pendingIntent?.creatorPackage
+                if (caller == BuildConfig.APPLICATION_ID) {
+                    intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
+                        config = SystemUIConfig.parseFrom(it)
+                        configPath.writeBytes(it)
+                        logD("onReceive: update config $config")
+                    }
+                } else {
+                    logE("onReceive: invalid caller $caller")
+                }
+            }.onFailure {
+                logE("onReceive: ", it)
+            }
+        }
+    }
+
+    private fun registerBroadcast() {
+        try {
+            val ctx = ActivityThread.currentActivityThread().systemContext as Context
+            val flags =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
+            ctx.registerReceiver(
+                receiver,
+                IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG"),
+                null,
+                null,
+                flags
+            )
+            logD("registerBroadcast: registered")
+        } catch (t: Throwable) {
+            logE("registerBroadcast: ", t)
+        }
     }
 }

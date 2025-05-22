@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <PreferenceCategory android:title="system">
+    <PreferenceCategory
+        android:key="system"
+        android:title="system">
         <SwitchPreference
             android:defaultValue="false"
             android:key="noWakePath"
@@ -48,6 +50,30 @@
             android:key="commit"
             android:persistent="false"
             android:summary="向系统同步修改"
+            android:title="提交修改" />
+    </PreferenceCategory>
+    <PreferenceCategory
+        android:key="systemui"
+        android:title="SystemUI">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="showNotificationDetail"
+            android:summary="在小米手机上，长按通知可显示详情，点击详情可打开相应的通知渠道管理界面"
+            android:title="显示通知详情（小米）" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="noDndNotification"
+            android:summary="阻止小米手机上通过磁贴外的方式开关勿扰模式开关后显示 Toast 或者灵动额头"
+            android:title="勿扰模式无通知（小米）" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="alwaysExpandNotification"
+            android:summary="以便使用按钮"
+            android:title="总是展开通知" />
+        <Preference
+            android:key="commitSysUI"
+            android:persistent="false"
+            android:summary="向系统 UI 同步修改"
             android:title="提交修改" />
     </PreferenceCategory>
 

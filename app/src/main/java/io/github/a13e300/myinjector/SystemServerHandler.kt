@@ -18,6 +18,7 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.SkipIf
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -27,11 +28,6 @@ import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import java.io.File
 import java.util.UUID
 
-class SkipIf(private val cond: (p: MethodHookParam) -> Boolean) : XC_MethodHook() {
-    override fun beforeHookedMethod(param: MethodHookParam) {
-        if (cond(param)) param.result = null
-    }
-}
 
 fun matchSimple(p: String, s: String?): Boolean {
     if (s == null) return false

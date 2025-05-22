@@ -10,6 +10,7 @@ import android.os.Parcelable
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedHelpers
 
 
@@ -73,3 +74,9 @@ fun <T : Parcelable> Intent.getParcelableExtraCompat(key: String, clz: Class<T>)
     } else {
         getParcelableExtra(key)
     }
+
+class SkipIf(private val cond: (p: MethodHookParam) -> Boolean) : XC_MethodHook() {
+    override fun beforeHookedMethod(param: MethodHookParam) {
+        if (cond(param)) param.result = null
+    }
+}

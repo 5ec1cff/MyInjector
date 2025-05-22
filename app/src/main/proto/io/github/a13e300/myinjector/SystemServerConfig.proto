@@ -1,11 +1,8 @@
 syntax = "proto3";
 
-import "google/protobuf/any.proto";
-
 package io.github.a13e300.myinjector;
 
 option java_package = "io.github.a13e300.myinjector";
-option java_outer_classname = "API";
 option java_multiple_files = true;
 option optimize_for = LITE_RUNTIME;
 
