@@ -50,6 +50,18 @@ fun Class<*>.newInst(vararg args: Any?) = XposedHelpers.newInstance(this, *args)
 
 fun ClassLoader.findClass(name: String): Class<*> = XposedHelpers.findClass(name, this)
 
+fun ClassLoader.findClassN(name: String): Class<*>? = XposedHelpers.findClassIfExists(name, this)
+
+fun ClassLoader.findClassOfN(vararg names: String): Class<*>? {
+    for (name in names) {
+        XposedHelpers.findClassIfExists(name, this)?.let { return it }
+    }
+    return null
+}
+
+fun ClassLoader.findClassOf(vararg names: String): Class<*> =
+    findClassOfN(*names)?.let { it } ?: error("none of class found: ${names.joinToString(",")}")
+
 fun Context.addModuleAssets(path: String) {
     resources.assets.call("addAssetPath", path)
 }

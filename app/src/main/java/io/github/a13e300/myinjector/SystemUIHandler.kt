@@ -19,7 +19,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.dp2px
-import io.github.a13e300.myinjector.arch.findClass
+import io.github.a13e300.myinjector.arch.findClassOf
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjS
@@ -42,8 +42,11 @@ class SystemUIHandler : IHook() {
 
                     logD("in sysui plugin", Throwable())
                     runCatching {
+                        // hook to not show status bar notification when silence mode changed
+                        // to debug: cmd notification set_dnd on/off
                         XposedBridge.hookAllMethods(
-                            cl.findClass(
+                            cl.findClassOf(
+                                "com.android.systemui.miui.volume.VolumePanelViewController\$SilenceModeObserver",
                                 "com.android.systemui.miui.volume.MiuiVolumeDialogImpl\$SilenceModeObserver"
                             ), "showToastOrStatusBar", XC_MethodReplacement.DO_NOTHING
                         )
