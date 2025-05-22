@@ -40,7 +40,7 @@ class SystemUIHandler : IHook() {
                     if (param.args[2].javaClass != parentCLClass) return
                     val cl = param.thisObject as ClassLoader
 
-                    logD("in sysui plugin", Throwable())
+                    // logD("in sysui plugin", Throwable())
                     runCatching {
                         // hook to not show status bar notification when silence mode changed
                         // to debug: cmd notification set_dnd on/off
@@ -197,5 +197,25 @@ class SystemUIHandler : IHook() {
                 }
             }
         )
+
+        hookExpandNotification()
+    }
+
+    private fun hookExpandNotification() = runCatching {
+        val clz =
+            findClass("com.android.systemui.statusbar.notification.row.ExpandableNotificationRow")
+        val rootViewClz = findClass("com.android.systemui.shade.NotificationShadeWindowView")
+        XposedBridge.hookAllMethods(
+            clz, "isExpanded",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    if ((param.thisObject as View).rootView.javaClass == rootViewClz) {
+                        param.result = param.thisObject.call("isExpandable$1")
+                    }
+                }
+            }
+        )
+    }.onFailure {
+        logE("hookExpandNotification", it)
     }
 }
