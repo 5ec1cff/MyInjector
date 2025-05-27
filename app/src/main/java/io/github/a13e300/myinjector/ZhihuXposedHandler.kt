@@ -2,12 +2,12 @@ package io.github.a13e300.myinjector
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.hookAllAfter
+import io.github.a13e300.myinjector.arch.hookAllBefore
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.matchers.ClassMatcher
 import java.io.File
@@ -84,32 +84,20 @@ class ZhihuXposedHandler : IHook() {
 
     private fun hookDisableFeedAutoRefresh() =
         kotlin.runCatching {
-            XposedBridge.hookAllMethods(
-                findClass(localSourceClass),
-                localSourceMethod,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val b = param.thisObject.getObj(localSourceField) // ReplaySubject
-                        b.call("onComplete") // call onComplete to prevent from update
-                    }
-                }
-            )
+            findClass(localSourceClass).hookAllAfter(localSourceMethod) { param ->
+                val b = param.thisObject.getObj(localSourceField) // ReplaySubject
+                b.call("onComplete") // call onComplete to prevent from update
+            }
         }.onFailure {
             logE("hookDisableAutoRefresh: failed", it)
             cacheFile?.delete()
         }
 
     private fun hookClipboard() = kotlin.runCatching {
-        XposedBridge.hookAllMethods(
-            ClipboardManager::class.java,
-            "setPrimaryClip",
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val clip = param.args[0] as ClipData
-                    if (clip.getItemAt(0).text.contains("?utm_psn=")) param.result = null
-                }
-            }
-        )
+        ClipboardManager::class.java.hookAllBefore("setPrimaryClip") { param ->
+            val clip = param.args[0] as ClipData
+            if (clip.getItemAt(0).text.contains("?utm_psn=")) param.result = null
+        }
     }.onFailure {
         logE("hookClipboard: ", it)
     }

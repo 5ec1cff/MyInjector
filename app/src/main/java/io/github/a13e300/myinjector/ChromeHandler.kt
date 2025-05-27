@@ -2,12 +2,11 @@ package io.github.a13e300.myinjector
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.findClass
+import io.github.a13e300.myinjector.arch.hookAfter
+import io.github.a13e300.myinjector.arch.hookAllNop
 import org.luckypray.dexkit.DexKitBridge
 import java.io.File
 
@@ -32,17 +31,12 @@ class ChromeHandler : IHook() {
         val appClz = findClass(name)
         val m = runCatching { appClz.getDeclaredMethod("onCreate") }.getOrNull()
         if (m != null) {
-            XposedBridge.hookMethod(
-                m,
-                object : XC_MethodHook() {
-                    // real classloader will be available after onCreate
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val loader = (param.thisObject as Context).classLoader
-                        logD("afterHookedMethod: get classloader $loader")
-                        doHook(loader)
-                    }
-                }
-            )
+            m.hookAfter { param ->
+                // real classloader will be available after onCreate
+                val loader = (param.thisObject as Context).classLoader
+                logD("afterHookedMethod: get classloader $loader")
+                doHook(loader)
+            }
         } else {
             doHook(classLoader)
         }
@@ -53,13 +47,10 @@ class ChromeHandler : IHook() {
 
         val clazz = loader.findClass(swipeRefreshHandlerClassName)
 
-        XposedBridge.hookAllMethods(
-            clazz, swipeRefreshHandlerMethodPull, XC_MethodReplacement.DO_NOTHING
-        )
+        clazz.hookAllNop(swipeRefreshHandlerMethodPull)
 
-        XposedBridge.hookAllMethods(
-            clazz, swipeRefreshHandlerMethodRelease, XC_MethodReplacement.DO_NOTHING
-        )
+
+        clazz.hookAllNop(swipeRefreshHandlerMethodRelease)
     }
 
     private fun doFind(loader: ClassLoader) {

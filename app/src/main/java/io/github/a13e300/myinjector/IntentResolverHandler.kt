@@ -3,10 +3,9 @@ package io.github.a13e300.myinjector
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.hookBefore
 
 // resolver activity 都有 FLAG_EXCLUDE_FROM_RECENTS ，这会在 ActivityRecord 的时候加到 intent 上去
 // 因此 resolver 会拿到带有这个 flag 的原始 intent ，显然我们不希望每个通过 resolver 启动的 intent 都带上这个 flag
@@ -20,28 +19,16 @@ import io.github.a13e300.myinjector.arch.IHook
 class IntentResolverHandler : IHook() {
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val ra = findClass("com.android.intentresolver.ResolverActivity")
-        XposedHelpers.findAndHookMethod(
-            ra,
-            "onCreate",
-            Bundle::class.java,
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    (param.thisObject as Activity).intent.run {
-                        flags = flags.and(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS.inv())
-                    }
-                }
-            })
+        ra.hookBefore("onCreate", Bundle::class.java) { param ->
+            (param.thisObject as Activity).intent.run {
+                flags = flags.and(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS.inv())
+            }
+        }
         val ca = findClass("com.android.intentresolver.ChooserActivity")
-        XposedHelpers.findAndHookMethod(
-            ca,
-            "onCreate",
-            Bundle::class.java,
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    (param.thisObject as Activity).intent.run {
-                        flags = flags.and(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS.inv())
-                    }
-                }
-            })
+        ca.hookBefore("onCreate", Bundle::class.java) { param ->
+            (param.thisObject as Activity).intent.run {
+                flags = flags.and(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS.inv())
+            }
+        }
     }
 }

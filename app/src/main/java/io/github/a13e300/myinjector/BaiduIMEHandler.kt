@@ -3,11 +3,11 @@ package io.github.a13e300.myinjector
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.ApplicationInfo
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.hookAllAfter
+import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hookAllNop
 import org.luckypray.dexkit.DexKitBridge
 import java.io.File
 
@@ -23,41 +23,28 @@ class BaiduIMEHandler : IHook() {
 
     private fun hookSplash() = runCatching {
         val splash = findClass("com.baidu.input.ImeAppMainActivity")
-        XposedBridge.hookAllMethods(
-            splash,
-            "onCreate", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as Activity
-                    val intent = activity.intent
-                        ?: Intent().also { activity.intent = it }
-                    intent.putExtra("is_no_ads", true)
-                }
+        splash.hookAllBefore("onCreate") { param ->
+            val activity = param.thisObject as Activity
+            val intent = activity.intent
+                ?: Intent().also { activity.intent = it }
+            intent.putExtra("is_no_ads", true)
+        }
+
+        splash.hookAllAfter("endAd") { param ->
+            val activity = param.thisObject as Activity
+            val intent = activity.intent ?: return@hookAllAfter
+            if (intent.hasExtra("ime.intent_keys.next_route_path")) {
+                logD("afterHookedMethod: finish it")
+                activity.finish()
             }
-        )
-        XposedBridge.hookAllMethods(
-            splash,
-            "endAd", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as Activity
-                    val intent = activity.intent ?: return
-                    if (intent.hasExtra("ime.intent_keys.next_route_path")) {
-                        logD("afterHookedMethod: finish it")
-                        activity.finish()
-                    }
-                }
-            }
-        )
+        }
     }.onFailure {
         logE("doHookSplash: ", it)
     }
 
     private fun hookContactSuggestion(appInfo: ApplicationInfo) = runCatching {
         findContactSuggestion(appInfo)
-        XposedBridge.hookAllMethods(
-            findClass(
-                showMethodClass
-            ), showMethodName, XC_MethodReplacement.DO_NOTHING
-        )
+        findClass(showMethodClass).hookAllNop(showMethodName)
     }.onFailure {
         logE("hookContactSuggestion: ", it)
     }

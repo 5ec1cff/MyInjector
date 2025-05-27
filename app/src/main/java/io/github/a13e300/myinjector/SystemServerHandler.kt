@@ -13,18 +13,17 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.ServiceManager
 import android.view.View
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
-import io.github.a13e300.myinjector.arch.SkipIf
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
+import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hookAllNopIf
+import io.github.a13e300.myinjector.arch.hookBefore
 import java.io.File
 import java.util.UUID
 
@@ -101,55 +100,39 @@ class SystemServerHandler : IHook() {
     }
 
     private fun hookNoWakePath() = runCatching {
-        val hook = SkipIf { _ -> config.noWakePath }
-        XposedBridge.hookAllMethods(
-            findClass("miui.app.ActivitySecurityHelper"),
-            "getCheckStartActivityIntent",
-            hook
-        )
-        XposedBridge.hookAllMethods(
-            findClass("miui.security.SecurityManager"),
-            "getCheckStartActivityIntent",
-            hook
-        )
+        findClass("miui.app.ActivitySecurityHelper").hookAllNopIf("getCheckStartActivityIntent") {
+            config.noWakePath
+        }
+        findClass("miui.security.SecurityManager").hookAllNopIf("getCheckStartActivityIntent") {
+            config.noWakePath
+        }
     }.onFailure {
         logE("hookNoWakePath: ", it)
     }
 
     private fun hookNoMiuiIntent() = runCatching {
-        XposedHelpers.findAndHookMethod(
-            "com.android.server.pm.PackageManagerServiceImpl",
-            classLoader,
+        findClass("com.android.server.pm.PackageManagerServiceImpl").hookBefore(
             "hookChooseBestActivity",
             Intent::class.java,
             String::class.java,
             java.lang.Long.TYPE,
             List::class.java,
             Integer.TYPE,
-            ResolveInfo::class.java, object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    param.result = param.args[5] // defaultValue
-                }
-            }
-        )
+            ResolveInfo::class.java
+        ) { param ->
+            param.result = param.args[5] // defaultValue
+        }
     }.onFailure {
         logE("hookNoMiuiIntent: ", it)
     }
 
     private fun hookClipboardWhitelist() = runCatching {
-        XposedBridge.hookAllMethods(
-            findClass(
-                "com.android.server.clipboard.ClipboardService"
-            ),
-            "clipboardAccessAllowed",
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (!config.clipboardWhitelist) return
-                    var pkg = param.args[1]?.toString() ?: return
-                    if (config.clipboardWhitelistPackagesList.contains(pkg)) param.setResult(true)
-                }
+        findClass("com.android.server.clipboard.ClipboardService")
+            .hookAllBefore("clipboardAccessAllowed") { param ->
+                if (!config.clipboardWhitelist) return@hookAllBefore
+                val pkg = param.args[1]?.toString() ?: return@hookAllBefore
+                if (config.clipboardWhitelistPackagesList.contains(pkg)) param.setResult(true)
             }
-        )
     }.onFailure {
         logE("hookClipboardWhitelist: ", it)
     }
@@ -157,23 +140,18 @@ class SystemServerHandler : IHook() {
     private fun hookFixSync() = runCatching {
         // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/services/core/java/com/android/server/wm/WindowState.java;l=5756;drc=4eb30271c338af7ee6abcbd2b7a9a0721db0595b
         // some gone accessibility windows does not get synced
-        XposedBridge.hookAllMethods(
-            findClass("com.android.server.wm.WindowState"),
-            "isSyncFinished",
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (!config.fixSync) return
-                    if (param.thisObject.getObj(
-                            "mViewVisibility"
-                        ) != View.VISIBLE
-                        && param.thisObject.getObj("mActivityRecord") == null
-                    ) {
-                        // XposedBridge.log("no wait on " + param.thisObject);
-                        param.setResult(true)
-                    }
+        findClass("com.android.server.wm.WindowState")
+            .hookAllBefore("isSyncFinished") { param ->
+                if (!config.fixSync) return@hookAllBefore
+                if (param.thisObject.getObj(
+                        "mViewVisibility"
+                    ) != View.VISIBLE
+                    && param.thisObject.getObj("mActivityRecord") == null
+                ) {
+                    // XposedBridge.log("no wait on " + param.thisObject);
+                    param.setResult(true)
                 }
             }
-        )
     }.onFailure {
         logE("hookFixSync: ", it)
     }
@@ -209,63 +187,61 @@ class SystemServerHandler : IHook() {
         val activityStarter =
             findClass("com.android.server.wm.ActivityStarter")
         val activityRecordClass = findClass("com.android.server.wm.ActivityRecord")
-        XposedBridge.hookAllMethods(activityStarter, "executeRequest", object : XC_MethodHook() {
-            override fun beforeHookedMethod(param: MethodHookParam) {
-                if (!config.forceNewTask && !config.forceNewTaskDebug) return
-                val request = param.args[0]
-                val requestCode = request.getObjAs<Int>("requestCode")
-                val intent = request.getObjAsN<Intent>("intent")
-                val source = request.getObjAsN<String>("callingPackage")
-                val targetInfo = request.getObjAsN<ActivityInfo>("activityInfo")
-                val resultTo = request.getObj("resultTo")
-                val sourceRecord = activityRecordClass.callS("isInAnyTask", resultTo)
-                val sourceInfo = sourceRecord?.getObjAsN<ActivityInfo>("info")
-                if (config.forceNewTaskDebug) {
-                    val resultWho = request.getObj("resultWho")
-                    logD("new intent start requestCode=$requestCode intent=$intent resultWho=$resultWho source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
-                }
-                if (intent == null) return
-                if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return
-                if (source == null) {
-                    logW("forceNewTask: null source package!")
-                    return
-                }
-                if (targetInfo == null) {
-                    logW("forceNewTask: null target package!")
-                    return
-                }
-                val selfStart = source == targetInfo.packageName
-                config.forceNewTaskRulesList.forEach {
-                    // TODO: support components
-                    val anySource = it.sourcePackage == "*" && !selfStart
-                    val anyTarget = it.targetPackage == "*" && !selfStart
-                    val match = (it.sourcePackage == source || anySource)
-                            && (it.sourceComponent.isEmpty() || matchSimple(
-                        it.sourceComponent,
-                        sourceInfo?.name
-                    ))
-                            && (it.targetPackage == targetInfo.packageName || anyTarget)
-                            && (it.targetComponent.isEmpty() || matchSimple(
-                        it.targetComponent,
-                        targetInfo.name
-                    ))
-                    if (match) {
-                        // do not handle startActivityForResult, except user forced.
-                        val requestCode = request.getObjAs<Int>("requestCode")
-                        if (requestCode >= 0 && !it.ignoreResult) {
-                            logD("not handling requestCode >= 0: $requestCode")
-                            return@forEach
-                        }
-                        if (config.forceNewTaskDebug) logI("forceNewTask: matched $it")
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        if (it.useNewDocument) {
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
-                        }
-                        return
+        activityStarter.hookAllBefore("executeRequest") { param ->
+            if (!config.forceNewTask && !config.forceNewTaskDebug) return@hookAllBefore
+            val request = param.args[0]
+            val requestCode = request.getObjAs<Int>("requestCode")
+            val intent = request.getObjAsN<Intent>("intent")
+            val source = request.getObjAsN<String>("callingPackage")
+            val targetInfo = request.getObjAsN<ActivityInfo>("activityInfo")
+            val resultTo = request.getObj("resultTo")
+            val sourceRecord = activityRecordClass.callS("isInAnyTask", resultTo)
+            val sourceInfo = sourceRecord?.getObjAsN<ActivityInfo>("info")
+            if (config.forceNewTaskDebug) {
+                val resultWho = request.getObj("resultWho")
+                logD("new intent start requestCode=$requestCode intent=$intent resultWho=$resultWho source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
+            }
+            if (intent == null) return@hookAllBefore
+            if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return@hookAllBefore
+            if (source == null) {
+                logW("forceNewTask: null source package!")
+                return@hookAllBefore
+            }
+            if (targetInfo == null) {
+                logW("forceNewTask: null target package!")
+                return@hookAllBefore
+            }
+            val selfStart = source == targetInfo.packageName
+            config.forceNewTaskRulesList.forEach {
+                // TODO: support components
+                val anySource = it.sourcePackage == "*" && !selfStart
+                val anyTarget = it.targetPackage == "*" && !selfStart
+                val match = (it.sourcePackage == source || anySource)
+                        && (it.sourceComponent.isEmpty() || matchSimple(
+                    it.sourceComponent,
+                    sourceInfo?.name
+                ))
+                        && (it.targetPackage == targetInfo.packageName || anyTarget)
+                        && (it.targetComponent.isEmpty() || matchSimple(
+                    it.targetComponent,
+                    targetInfo.name
+                ))
+                if (match) {
+                    // do not handle startActivityForResult, except user forced.
+                    val requestCode = request.getObjAs<Int>("requestCode")
+                    if (requestCode >= 0 && !it.ignoreResult) {
+                        logD("not handling requestCode >= 0: $requestCode")
+                        return@forEach
                     }
+                    if (config.forceNewTaskDebug) logI("forceNewTask: matched $it")
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (it.useNewDocument) {
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+                    }
+                    return@hookAllBefore
                 }
             }
-        })
+        }
     }.onFailure {
         logE("hookForceNewTask: ", it)
     }

@@ -8,12 +8,11 @@ import android.os.ServiceManager
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.hookAllAfter
 
 class MiuiHomeHandler : IHook() {
     override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -23,41 +22,21 @@ class MiuiHomeHandler : IHook() {
                 "com.miui.home.recents.views.TaskStackViewTouchHandler"
             )
 
-            XposedBridge.hookAllMethods(
-                recentTouchHandlerClass,
-                "onBeginDrag",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        onBeginDrag(param.args[0] as View)
-                    }
-                })
+            recentTouchHandlerClass.hookAllAfter("onBeginDrag") { param ->
+                onBeginDrag(param.args[0] as View)
+            }
 
-            XposedBridge.hookAllMethods(
-                recentTouchHandlerClass,
-                "onDragEnd",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        onDragEnd(param.args[0] as View)
-                    }
-                })
+            recentTouchHandlerClass.hookAllAfter("onDragEnd") { param ->
+                onDragEnd(param.args[0] as View)
+            }
 
-            XposedBridge.hookAllMethods(
-                recentTouchHandlerClass,
-                "onChildDismissedEnd",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        onChildDismissedEnd(param.args[0] as View)
-                    }
-                })
+            recentTouchHandlerClass.hookAllAfter("onChildDismissedEnd") { param ->
+                onChildDismissedEnd(param.args[0] as View)
+            }
 
-            XposedBridge.hookAllMethods(
-                recentTouchHandlerClass,
-                "onDragCancelled",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        onDragCancelled(param.args[0] as View)
-                    }
-                })
+            recentTouchHandlerClass.hookAllAfter("onDragCancelled") { param ->
+                onDragCancelled(param.args[0] as View)
+            }
         }.onFailure {
             logE("handleLoadPackage: ", it)
         }
