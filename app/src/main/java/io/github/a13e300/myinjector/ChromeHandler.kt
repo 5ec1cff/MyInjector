@@ -2,10 +2,12 @@ package io.github.a13e300.myinjector
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.view.MotionEvent
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.findClass
 import io.github.a13e300.myinjector.arch.hookAfter
+import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllNop
 import org.luckypray.dexkit.DexKitBridge
 import java.io.File
@@ -19,6 +21,7 @@ class ChromeHandler : IHook() {
     private lateinit var appInfo: ApplicationInfo
 
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+        hookNoDetectObscure()
         if (param.processName.contains(":")) return
         val name = param.appInfo.className
         appInfo = param.appInfo
@@ -35,25 +38,33 @@ class ChromeHandler : IHook() {
                 // real classloader will be available after onCreate
                 val loader = (param.thisObject as Context).classLoader
                 logD("afterHookedMethod: get classloader $loader")
-                doHook(loader)
+                hookSwipeRefresh(loader)
             }
         } else {
-            doHook(classLoader)
+            hookSwipeRefresh(classLoader)
         }
     }
 
-    private fun doHook(loader: ClassLoader) {
-        doFind(loader)
+    private fun hookNoDetectObscure() = runCatching {
+        MotionEvent::class.java.hookAllAfter("getFlags") { param ->
+            param.result = (param.result as Int).and(
+                MotionEvent.FLAG_WINDOW_IS_OBSCURED.or(
+                    MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED
+                ).inv()
+            )
+        }
+    }.onFailure {
+        logE("hookNoDetectObscure", it)
+    }
 
+    private fun hookSwipeRefresh(loader: ClassLoader) {
+        findSwipeRefresh(loader)
         val clazz = loader.findClass(swipeRefreshHandlerClassName)
-
         clazz.hookAllNop(swipeRefreshHandlerMethodPull)
-
-
         clazz.hookAllNop(swipeRefreshHandlerMethodRelease)
     }
 
-    private fun doFind(loader: ClassLoader) {
+    private fun findSwipeRefresh(loader: ClassLoader) {
         val f = File(appInfo.dataDir, "dexkit.tmp")
         cacheFile = f
         if (f.isFile) {
