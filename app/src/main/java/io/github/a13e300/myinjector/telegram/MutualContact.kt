@@ -8,18 +8,22 @@ import android.widget.ImageView
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.logD
 
 // 标记双向联系人（↑↓图标）
-class MutualContact : IHook() {
+class MutualContact : DynHook() {
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.mutualContact
+
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val drawable = Entry.moduleRes.getDrawable(R.drawable.ic_mutual_contact)
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
-        findClass("org.telegram.ui.Cells.UserCell").hookAllAfter("update") { param ->
+        findClass("org.telegram.ui.Cells.UserCell").hookAllAfter(
+            "update",
+            cond = ::isEnabled
+        ) { param ->
             // logD("afterHookedMethod: update")
             val d = param.thisObject.getObjAs<Int>("currentDrawable")
             if (d != 0) {

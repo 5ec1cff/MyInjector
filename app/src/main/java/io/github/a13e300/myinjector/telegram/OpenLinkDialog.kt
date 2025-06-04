@@ -8,7 +8,6 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.StyleSpan
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -18,12 +17,14 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.logD
 
 // 自动修正一些包含了错误字符的链接，在打开时提供 fix 选项以打开修复后的链接
-class OpenLinkDialog : IHook() {
+class OpenLinkDialog : DynHook() {
     data class FixLink(
         val pos: Int,
         val url: String,
         var openRunnable: Runnable?
     )
+
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.openLinkDialog
 
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         logD("hookOpenLinkDialog")
@@ -37,7 +38,7 @@ class OpenLinkDialog : IHook() {
 
         logD("hookOpenLinkDialog: start hook")
 
-        classChatActivity.hookAllBefore("processExternalUrl") { param ->
+        classChatActivity.hookAllBefore("processExternalUrl", cond = ::isEnabled) { param ->
             val url = param.args[1] as String
             // logD("processExternalUrl: $url")
             if (regexTelegraph.find(url) != null) return@hookAllBefore

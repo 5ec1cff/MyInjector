@@ -1,7 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -10,10 +9,12 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.logD
 
 // 个人资料头像如果存在多个且主头像非第一个时，下拉展示完整头像列表时自动切到当前头像（原行为是总是切到第一个）
-class AvatarPagerScrollToCurrent : IHook() {
+class AvatarPagerScrollToCurrent : DynHook() {
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.avatarPageScrollToCurrent
+
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val pgvClass = findClass("org.telegram.ui.Components.ProfileGalleryView")
-        pgvClass.hookAllBefore("resetCurrentItem") { param ->
+        pgvClass.hookAllBefore("resetCurrentItem", cond = ::isEnabled) { param ->
             if (!param.thisObject.javaClass.name.startsWith("org.telegram.ui.ProfileActivity")) return@hookAllBefore
             val pa = param.thisObject.getObj("this$0")
             val currentPhoto = pa.getObj("userInfo")?.getObj("profile_photo")
@@ -41,6 +42,7 @@ class AvatarPagerScrollToCurrent : IHook() {
         val paClass = findClass("org.telegram.ui.ProfileActivity")
         paClass.hookAll(
             "setForegroundImage",
+            cond = ::isEnabled,
             before = { param ->
                 if (param.args[0] == false) {
                     inSetFgImg.set(true)
@@ -50,7 +52,7 @@ class AvatarPagerScrollToCurrent : IHook() {
                 inSetFgImg.set(false)
             }
         )
-        pgvClass.hookAllBefore("getImageLocation") { param ->
+        pgvClass.hookAllBefore("getImageLocation", cond = ::isEnabled) { param ->
             if (inSetFgImg.get() == true) {
                 val pa = param.thisObject.getObj("this$0")
                 val currentPhoto = pa.getObj("userInfo")?.getObj("profile_photo")

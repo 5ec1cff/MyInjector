@@ -9,7 +9,6 @@ import android.content.Intent
 import android.view.View
 import android.widget.Toast
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -18,7 +17,9 @@ import org.json.JSONObject
 import java.io.File
 
 // 支持导入和使用自定义 emoji 文本映射
-class CustomEmojiMapping : IHook() {
+object CustomEmojiMapping : DynHook() {
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customEmojiMapping
+
     // emoji name -> (emoji id, emoji)
     data class EmotionMap(
         val map: Map<String, Pair<String, String>>,
@@ -43,7 +44,7 @@ class CustomEmojiMapping : IHook() {
         return File(getExternalFilesDir(""), "emotion_map.json")
     }
 
-    private val emotionMap: EmotionMap
+    val emotionMap: EmotionMap
         get() {
             val m = _emotionMap
             if (m == null) {
@@ -67,7 +68,7 @@ class CustomEmojiMapping : IHook() {
         }
 
     private fun hookPasteCustomEmoji() {
-        ClipboardManager::class.java.hookAllAfter("getPrimaryClip") { param ->
+        ClipboardManager::class.java.hookAllAfter("getPrimaryClip", cond = ::isEnabled) { param ->
             // logD("afterHookedMethod: getPrimaryClip")
             val result = param.result as? ClipData ?: return@hookAllAfter
             val item = result.getItemAt(0)
@@ -99,6 +100,19 @@ class CustomEmojiMapping : IHook() {
         }
     }
 
+    fun importEmojiMap(context: Context) {
+
+        Toast.makeText(context, "选择一个 emoji 映射的 json 配置文件", Toast.LENGTH_SHORT)
+            .show()
+        val activity = context as Activity
+        activity.startActivityForResult(
+            Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "*/*"
+            },
+            114514
+        )
+    }
+
     private fun hookEmojiManage() {
         val chatActivityEnterView = findClass(
             "org.telegram.ui.Components.ChatActivityEnterView"
@@ -106,18 +120,10 @@ class CustomEmojiMapping : IHook() {
 
         val cst = chatActivityEnterView.declaredConstructors.maxBy { it.parameterCount }!!
             .also { it.isAccessible = true }
-        cst.hookAfter { param ->
+        cst.hookAfter(cond = ::isEnabled) { param ->
             param.thisObject.getObjAs<View>("emojiButton")
                 .setOnLongClickListener { v ->
-                    Toast.makeText(v.context, "choose an emotion map json file", Toast.LENGTH_SHORT)
-                        .show()
-                    val activity = v.context as Activity
-                    activity.startActivityForResult(
-                        Intent(Intent.ACTION_GET_CONTENT).apply {
-                            type = "*/*"
-                        },
-                        114514
-                    )
+                    importEmojiMap(v.context)
                     true
                 }
         }
@@ -140,11 +146,11 @@ class CustomEmojiMapping : IHook() {
                             _emotionMap = mp
                         }
                         ctx.getEmotionMapFile().writeText(text)
-                        Toast.makeText(ctx, "load success", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, "加载成功", Toast.LENGTH_SHORT).show()
                         return@hookAllAfter
                     }
                 }
-                Toast.makeText(ctx, "no file provided", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "未提供文件", Toast.LENGTH_SHORT).show()
             }
         }
     }

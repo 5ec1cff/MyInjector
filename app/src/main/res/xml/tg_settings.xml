@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <SwitchPreference
+        android:defaultValue="true"
+        android:key="enabled"
+        android:title="总开关" />
+
+    <PreferenceCategory android:title="更改默认行为">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="autoCheckDeleteMessageOption"
+            android:summary="在私聊中删除消息时自动勾选为对方删除消息"
+            android:title="自动勾选删除" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="autoUncheckSharePhoneNumber"
+            android:summary="添加联系人自动取消勾选分享手机号"
+            android:title="自动取消分享手机号" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="avatarPageScrollToCurrent"
+            android:summary="个人资料头像如果存在多个且当前头像非第一个时，下拉展示完整头像列表时自动切到当前头像（原行为是总是切到第一个）"
+            android:title="头像列表默认当前头像" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="defaultSearchTab"
+            android:title="hashtag 总是搜索本频道" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="忽略权限">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="contactPermission"
+            android:summary="打开联系人页面不再请求联系人权限"
+            android:title="忽略联系人权限" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="fakeInstallPermission"
+            android:summary="打开 apk 时不检查是否有 REQUEST_INSTALL_PACKAGE 权限，这并不会实际给予权限"
+            android:title="打开 apk 无需请求权限" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="noGoogleMaps"
+            android:summary="不再提示安装谷歌地图"
+            android:title="无需谷歌地图" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Emoji 和 Sticker">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="customEmojiMapping"
+            android:title="自定义 emoji 映射" />
+        <Preference
+            android:defaultValue="false"
+            android:key="customEmojiMappingConfig"
+            android:persistent="false"
+            android:title="自定义 emoji 映射配置" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="emojiStickerMenu"
+            android:summary="在 Emoji 和 Sticker Pack 列表对话框的菜单增加查看创建者"
+            android:title="查看 Emoji 和 Sticker Pack 创建者" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="防误触">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="disableVoiceOrCameraButton"
+            android:title="消息编辑框禁用语音或相机按钮" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="链接优化">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="fixHasAppToOpen"
+            android:title="修复打开链接" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="openLinkDialog"
+            android:summary="如果打开的链接包含意外字符（比如可能链接和后面的文字无空格），则总是弹出对话框，并可以点击fix按钮打开去除这些意外字符的链接"
+            android:title="修复链接的意外字符" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="其他">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="customMapPosition"
+            android:summary="长按定位按钮打开对话框"
+            android:title="地图自定义经纬度" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="longClickMention"
+            android:summary="at 列表中，长按某人以使用无用户名的方式 at 此人"
+            android:title="at 列表长按使用无用户名 at" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="mutualContact"
+            android:summary="在联系人列表标记你的双向联系人（↑↓）"
+            android:title="标记双向联系人" />
+    </PreferenceCategory>
+</PreferenceScreen>

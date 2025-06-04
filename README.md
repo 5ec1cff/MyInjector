@@ -186,3 +186,8 @@ com.meizu.customizecenter
 ```
 
 - 将本应用在 /sdcard 下创建的目录重定向到 /sdcard/Documents （不建议使用）
+
+# Credits
+
+[哔哩漫游](https://github.com/yujincheng08/BiliRoaming)
+[DexKit](https://github.com/LuckyPray/DexKit)

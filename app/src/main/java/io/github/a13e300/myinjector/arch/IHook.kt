@@ -10,7 +10,7 @@ abstract class IHook {
     lateinit var loadPackageParam: XC_LoadPackage.LoadPackageParam
         private set
 
-    fun hook(param: XC_LoadPackage.LoadPackageParam) {
+    open fun hook(param: XC_LoadPackage.LoadPackageParam) {
         loadPackageParam = param
         classLoader = param.classLoader
         try {

@@ -5,7 +5,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -17,11 +16,13 @@ import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.logD
 
 // 在 emoji 和 sticker 查看页面增加更多按钮，包括查看创建者(id)和导出 emoji 信息
-class EmojiStickerMenu : IHook() {
+class EmojiStickerMenu : DynHook() {
     companion object {
         private const val MENU_DUMP = 301
         private const val MENU_GET_PROFILE = 302
     }
+
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.emojiStickerMenu
 
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val emojiPacksAlert = findClass("org.telegram.ui.Components.EmojiPacksAlert")
@@ -40,6 +41,7 @@ class EmojiStickerMenu : IHook() {
 
         emojiPacksAlert.hookAllBefore("onSubItemClick") { param ->
             // https://github.com/NextAlone/Nagram/blob/c189a1af80016fd3d041be121143ede94b0fdcf4/TMessagesProj/src/main/java/org/telegram/ui/Components/EmojiPacksAlert.java#L1541
+            if (!isEnabled()) return@hookAllBefore
             if (param.args[0] == MENU_GET_PROFILE) {
                 val stickerSet = (param.thisObject.getObj("customEmojiPacks")
                     .getObj("stickerSets") as List<*>)[0]
@@ -111,12 +113,12 @@ class EmojiStickerMenu : IHook() {
         val stickersAlert = findClass("org.telegram.ui.Components.StickersAlert")
 
         // https://github.com/NextAlone/Nagram/blob/c189a1af80016fd3d041be121143ede94b0fdcf4/TMessagesProj/src/main/java/org/telegram/ui/Components/StickersAlert.java#L1485
-        stickersAlert.hookAllAfter("init") { param ->
+        stickersAlert.hookAllAfter("init", cond = ::isEnabled) { param ->
             val optionsButton = param.thisObject.getObj("optionsButton") ?: return@hookAllAfter
             optionsButton.call("addSubItem", MENU_GET_PROFILE, "Profile of admin")
         }
 
-        stickersAlert.hookAllBefore("onSubItemClick") { param ->
+        stickersAlert.hookAllBefore("onSubItemClick", cond = ::isEnabled) { param ->
             if (param.args[0] == MENU_GET_PROFILE) {
                 val stickerSet = param.thisObject.getObj("stickerSet")
                 val id = stickerSet.getObj("set").getObj("id") as Long

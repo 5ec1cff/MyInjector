@@ -3,7 +3,6 @@ package io.github.a13e300.myinjector.telegram
 import android.app.Dialog
 import android.view.ViewGroup
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.findView
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -11,13 +10,16 @@ import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookBefore
 
 // 自动勾选为对方删除消息（原行为是默认不勾选）
-class AutoCheckDeleteMessageOption : IHook() {
+class AutoCheckDeleteMessageOption : DynHook() {
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoCheckDeleteMessageOption
+
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val isCreating = ThreadLocal<Boolean>()
         val alertDialogClass = findClass("org.telegram.ui.ActionBar.AlertDialog")
         val checkBoxCellClass = findClass("org.telegram.ui.Cells.CheckBoxCell")
         findClass("org.telegram.ui.Components.AlertsCreator").hookAll(
             "createDeleteMessagesAlert",
+            cond = ::isEnabled,
             before = {
                 isCreating.set(true)
             },
@@ -27,7 +29,8 @@ class AutoCheckDeleteMessageOption : IHook() {
         )
         findClass("org.telegram.ui.ActionBar.BaseFragment").hookBefore(
             "showDialog",
-            Dialog::class.java
+            Dialog::class.java,
+            cond = ::isEnabled
         ) { param ->
             if (isCreating.get() != true) return@hookBefore
             val dialog = param.args[0]

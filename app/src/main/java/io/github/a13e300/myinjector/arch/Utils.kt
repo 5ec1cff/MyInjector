@@ -1,14 +1,18 @@
 package io.github.a13e300.myinjector.arch
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.os.Build
 import android.os.Parcelable
 import android.util.TypedValue
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import de.robv.android.xposed.XC_MethodHook
+import android.widget.ListView
+import androidx.annotation.LayoutRes
+import kotlin.system.exitProcess
 
 
 fun View.findView(predicate: (View) -> Boolean): View? {
@@ -25,7 +29,11 @@ fun View.findView(predicate: (View) -> Boolean): View? {
 fun Float.dp2px(resources: Resources) =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, this, resources.displayMetrics)
 
+fun Float.sp2px(resources: Resources) =
+    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, this, resources.displayMetrics)
+
 fun Int.dp2px(resources: Resources) = toFloat().dp2px(resources)
+fun Int.sp2px(resources: Resources) = toFloat().sp2px(resources)
 
 fun Context.addModuleAssets(path: String) {
     resources.assets.call("addAssetPath", path)
@@ -39,8 +47,23 @@ fun <T : Parcelable> Intent.getParcelableExtraCompat(key: String, clz: Class<T>)
         getParcelableExtra(key)
     }
 
-class SkipIf(private val cond: (p: MethodHookParam) -> Boolean) : XC_MethodHook() {
-    override fun beforeHookedMethod(param: MethodHookParam) {
-        if (cond(param)) param.result = null
-    }
+fun Context.inflateLayout(
+    @LayoutRes resource: Int,
+    root: ViewGroup? = null,
+    attachToRoot: Boolean = root != null
+): View = LayoutInflater.from(this).inflate(resource, root, attachToRoot)
+
+fun ListView.forceSetSelection(pos: Int, top: Int = 0) {
+    // stop scrolling
+    smoothScrollBy(0, 0)
+    setSelectionFromTop(pos, top)
+}
+
+fun restartApplication(activity: Activity) {
+    // https://stackoverflow.com/a/58530756
+    val pm = activity.packageManager
+    val intent = pm.getLaunchIntentForPackage(activity.packageName)
+    activity.finishAffinity()
+    activity.startActivity(intent)
+    exitProcess(0)
 }

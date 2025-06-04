@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package io.github.a13e300.myinjector;
+
+option java_package = "io.github.a13e300.myinjector";
+option java_multiple_files = true;
+option optimize_for = LITE_RUNTIME;
+
+message TelegramSettings {
+  optional bool disabled = 1;
+  optional bool autoCheckDeleteMessageOption = 2;
+  optional bool autoUncheckSharePhoneNumber = 3;
+  optional bool avatarPageScrollToCurrent = 4;
+  optional bool contactPermission = 5;
+  optional bool customEmojiMapping = 6;
+  optional bool customMapPosition = 7;
+  optional bool defaultSearchTab = 8;
+  optional bool disableVoiceOrCameraButton = 9;
+  optional bool emojiStickerMenu = 10;
+  optional bool fakeInstallPermission = 11;
+  optional bool fixHasAppToOpen = 12;
+  optional bool longClickMention = 13;
+  optional bool mutualContact = 14;
+  optional bool noGoogleMaps = 15;
+  optional bool openLinkDialog = 16;
+}

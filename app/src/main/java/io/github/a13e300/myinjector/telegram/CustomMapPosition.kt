@@ -7,18 +7,19 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Toast
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 
 // 允许通过经纬度设置地图位置（长按定位按钮）
-class CustomMapPosition : IHook() {
+class CustomMapPosition : DynHook() {
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customMapPosition
+
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         // 聊天发送
         val caall = findClass("org.telegram.ui.Components.ChatAttachAlertLocationLayout")
-        caall.hookAllCAfter { param ->
+        caall.hookAllCAfter(cond = ::isEnabled) { param ->
             val self = param.thisObject
             param.thisObject.getObjAs<ImageView>("locationButton").run {
                 setOnLongClickListener {
@@ -52,7 +53,7 @@ class CustomMapPosition : IHook() {
 
         // 企业版个人资料设置位置
         val la = findClass("org.telegram.ui.LocationActivity")
-        la.hookAfter("createView", Context::class.java) { param ->
+        la.hookAfter("createView", Context::class.java, cond = ::isEnabled) { param ->
             val self = param.thisObject
             param.thisObject.getObjAs<ImageView>("locationButton").run {
                 setOnLongClickListener {

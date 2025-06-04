@@ -4,7 +4,6 @@ import android.text.SpannableString
 import android.text.Spanned
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -15,14 +14,19 @@ import io.github.a13e300.myinjector.logE
 import java.lang.reflect.Proxy
 
 // 在 at 列表中，长按以强制使用无用户名的 at 形式
-class LongClickMention : IHook() {
+class LongClickMention : DynHook() {
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.longClickMention
+
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val longClickListenerClass =
             findClass("org.telegram.ui.Components.RecyclerListView\$OnItemLongClickListener")
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
         val userObjectClass = findClass("org.telegram.messenger.UserObject")
         val classURLSpanUserMention = findClass("org.telegram.ui.Components.URLSpanUserMention")
-        findClass("org.telegram.ui.ChatActivity").hookAllAfter("createView") { param ->
+        findClass("org.telegram.ui.ChatActivity").hookAllAfter(
+            "createView",
+            cond = ::isEnabled
+        ) { param ->
             val obj = Object()
             val thiz = param.thisObject
             val mentionContainer = XposedHelpers.getObjectField(thiz, "mentionContainer")
