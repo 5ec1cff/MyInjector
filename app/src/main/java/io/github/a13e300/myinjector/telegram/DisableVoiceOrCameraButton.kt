@@ -1,0 +1,22 @@
+package io.github.a13e300.myinjector.telegram
+
+import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.hookAllCAfter
+import io.github.a13e300.myinjector.arch.hookAllConstant
+import java.util.concurrent.atomic.AtomicBoolean
+
+// 禁用音频 / 摄像头按钮，防止误触
+class DisableVoiceOrCameraButton : IHook() {
+    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+        val subHookFound = AtomicBoolean(false)
+        findClass("org.telegram.ui.Components.ChatActivityEnterView").hookAllCAfter { param ->
+            if (subHookFound.get()) return@hookAllCAfter
+            val audioVideoButtonContainer =
+                param.thisObject.getObj("audioVideoButtonContainer") ?: return@hookAllCAfter
+            audioVideoButtonContainer.javaClass.hookAllConstant("onTouchEvent", true)
+            subHookFound.set(true)
+        }
+    }
+}

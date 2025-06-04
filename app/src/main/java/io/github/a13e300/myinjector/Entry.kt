@@ -1,12 +1,20 @@
 package io.github.a13e300.myinjector
 
+import android.content.res.XModuleResources
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.telegram.TelegramHandler
 
 class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
     companion object {
         lateinit var modulePath: String
+        val moduleRes: XModuleResources by lazy {
+            XModuleResources.createInstance(
+                modulePath,
+                null
+            )
+        }
     }
 
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
