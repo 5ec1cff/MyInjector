@@ -2,7 +2,6 @@
 
 package io.github.a13e300.myinjector.telegram
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.res.Resources
@@ -15,6 +14,7 @@ import android.preference.Preference
 import android.preference.PreferenceCategory
 import android.preference.PreferenceFragment
 import android.preference.PreferenceGroup
+import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
 import android.text.Editable
 import android.text.SpannableStringBuilder
@@ -23,6 +23,8 @@ import android.text.TextWatcher
 import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import android.view.ContextThemeWrapper
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -39,6 +41,7 @@ import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.addModuleAssets
+import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.forceSetSelection
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
@@ -51,6 +54,7 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.sp2px
 
 class SettingDialog(context: Context) : AlertDialog.Builder(context) {
+
     class PrefsFragment : PreferenceFragment(), Preference.OnPreferenceChangeListener,
         Preference.OnPreferenceClickListener {
         private lateinit var listView: ListView
@@ -66,8 +70,28 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             preferenceManager.sharedPreferencesName = "MyInjector_telegram"
-            addPreferencesFromResource(R.xml.tg_settings)
+            preferenceScreen = preferenceManager.call(
+                "inflateFromResource",
+                ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault_DayNight),
+                R.xml.tg_settings,
+                preferenceScreen
+            ) as PreferenceScreen
             searchItems = retrieve(preferenceScreen)
+        }
+
+        override fun onCreateView(
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
+        ): View? {
+            val inf = inflater.cloneInContext(
+                ContextThemeWrapper(
+                    context,
+                    android.R.style.Theme_DeviceDefault_DayNight
+                )
+            )
+
+            return super.onCreateView(inf, container, savedInstanceState)
         }
 
         @Deprecated("Deprecated in Java")
@@ -355,7 +379,7 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
         searchBar.setOnClickListener {
             editView.requestFocus()
             context.getSystemService(InputMethodManager::class.java)
-                ?.showSoftInput(editView, 0)
+                .showSoftInput(editView, 0)
         }
         editView.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {}
@@ -382,19 +406,24 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
 
         fun show(context: Context) {
             try {
-                SettingDialog(context).show()
-            } catch (e: Resources.NotFoundException) {
+                SettingDialog(
+                    ContextThemeWrapper(
+                        context,
+                        android.R.style.Theme_DeviceDefault_DayNight
+                    )
+                ).show()
+            } catch (_: Resources.NotFoundException) {
                 AlertDialog.Builder(context)
                     .setTitle("需要重启")
                     .setPositiveButton("重启") { _, _ ->
-                        restartApplication(context as Activity)
+                        restartApplication(context.findBaseActivity())
                     }.show()
             }
         }
     }
 
     init {
-        val activity = context as Activity
+        val activity = context.findBaseActivity()
         activity.addModuleAssets(Entry.modulePath)
 
         // dirty way to make list preference summary span style take effect,
