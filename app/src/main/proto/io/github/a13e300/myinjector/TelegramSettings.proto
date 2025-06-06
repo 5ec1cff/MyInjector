@@ -24,4 +24,5 @@ message TelegramSettings {
   optional bool noGoogleMaps = 15;
   optional bool openLinkDialog = 16;
   optional bool sendImageWithHighQualityByDefault = 17;
+  optional bool hidePhoneNumber = 18;
 }

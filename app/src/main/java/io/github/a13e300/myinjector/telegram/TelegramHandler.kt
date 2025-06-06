@@ -88,6 +88,7 @@ object TelegramHandler : IHook() {
         subHook(CustomMapPosition())
         subHook(AvatarPagerScrollToCurrent())
         subHook(SendImageWithHighQualityByDefault())
+        subHook(HidePhoneNumber())
         subHook(Settings())
     }
 

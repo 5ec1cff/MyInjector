@@ -102,5 +102,10 @@
             android:key="mutualContact"
             android:summary="在联系人列表标记你的双向联系人（↑↓）"
             android:title="标记双向联系人" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="hidePhoneNumber"
+            android:summary="隐藏主页抽屉的电话号码，点按文本切换显示状态；隐藏资料页面的电话号码，点按右侧按钮切换显示状态"
+            android:title="默认隐藏电话号码" />
     </PreferenceCategory>
 </PreferenceScreen>

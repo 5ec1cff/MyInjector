@@ -157,6 +157,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
 
                 "sendImageWithHighQualityByDefault" ->
                     settings.sendImageWithHighQualityByDefault = v
+
+                "hidePhoneNumber" ->
+                    settings.hidePhoneNumber = v
             }
             TelegramHandler.updateSettings(settings.build())
             return true
@@ -249,6 +252,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
 
                         "sendImageWithHighQualityByDefault" -> (preference as SwitchPreference).isChecked =
                             TelegramHandler.settings.sendImageWithHighQualityByDefault
+
+                        "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
+                            TelegramHandler.settings.hidePhoneNumber
                     }
                 }
                 val searchItem = SearchItem(
