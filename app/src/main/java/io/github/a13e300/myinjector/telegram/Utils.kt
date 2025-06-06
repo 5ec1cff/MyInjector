@@ -35,4 +35,3 @@ fun Context.findBaseActivity(): Activity =
     this as? Activity
         ?: (this as? ContextWrapper)?.baseContext?.findBaseActivity()
         ?: error("not activity: $this")
-

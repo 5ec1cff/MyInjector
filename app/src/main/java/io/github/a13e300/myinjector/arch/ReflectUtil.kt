@@ -2,7 +2,11 @@
 
 package io.github.a13e300.myinjector.arch
 
+import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
+import io.github.a13e300.myinjector.logD
+import java.lang.reflect.Member
+import java.lang.reflect.Method
 
 inline fun Any?.getObj(name: String): Any? = XposedHelpers.getObjectField(this, name)
 
@@ -41,4 +45,20 @@ inline fun ClassLoader.findClassOf(vararg names: String): Class<*> {
         XposedHelpers.findClassIfExists(name, this)?.let { return it }
     }
     error("none of class found: ${names.joinToString(",")}")
+}
+
+private val deoptimizeMethodMethod: Method by lazy {
+    XposedBridge::class.java.getDeclaredMethod("deoptimizeMethod", Member::class.java)
+        .also { it.isAccessible = true }
+}
+
+fun Method.deoptimize() {
+    logD("deoptimizing $this")
+    deoptimizeMethodMethod.invoke(null, this)
+}
+
+fun Class<*>.deoptimize(name: String) {
+    declaredMethods.forEach {
+        if (it.name == name) it.deoptimize()
+    }
 }

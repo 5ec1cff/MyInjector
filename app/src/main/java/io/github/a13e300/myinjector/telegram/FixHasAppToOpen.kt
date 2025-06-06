@@ -1,19 +1,49 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.app.Activity
+import android.content.Intent
+import android.os.Bundle
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.a13e300.myinjector.arch.hookAllConstantIf
+import io.github.a13e300.myinjector.arch.deoptimize
+import io.github.a13e300.myinjector.arch.hook
+import io.github.a13e300.myinjector.logD
 
 // 修复重复打开链接的问题
-// TODO: 目前没修好
 class FixHasAppToOpen : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.fixHasAppToOpen
 
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
-        // 这构式逻辑谁写的？
-        // https://github.com/DrKLO/Telegram/blob/eee720ef5e48e1c434f4c5a83698dc4ada34aaa9/TMessagesProj/src/main/java/org/telegram/messenger/browser/Browser.java#L391
-        findClass("org.telegram.messenger.browser.Browser")
-            .hookAllConstantIf("hasAppToOpen", true) {
-                isEnabled()
+        val inBrowserOpenUrl = ThreadLocal<Boolean>()
+        val started = ThreadLocal<Boolean>()
+        val browserClass = findClass("org.telegram.messenger.browser.Browser")
+        val targetNethod =
+            browserClass.declaredMethods.filter { it.name == "openUrl" }.maxBy { it.parameterCount }
+        logD("targetMethod=$targetNethod")
+        targetNethod.hook(
+            cond = ::isEnabled,
+            before = {
+                inBrowserOpenUrl.set(true)
+                started.set(false)
+            },
+            after = {
+                inBrowserOpenUrl.set(false)
             }
+        )
+
+        Activity::class.java.hook(
+            "startActivity", Intent::class.java, Bundle::class.java, cond = ::isEnabled,
+            before = { param ->
+                if (inBrowserOpenUrl.get() == true && started.get() == true) {
+                    param.result = null
+                    return@hook
+                }
+            },
+            after = { param ->
+                if (inBrowserOpenUrl.get() == true && param.throwable == null) {
+                    started.set(true)
+                }
+            }
+        )
+        Activity::class.java.deoptimize("startActivity")
     }
 }
