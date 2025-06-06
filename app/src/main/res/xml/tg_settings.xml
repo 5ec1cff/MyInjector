@@ -25,6 +25,11 @@
             android:defaultValue="false"
             android:key="defaultSearchTab"
             android:title="hashtag 总是搜索本频道" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="sendImageWithHighQualityByDefault"
+            android:summary="需要 11.12.0 (5997) 或更高版本"
+            android:title="默认发送高清晰度图像" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="忽略权限">

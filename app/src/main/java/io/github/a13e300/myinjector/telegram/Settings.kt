@@ -154,6 +154,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
 
                 "openLinkDialog" ->
                     settings.openLinkDialog = v
+
+                "sendImageWithHighQualityByDefault" ->
+                    settings.sendImageWithHighQualityByDefault = v
             }
             TelegramHandler.updateSettings(settings.build())
             return true
@@ -243,6 +246,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
 
                         "openLinkDialog" -> (preference as SwitchPreference).isChecked =
                             TelegramHandler.settings.openLinkDialog
+
+                        "sendImageWithHighQualityByDefault" -> (preference as SwitchPreference).isChecked =
+                            TelegramHandler.settings.sendImageWithHighQualityByDefault
                     }
                 }
                 val searchItem = SearchItem(

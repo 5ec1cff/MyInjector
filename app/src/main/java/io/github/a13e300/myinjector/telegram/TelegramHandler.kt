@@ -87,6 +87,7 @@ object TelegramHandler : IHook() {
         subHook(DefaultSearchTab())
         subHook(CustomMapPosition())
         subHook(AvatarPagerScrollToCurrent())
+        subHook(SendImageWithHighQualityByDefault())
         subHook(Settings())
     }
 
