@@ -27,8 +27,22 @@ class FvXposedHandler : IHook() {
 
     // 阻止 FV 发现系统的悬浮窗通知时应激哈气
     // 懒得写 dexkit 了
+    // 当前仅适配 1.6.1
     private fun hookNoTipNotificationPerm() = runCatching {
         val isTarget = ThreadLocal<Boolean>()
+        // com.fooview.android.fooview.fvprocess.FooAccessibilityService#onAccessibilityEvent->G0 调用以下两个方法
+        // 远程调用 FooViewService 显示授权通知权限的窗口
+        // binder 接口 g1, g1$a, g1$a$a, 特征 com.fooview.android.fooview.IMainUIService
+        // 实际逻辑 FVMainUIService$a$y0 implements Runnable 特征：资源 id
+        // remove_float_displaying_notification 0x7f0e0021 去除通知栏上“正在其他应用上层显示”的通知
+        // 此处 hook 同一进程的执行远程调用的方法
+        // 这两个方法是先后调用的，而另一个方法在别滴地方也会调用，
+        // 因此先检查是否调用了这个方法，然后设置 flag ，以便另一个方法确定是否是正确的上下文
+        findClass("com.fooview.android.fooview.fvprocess.FooViewService")
+            .hookAllReplace("G3") { param ->
+                isTarget.set(true)
+                null
+            }
         // 自动返回桌面
         // 特征： android.intent.action.MAIN, android.intent.category.HOME, 调用 performGlobalAction(2)
         findClass("com.fooview.android.fooview.fvprocess.FooAccessibilityService")
@@ -37,16 +51,6 @@ class FvXposedHandler : IHook() {
                     isTarget.set(false)
                     param.result = null
                 }
-            }
-        // 远程调用 FooViewService 显示授权通知权限的窗口
-        // binder 接口 f1, f1$a, f1$a$a, 特征 com.fooview.android.fooview.IMainUIService
-        // 实际逻辑 FVMainUIService$a$y0 implements Runnable 特征：资源 id
-        // authorize_floating_window_permission_desc 0x7f0e00d6 打开通知栏权限
-        // remove_float_displaying_notification 0x7f0e0021 去除通知栏上“正在其他应用上层显示”的通知
-        findClass("com.fooview.android.fooview.fvprocess.FooViewService")
-            .hookAllReplace("F3") { param ->
-                isTarget.set(true)
-                null
             }
     }.onFailure {
         logE("hookNoTipNotificationPerm: ", it)
