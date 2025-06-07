@@ -2,23 +2,22 @@ package io.github.a13e300.myinjector
 
 import android.app.Activity
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNop
-import org.luckypray.dexkit.DexKitBridge
-import java.io.File
+import io.github.a13e300.myinjector.arch.toObfsInfo
 
 class BaiduIMEHandler : IHook() {
-    private var cacheFile: File? = null
-    private var showMethodName = ""
-    private var showMethodClass = ""
+    companion object {
+        private const val KEY_showMethod = "showMethod"
+    }
 
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         hookSplash()
-        hookContactSuggestion(param.appInfo)
+        hookContactSuggestion()
     }
 
     private fun hookSplash() = runCatching {
@@ -42,62 +41,34 @@ class BaiduIMEHandler : IHook() {
         logE("doHookSplash: ", it)
     }
 
-    private fun hookContactSuggestion(appInfo: ApplicationInfo) = runCatching {
-        findContactSuggestion(appInfo)
-        findClass(showMethodClass).hookAllNop(showMethodName)
-    }.onFailure {
-        logE("hookContactSuggestion: ", it)
-    }
-
-    private fun findContactSuggestion(appInfo: ApplicationInfo) {
-        val f = File(appInfo.dataDir, "dexkit.tmp")
-        cacheFile = f
-        if (f.isFile) {
-            try {
-                val lines = f.inputStream().use { f.readLines() }
-                val apkPath = lines[0]
-                if (apkPath == appInfo.sourceDir) {
-                    showMethodClass = lines[1]
-                    showMethodName = lines[2]
-                    logD("prepare: use cached result")
-                    return
-                } else {
-                    logD("prepare: need invalidate cache!")
-                    f.delete()
+    private fun hookContactSuggestion() = runCatching {
+        val tbl = createObfsTable("baiduime", 1) { bridge ->
+            val showMethod = bridge.findClass {
+                matcher {
+                    usingStrings("android.permission.READ_CONTACTS", "layout_inflater")
+                    addMethod {
+                        addInvoke {
+                            name = "getWindowToken"
+                            declaredClass = "android.view.View"
+                        }
+                    }
                 }
-            } catch (t: Throwable) {
-                logE("prepare: failed to read", t)
-                f.delete()
-            }
-        }
-        logD("prepare: start deobf")
-        System.loadLibrary("dexkit")
-        val bridge = DexKitBridge.create(classLoader, true)
-        val showMethod = bridge.findClass {
-            matcher {
-                usingStrings("android.permission.READ_CONTACTS", "layout_inflater")
-                addMethod {
+            }.findMethod {
+                matcher {
                     addInvoke {
                         name = "getWindowToken"
                         declaredClass = "android.view.View"
                     }
                 }
-            }
-        }.findMethod {
-            matcher {
-                addInvoke {
-                    name = "getWindowToken"
-                    declaredClass = "android.view.View"
-                }
-            }
-        }.single()
-        logD("prepare: found method: $showMethod")
-        showMethodClass = showMethod.className
-        showMethodName = showMethod.methodName
-        f.bufferedWriter().use {
-            it.write("${appInfo.sourceDir}\n")
-            it.write("$showMethodClass\n")
-            it.write("$showMethodName\n")
+            }.single()
+
+            mutableMapOf(KEY_showMethod to showMethod.toObfsInfo())
         }
+
+        val showMethod = tbl[KEY_showMethod]!!
+
+        findClass(showMethod.className).hookAllNop(showMethod.memberName)
+    }.onFailure {
+        logE("hookContactSuggestion: ", it)
     }
 }

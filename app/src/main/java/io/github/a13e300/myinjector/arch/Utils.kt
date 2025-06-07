@@ -3,6 +3,8 @@ package io.github.a13e300.myinjector.arch
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.res.AssetManager
 import android.content.res.Resources
 import android.os.Build
 import android.os.Parcelable
@@ -66,4 +68,11 @@ fun restartApplication(activity: Activity) {
     activity.finishAffinity()
     activity.startActivity(intent)
     exitProcess(0)
+}
+
+@Suppress("DEPRECATION")
+fun createPackageResources(appInfo: ApplicationInfo): Resources {
+    val assetManager = AssetManager::class.java.newInstance()
+    assetManager.call("addAssetPath", appInfo.sourceDir)
+    return Resources(assetManager, null, null)
 }
