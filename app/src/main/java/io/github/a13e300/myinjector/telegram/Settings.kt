@@ -5,14 +5,10 @@ package io.github.a13e300.myinjector.telegram
 import android.app.AlertDialog
 import android.content.Context
 import android.content.res.Resources
-import android.graphics.Color
 import android.graphics.Typeface
-import android.os.Bundle
 import android.preference.ListPreference
 import android.preference.MultiSelectListPreference
 import android.preference.Preference
-import android.preference.PreferenceCategory
-import android.preference.PreferenceFragment
 import android.preference.PreferenceGroup
 import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
@@ -24,9 +20,7 @@ import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.ContextThemeWrapper
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.BaseAdapter
@@ -35,252 +29,218 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListAdapter
 import android.widget.ListView
-import android.widget.TextView
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.addModuleAssets
-import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.category
 import io.github.a13e300.myinjector.arch.forceSetSelection
 import io.github.a13e300.myinjector.arch.getObjAs
-import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.inflateLayout
 import io.github.a13e300.myinjector.arch.newInst
+import io.github.a13e300.myinjector.arch.newInstAs
+import io.github.a13e300.myinjector.arch.preference
 import io.github.a13e300.myinjector.arch.restartApplication
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.sp2px
+import io.github.a13e300.myinjector.arch.switchPreference
 
-class SettingDialog(context: Context) : AlertDialog.Builder(context) {
+class SettingDialog(context: Context) : AlertDialog.Builder(context),
+    Preference.OnPreferenceChangeListener,
+    Preference.OnPreferenceClickListener {
 
-    class PrefsFragment : PreferenceFragment(), Preference.OnPreferenceChangeListener,
-        Preference.OnPreferenceClickListener {
-        private lateinit var listView: ListView
-        private lateinit var adapter: BaseAdapter
-        private var searchItems = listOf<SearchItem>()
-        private var ListAdapter.preferenceList: List<Preference>
-            get() = getObjAs("mPreferenceList")
-            set(value) {
-                setObj("mPreferenceList", value)
+    private lateinit var listView: ListView
+    private lateinit var adapter: BaseAdapter
+    private lateinit var prefScreen: PreferenceScreen
+    private var searchItems = listOf<SearchItem>()
+    private var ListAdapter.preferenceList: List<Preference>
+        get() = getObjAs("mPreferenceList")
+        set(value) {
+            setObj("mPreferenceList", value)
+        }
+
+
+    @Deprecated("Deprecated in Java")
+    override fun onPreferenceChange(
+        preference: Preference,
+        newValue: Any?
+    ): Boolean {
+        val settings = TelegramHandler.settings.toBuilder()
+        val v = newValue as Boolean
+        when (preference.key) {
+            "enabled" -> settings.disabled = !v
+            "autoCheckDeleteMessageOption" ->
+                settings.autoCheckDeleteMessageOption = v
+
+            "autoUncheckSharePhoneNumber" ->
+                settings.autoUncheckSharePhoneNumber = v
+
+            "avatarPageScrollToCurrent" ->
+                settings.avatarPageScrollToCurrent = v
+
+            "contactPermission" ->
+                settings.contactPermission = v
+
+            "customEmojiMapping" ->
+                settings.customEmojiMapping = v
+
+            "customMapPosition" ->
+                settings.customMapPosition = v
+
+            "defaultSearchTab" ->
+                settings.defaultSearchTab = v
+
+            "disableVoiceOrCameraButton" ->
+                settings.disableVoiceOrCameraButton = v
+
+            "emojiStickerMenu" ->
+                settings.emojiStickerMenu = v
+
+            "fakeInstallPermission" ->
+                settings.fakeInstallPermission = v
+
+            "fixHasAppToOpen" ->
+                settings.fixHasAppToOpen = v
+
+            "longClickMention" ->
+                settings.longClickMention = v
+
+            "mutualContact" ->
+                settings.mutualContact = v
+
+            "noGoogleMaps" ->
+                settings.noGoogleMaps = v
+
+            "openLinkDialog" ->
+                settings.openLinkDialog = v
+
+            "sendImageWithHighQualityByDefault" ->
+                settings.sendImageWithHighQualityByDefault = v
+
+            "hidePhoneNumber" -> {
+                settings.hidePhoneNumber = v
+                prefScreen.findPreference("hidePhoneNumberForSelfOnly").isEnabled = v
             }
 
-        @Deprecated("Deprecated in Java")
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            preferenceManager.sharedPreferencesName = "MyInjector_telegram"
-            preferenceScreen = preferenceManager.call(
-                "inflateFromResource",
-                ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault_DayNight),
-                R.xml.tg_settings,
-                preferenceScreen
-            ) as PreferenceScreen
-            searchItems = retrieve(preferenceScreen)
+            "hidePhoneNumberForSelfOnly" ->
+                settings.hidePhoneNumberForSelfOnly = v
         }
+        TelegramHandler.updateSettings(settings.build())
+        return true
+    }
 
-        override fun onCreateView(
-            inflater: LayoutInflater,
-            container: ViewGroup?,
-            savedInstanceState: Bundle?
-        ): View? {
-            val inf = inflater.cloneInContext(
-                ContextThemeWrapper(
-                    context,
-                    android.R.style.Theme_DeviceDefault_DayNight
-                )
-            )
-
-            return super.onCreateView(inf, container, savedInstanceState)
-        }
-
-        @Deprecated("Deprecated in Java")
-        override fun onActivityCreated(savedInstanceState: Bundle?) {
-            super.onActivityCreated(savedInstanceState)
-            listView = view?.findViewById(android.R.id.list) ?: return
-            adapter = listView.adapter as BaseAdapter
-        }
-
-        @Deprecated("Deprecated in Java")
-        override fun onPreferenceChange(
-            preference: Preference,
-            newValue: Any?
-        ): Boolean {
-            val settings = TelegramHandler.settings.toBuilder()
-            val v = newValue as Boolean
-            when (preference.key) {
-                "enabled" -> settings.disabled = !v
-                "autoCheckDeleteMessageOption" ->
-                    settings.autoCheckDeleteMessageOption = v
-
-                "autoUncheckSharePhoneNumber" ->
-                    settings.autoUncheckSharePhoneNumber = v
-
-                "avatarPageScrollToCurrent" ->
-                    settings.avatarPageScrollToCurrent = v
-
-                "contactPermission" ->
-                    settings.contactPermission = v
-
-                "customEmojiMapping" ->
-                    settings.customEmojiMapping = v
-
-                "customMapPosition" ->
-                    settings.customMapPosition = v
-
-                "defaultSearchTab" ->
-                    settings.defaultSearchTab = v
-
-                "disableVoiceOrCameraButton" ->
-                    settings.disableVoiceOrCameraButton = v
-
-                "emojiStickerMenu" ->
-                    settings.emojiStickerMenu = v
-
-                "fakeInstallPermission" ->
-                    settings.fakeInstallPermission = v
-
-                "fixHasAppToOpen" ->
-                    settings.fixHasAppToOpen = v
-
-                "longClickMention" ->
-                    settings.longClickMention = v
-
-                "mutualContact" ->
-                    settings.mutualContact = v
-
-                "noGoogleMaps" ->
-                    settings.noGoogleMaps = v
-
-                "openLinkDialog" ->
-                    settings.openLinkDialog = v
-
-                "sendImageWithHighQualityByDefault" ->
-                    settings.sendImageWithHighQualityByDefault = v
-
-                "hidePhoneNumber" -> {
-                    settings.hidePhoneNumber = v
-                    findPreference("hidePhoneNumberForSelfOnly").isEnabled = v
-                }
-
-                "hidePhoneNumberForSelfOnly" ->
-                    settings.hidePhoneNumberForSelfOnly = v
-            }
-            TelegramHandler.updateSettings(settings.build())
+    @Deprecated("Deprecated in Java")
+    override fun onPreferenceClick(preference: Preference): Boolean {
+        if (preference.key == "customEmojiMappingConfig") {
+            CustomEmojiMapping.importEmojiMap(context)
             return true
         }
+        return false
+    }
 
-        @Deprecated("Deprecated in Java")
-        override fun onPreferenceClick(preference: Preference): Boolean {
-            if (preference.key == "customEmojiMappingConfig") {
-                CustomEmojiMapping.importEmojiMap(context)
-                return true
-            }
-            return false
+    fun search(text: String) {
+        val preferences = if (text.isEmpty()) {
+            searchItems.map { it.restore(); it.preference }
+        } else {
+            searchItems.sortedByDescending { it.calcScoreAndApplyHintBy(text) }
+                .filterNot { it.cacheScore == 0 }.map { it.preference }
         }
+        adapter.preferenceList = preferences
+        adapter.notifyDataSetChanged()
+        listView.forceSetSelection(0)
+    }
 
-        fun search(text: String) {
-            val preferences = if (text.isEmpty()) {
-                searchItems.map { it.restore(); it.preference }
-            } else {
-                searchItems.sortedByDescending { it.calcScoreAndApplyHintBy(text) }
-                    .filterNot { it.cacheScore == 0 }.map { it.preference }
-            }
-            adapter.preferenceList = preferences
-            adapter.notifyDataSetChanged()
-            listView.forceSetSelection(0)
-        }
+    private fun retrieve(group: PreferenceGroup): List<SearchItem> = buildList {
+        for (i in 0 until group.preferenceCount) {
+            val preference = group.getPreference(i)
+            val entries = when (preference) {
+                is ListPreference -> preference.entries
+                is MultiSelectListPreference -> preference.entries
+                else -> arrayOf()
+            }.orEmpty()
+            if (preference !is PreferenceGroup) {
+                preference.isPersistent = false
+                preference.onPreferenceChangeListener = this@SettingDialog
+                preference.onPreferenceClickListener = this@SettingDialog
+                when (preference.key) {
+                    "enabled" -> (preference as SwitchPreference).isChecked =
+                        !TelegramHandler.settings.disabled
 
-        private fun retrieve(group: PreferenceGroup): List<SearchItem> = buildList {
-            for (i in 0 until group.preferenceCount) {
-                val preference = group.getPreference(i)
-                val entries = when (preference) {
-                    is ListPreference -> preference.entries
-                    is MultiSelectListPreference -> preference.entries
-                    else -> arrayOf()
-                }.orEmpty()
-                if (preference !is PreferenceGroup) {
-                    preference.isPersistent = false
-                    preference.onPreferenceChangeListener = this@PrefsFragment
-                    preference.onPreferenceClickListener = this@PrefsFragment
-                    when (preference.key) {
-                        "enabled" -> (preference as SwitchPreference).isChecked =
-                            !TelegramHandler.settings.disabled
+                    "autoCheckDeleteMessageOption" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.autoCheckDeleteMessageOption
 
-                        "autoCheckDeleteMessageOption" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.autoCheckDeleteMessageOption
+                    "autoUncheckSharePhoneNumber" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.autoUncheckSharePhoneNumber
 
-                        "autoUncheckSharePhoneNumber" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.autoUncheckSharePhoneNumber
+                    "avatarPageScrollToCurrent" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.avatarPageScrollToCurrent
 
-                        "avatarPageScrollToCurrent" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.avatarPageScrollToCurrent
+                    "contactPermission" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.contactPermission
 
-                        "contactPermission" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.contactPermission
+                    "customEmojiMapping" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.customEmojiMapping
 
-                        "customEmojiMapping" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.customEmojiMapping
+                    "customEmojiMappingConfig" -> preference.summary =
+                        "加载了${CustomEmojiMapping.emotionMap.map.size}条映射规则"
 
-                        "customEmojiMappingConfig" -> preference.summary =
-                            "加载了${CustomEmojiMapping.emotionMap.map.size}条映射规则"
+                    "customMapPosition" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.customMapPosition
 
-                        "customMapPosition" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.customMapPosition
+                    "defaultSearchTab" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.defaultSearchTab
 
-                        "defaultSearchTab" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.defaultSearchTab
+                    "disableVoiceOrCameraButton" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.disableVoiceOrCameraButton
 
-                        "disableVoiceOrCameraButton" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.disableVoiceOrCameraButton
+                    "emojiStickerMenu" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.emojiStickerMenu
 
-                        "emojiStickerMenu" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.emojiStickerMenu
+                    "fakeInstallPermission" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.fakeInstallPermission
 
-                        "fakeInstallPermission" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.fakeInstallPermission
+                    "fixHasAppToOpen" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.fixHasAppToOpen
 
-                        "fixHasAppToOpen" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.fixHasAppToOpen
+                    "longClickMention" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.longClickMention
 
-                        "longClickMention" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.longClickMention
+                    "mutualContact" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.mutualContact
 
-                        "mutualContact" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.mutualContact
+                    "noGoogleMaps" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.noGoogleMaps
 
-                        "noGoogleMaps" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.noGoogleMaps
+                    "openLinkDialog" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.openLinkDialog
 
-                        "openLinkDialog" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.openLinkDialog
+                    "sendImageWithHighQualityByDefault" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.sendImageWithHighQualityByDefault
 
-                        "sendImageWithHighQualityByDefault" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.sendImageWithHighQualityByDefault
+                    "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.hidePhoneNumber
 
-                        "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
-                            TelegramHandler.settings.hidePhoneNumber
-
-                        "hidePhoneNumberForSelfOnly" -> (preference as SwitchPreference).apply {
-                            isChecked =
-                                TelegramHandler.settings.hidePhoneNumberForSelfOnly
-                            isEnabled = TelegramHandler.settings.hidePhoneNumber
-                        }
+                    "hidePhoneNumberForSelfOnly" -> (preference as SwitchPreference).apply {
+                        isChecked =
+                            TelegramHandler.settings.hidePhoneNumberForSelfOnly
+                        isEnabled = TelegramHandler.settings.hidePhoneNumber
                     }
                 }
-                val searchItem = SearchItem(
-                    preference,
-                    preference.key.orEmpty(),
-                    preference.title ?: "",
-                    preference.summary ?: "",
-                    entries,
-                    preference is PreferenceGroup,
-                )
-                // searchItem.appendExtraKeywords()
-                add(searchItem)
-                if (preference is PreferenceGroup) {
-                    addAll(retrieve(preference))
-                }
+            }
+            val searchItem = SearchItem(
+                preference,
+                preference.key.orEmpty(),
+                preference.title ?: "",
+                preference.summary ?: "",
+                entries,
+                preference is PreferenceGroup,
+            )
+            // searchItem.appendExtraKeywords()
+            add(searchItem)
+            if (preference is PreferenceGroup) {
+                addAll(retrieve(preference))
             }
         }
     }
@@ -388,8 +348,127 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
         }
     }
 
-    private fun getContentView(fragment: PrefsFragment): View {
-        val contentView = LinearLayout(fragment.context).apply {
+    private fun getContentView(): View {
+        prefScreen = PreferenceScreen::class.java.newInstAs(context, null)
+        listView = ListView(context)
+
+        prefScreen.run {
+            switchPreference("总开关", "enabled") {
+                setDefaultValue(true)
+            }
+
+            category("更改默认行为") {
+                switchPreference(
+                    "自动勾选删除",
+                    "autoCheckDeleteMessageOption",
+                    "在私聊中删除消息时自动勾选为对方删除消息"
+                )
+                switchPreference(
+                    "自动取消分享手机号",
+                    "autoUncheckSharePhoneNumber",
+                    "添加联系人自动取消勾选分享手机号"
+                )
+                switchPreference(
+                    "头像列表默认当前头像",
+                    "avatarPageScrollToCurrent",
+                    "个人资料头像如果存在多个且当前头像非第一个时，下拉展示完整头像列表时自动切到当前头像（原行为是总是切到第一个）"
+                )
+                switchPreference(
+                    "hashtag 总是搜索本频道",
+                    "defaultSearchTab",
+                )
+                switchPreference(
+                    "默认发送高清晰度图像",
+                    "sendImageWithHighQualityByDefault",
+                    "需要 11.12.0 (5997) 或更高版本"
+                )
+            }
+
+            category("隐私") {
+                switchPreference(
+                    "默认隐藏电话号码",
+                    "hidePhoneNumber",
+                    "隐藏主页抽屉的电话号码，点按文本切换显示状态；隐藏资料页面的电话号码，点按右侧按钮切换显示状态"
+                )
+                switchPreference(
+                    "默认只隐藏自己的隐藏电话号码",
+                    "hidePhoneNumberForSelfOnly",
+                    "其他人的电话号码默认显示（如有），也可隐藏，需启用「默认隐藏电话号码」"
+                )
+            }
+
+            category("忽略权限") {
+                switchPreference(
+                    "忽略联系人权限",
+                    "contactPermission",
+                    "打开联系人页面不再请求联系人权限"
+                )
+                switchPreference(
+                    "打开 apk 无需请求权限",
+                    "fakeInstallPermission",
+                    "打开 apk 时不检查是否有 REQUEST_INSTALL_PACKAGE 权限，这并不会实际给予权限"
+                )
+                switchPreference(
+                    "无需谷歌地图",
+                    "noGoogleMaps",
+                    "不再提示安装谷歌地图"
+                )
+            }
+
+            category("Emoji 和 Sticker") {
+                switchPreference(
+                    "自定义 emoji 映射",
+                    "customEmojiMapping",
+                )
+                preference(
+                    "自定义 emoji 映射配置",
+                    "customEmojiMappingConfig",
+                )
+                switchPreference(
+                    "查看 Emoji 和 Sticker Pack 创建者",
+                    "emojiStickerMenu",
+                    "在 Emoji 和 Sticker Pack 列表对话框的菜单增加查看创建者"
+                )
+            }
+
+            category("链接优化") {
+                switchPreference(
+                    "阻止重复打开链接",
+                    "fixHasAppToOpen",
+                )
+                switchPreference(
+                    "修复链接的意外字符",
+                    "openLinkDialog",
+                    "如果打开的链接包含意外字符（比如可能链接和后面的文字无空格），则总是弹出对话框，并可以点击fix按钮打开去除这些意外字符的链接"
+                )
+            }
+
+            category("其他") {
+                switchPreference(
+                    "消息编辑框禁用语音或相机按钮",
+                    "disableVoiceOrCameraButton",
+                )
+                switchPreference(
+                    "地图自定义经纬度",
+                    "customMapPosition",
+                    "长按定位按钮打开对话框"
+                )
+                switchPreference(
+                    "at 列表长按使用无用户名 at",
+                    "longClickMention",
+                    "at 列表中，长按某人以使用无用户名的方式 at 此人"
+                )
+                switchPreference(
+                    "标记双向联系人",
+                    "mutualContact",
+                    "在联系人列表标记你的双向联系人（↑↓）"
+                )
+            }
+        }
+        prefScreen.bind(listView)
+        searchItems = retrieve(prefScreen)
+        adapter = listView.adapter as BaseAdapter
+        val contentView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -409,11 +488,11 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(
                 s: CharSequence?, start: Int, before: Int, count: Int
-            ) = fragment.search(s?.toString()?.trim().orEmpty())
+            ) = search(s?.toString()?.trim().orEmpty())
         })
         editView.setOnEditorActionListener { v, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                fragment.search(v.text.toString().trim())
+                search(v.text.toString().trim())
                 true
             } else false
         }
@@ -421,7 +500,7 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
             editView.setText("")
         }
         contentView.addView(searchBar)
-        contentView.addView(fragment.view)
+        contentView.addView(listView)
         return contentView
     }
 
@@ -449,39 +528,11 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
         val activity = context.findBaseActivity()
         activity.addModuleAssets(Entry.modulePath)
 
-        // dirty way to make list preference summary span style take effect,
-        // we have no choice, see ListPreference#getSummary
-        val summaryHook = ListPreference::class.java.hookBefore("getSummary") { param ->
-            param.thisObject.setObj("mSummary", null)
-        }
-
-        val prefsFragment = PrefsFragment()
-        activity.fragmentManager.beginTransaction().add(prefsFragment, "Setting").commit()
-        activity.fragmentManager.executePendingTransactions()
-
-        prefsFragment.onActivityCreated(null)
-
-        val unhook = Preference::class.java.hookAfter(
-            "onCreateView", ViewGroup::class.java
-        ) { param ->
-            if (PreferenceCategory::class.java.isInstance(param.thisObject)
-                && TextView::class.java.isInstance(param.result)
-            ) {
-                val textView = param.result as TextView
-                if (textView.textColors.defaultColor == -13816531)
-                    textView.setTextColor(Color.GRAY)
-            }
-        }
-
-        setView(getContentView(prefsFragment))
+        setView(getContentView())
         setTitle("MyInjector")
         setNegativeButton("返回", null)
         setPositiveButton("重启") { _, _ ->
             restartApplication(activity)
-        }
-        setOnDismissListener {
-            unhook.unhook()
-            summaryHook.unhook()
         }
     }
 }

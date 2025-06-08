@@ -104,7 +104,7 @@ object CustomEmojiMapping : DynHook() {
 
         Toast.makeText(context, "选择一个 emoji 映射的 json 配置文件", Toast.LENGTH_SHORT)
             .show()
-        val activity = context as Activity
+        val activity = context.findBaseActivity()
         activity.startActivityForResult(
             Intent(Intent.ACTION_GET_CONTENT).apply {
                 type = "*/*"
