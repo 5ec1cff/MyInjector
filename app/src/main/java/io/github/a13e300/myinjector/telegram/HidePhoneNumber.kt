@@ -22,8 +22,7 @@ class HidePhoneNumber : DynHook() {
     override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
         val classDrawerProfileCell = findClass("org.telegram.ui.Cells.DrawerProfileCell")
         var show = false
-        // you should restart client to take effect
-        classDrawerProfileCell.hookAllAfter("setUser") { param ->
+        classDrawerProfileCell.hookAllAfter("setUser", cond = ::isEnabled) { param ->
             val phoneTextView = param.thisObject.getObjAs<TextView>("phoneTextView")
             val currentNumber = phoneTextView.text
             phoneTextView.text = if (show) currentNumber else "点击显示电话号码"
