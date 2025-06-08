@@ -138,6 +138,7 @@ com.miui.home
 
 - 最近任务卡片划动时悬停 700ms
   后再划动即可杀死进程（「清理任务」字样替换为「停止进程」，不会阻止系统的划卡杀，需要配合其他划卡杀白名单模块使用，如 [NoSwipeToKill](https://github.com/dantmnf/NoSwipeToKill)）
+- 禁用 app 预启动
 
 ### FV 悬浮球
 

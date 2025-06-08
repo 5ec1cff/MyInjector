@@ -13,33 +13,43 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter
+import io.github.a13e300.myinjector.arch.hookAllConstant
 
 class MiuiHomeHandler : IHook() {
     override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
-        logD("handleLoadPackage: hooked")
-        runCatching {
-            val recentTouchHandlerClass = findClass(
-                "com.miui.home.recents.views.TaskStackViewTouchHandler"
-            )
+        hookDragKill()
+        hookPreLaunch()
+    }
 
-            recentTouchHandlerClass.hookAllAfter("onBeginDrag") { param ->
-                onBeginDrag(param.args[0] as View)
-            }
+    private fun hookPreLaunch() = runCatching {
+        val clazz = findClass("com.miui.home.launcher.util.PreLaunchAppUtil")
+        clazz.hookAllConstant("preLaunchProcess", false)
+    }.onFailure {
+        logE("hookPreLaunch", it)
+    }
 
-            recentTouchHandlerClass.hookAllAfter("onDragEnd") { param ->
-                onDragEnd(param.args[0] as View)
-            }
+    private fun hookDragKill() = runCatching {
+        val recentTouchHandlerClass = findClass(
+            "com.miui.home.recents.views.TaskStackViewTouchHandler"
+        )
 
-            recentTouchHandlerClass.hookAllAfter("onChildDismissedEnd") { param ->
-                onChildDismissedEnd(param.args[0] as View)
-            }
-
-            recentTouchHandlerClass.hookAllAfter("onDragCancelled") { param ->
-                onDragCancelled(param.args[0] as View)
-            }
-        }.onFailure {
-            logE("handleLoadPackage: ", it)
+        recentTouchHandlerClass.hookAllAfter("onBeginDrag") { param ->
+            onBeginDrag(param.args[0] as View)
         }
+
+        recentTouchHandlerClass.hookAllAfter("onDragEnd") { param ->
+            onDragEnd(param.args[0] as View)
+        }
+
+        recentTouchHandlerClass.hookAllAfter("onChildDismissedEnd") { param ->
+            onChildDismissedEnd(param.args[0] as View)
+        }
+
+        recentTouchHandlerClass.hookAllAfter("onDragCancelled") { param ->
+            onDragCancelled(param.args[0] as View)
+        }
+    }.onFailure {
+        logE("hookDragKill: ", it)
     }
 
     private var handler = Handler(Looper.getMainLooper())
@@ -73,13 +83,13 @@ class MiuiHomeHandler : IHook() {
     }
 
     private fun onDragCancelled(v: View) {
-        logD("onDragCancelled: cancelled $mToBeKilled")
+        // logD("onDragCancelled: cancelled $mToBeKilled")
         mToBeKilled = null
     }
 
     private fun onChildDismissedEnd(v: View) {
         if (mToBeKilled != v) {
-            logE("onChildDismissedEnd: not target: $v $mToBeKilled")
+            // logE("onChildDismissedEnd: not target: $v $mToBeKilled")
             return
         }
         mToBeKilled = null
