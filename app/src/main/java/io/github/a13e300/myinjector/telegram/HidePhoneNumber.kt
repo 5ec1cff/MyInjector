@@ -9,6 +9,7 @@ import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
 import io.github.a13e300.myinjector.arch.addModuleAssets
 import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.extraField
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -37,12 +38,12 @@ class HidePhoneNumber : DynHook() {
 
         val classProfileActivity_ListAdapter =
             findClass("org.telegram.ui.ProfileActivity\$ListAdapter")
+        val classLocaleController = findClass("org.telegram.messenger.LocaleController")
         classProfileActivity_ListAdapter.hookAllAfter(
             "onBindViewHolder",
             cond = ::isEnabled
         ) { param ->
             val profileActivity = param.thisObject.getObj("this$0")!!
-            var show by extraField(profileActivity, "showPhoneNumber", false)
             val phoneRow = profileActivity.getObj("phoneRow")
             val numberRow = profileActivity.getObj("numberRow")
             if (param.args[1] != phoneRow && param.args[1] != numberRow) return@hookAllAfter
@@ -51,6 +52,15 @@ class HidePhoneNumber : DynHook() {
             ctx.addModuleAssets(Entry.modulePath)
             val tv = cell.getObjAs<TextView>("textView")
             val phoneNumber = tv.text
+            val phoneHidden = classLocaleController.callS(
+                "getString",
+                ctx.resources.getIdentifier("PhoneHidden", "string", ctx.packageName)
+            )
+            if (phoneNumber == phoneHidden) {
+                return@hookAllAfter
+            }
+
+            var show by extraField(profileActivity, "showPhoneNumber", false)
             tv.text = if (show) phoneNumber else "号码已隐藏"
             fun setIcon() {
                 val icon =
