@@ -158,8 +158,13 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
                 "sendImageWithHighQualityByDefault" ->
                     settings.sendImageWithHighQualityByDefault = v
 
-                "hidePhoneNumber" ->
+                "hidePhoneNumber" -> {
                     settings.hidePhoneNumber = v
+                    findPreference("hidePhoneNumberForSelfOnly").isEnabled = v
+                }
+
+                "hidePhoneNumberForSelfOnly" ->
+                    settings.hidePhoneNumberForSelfOnly = v
             }
             TelegramHandler.updateSettings(settings.build())
             return true
@@ -255,6 +260,12 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context) {
 
                         "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
                             TelegramHandler.settings.hidePhoneNumber
+
+                        "hidePhoneNumberForSelfOnly" -> (preference as SwitchPreference).apply {
+                            isChecked =
+                                TelegramHandler.settings.hidePhoneNumberForSelfOnly
+                            isEnabled = TelegramHandler.settings.hidePhoneNumber
+                        }
                     }
                 }
                 val searchItem = SearchItem(

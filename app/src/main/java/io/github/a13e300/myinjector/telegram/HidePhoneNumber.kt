@@ -60,7 +60,15 @@ class HidePhoneNumber : DynHook() {
                 return@hookAllAfter
             }
 
-            var show by extraField(profileActivity, "showPhoneNumber", false)
+            var show by extraField(
+                profileActivity,
+                "showPhoneNumber",
+                if (TelegramHandler.settings.hidePhoneNumberForSelfOnly) {
+                    val currentUserId = profileActivity.call("getUserConfig").getObj("clientUserId")
+                    val userId = profileActivity.getObj("userId")
+                    currentUserId != userId
+                } else false
+            )
             tv.text = if (show) phoneNumber else "号码已隐藏"
             fun setIcon() {
                 val icon =
