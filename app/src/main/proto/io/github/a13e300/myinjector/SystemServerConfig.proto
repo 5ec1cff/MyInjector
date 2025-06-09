@@ -15,6 +15,12 @@ message NewTaskRule {
   optional string targetComponent = 6;
 }
 
+message OverrideStatusBarRule {
+  string package = 1;
+  optional string component = 2;
+  bool light = 3;
+}
+
 message SystemServerConfig {
   optional bool noWakePath = 1;
   optional bool noMiuiIntent = 2;
@@ -25,4 +31,6 @@ message SystemServerConfig {
   optional bool forceNewTask = 7;
   repeated NewTaskRule forceNewTaskRules = 8;
   optional bool forceNewTaskDebug = 9;
+  optional bool overrideStatusBar = 10;
+  repeated OverrideStatusBarRule overrideStatusBarRules = 11;
 }

@@ -151,6 +151,35 @@ public class SettingsActivity extends Activity {
                                         .build();
                             }
                     ).filter(Objects::nonNull).collect(Collectors.toList()))
+                    .setOverrideStatusBar(sp.getBoolean("overrideStatusBar", false))
+                    .addAllOverrideStatusBarRules(
+                            Arrays.stream(sp.getString("overrideStatusBarRules", "")
+                                    .trim()
+                                    .split("\n")
+                            ).map(x -> {
+                                var parts = x.split(":");
+                                if (parts.length != 2) return null;
+                                var pkg = parts[0];
+                                var light = false;
+                                if ("light".equals(parts[1])) {
+                                    light = true;
+                                } else if (!"dark".equals(parts[2])) {
+                                    return null;
+                                }
+                                var component = "";
+                                var pkgSplit = pkg.split("/");
+                                if (pkgSplit.length == 2) {
+                                    pkg = pkgSplit[0];
+                                    component = pkgSplit[1];
+                                    if (component.startsWith(".")) component = pkg + component;
+                                } else if (pkgSplit.length != 1) return null;
+                                return OverrideStatusBarRule.newBuilder()
+                                        .setPackage(pkg)
+                                        .setComponent(component)
+                                        .setLight(light)
+                                        .build();
+                            }).filter(Objects::nonNull).collect(Collectors.toList())
+                    )
                     .setForceNewTaskDebug(sp.getBoolean("forceNewTaskDebug", false))
                     .build();
             intent.putExtra("EXTRA_CREDENTIAL", pendingIntent);

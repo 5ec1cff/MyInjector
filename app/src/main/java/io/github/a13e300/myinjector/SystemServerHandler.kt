@@ -3,6 +3,7 @@ package io.github.a13e300.myinjector
 import android.app.ActivityThread
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -13,6 +14,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.ServiceManager
 import android.view.View
+import android.view.WindowInsetsController
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.callS
@@ -24,6 +26,7 @@ import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.hookBefore
+import io.github.a13e300.myinjector.arch.setObj
 import java.io.File
 import java.util.UUID
 
@@ -55,6 +58,7 @@ class SystemServerHandler : IHook() {
         hookFixSync()
         setXSpace()
         hookForceNewTask()
+        hookStatusBarAppearance()
         runConfigListener()
     }
 
@@ -277,6 +281,36 @@ class SystemServerHandler : IHook() {
                 logE("onReceive: ", it)
             }
         }
+    }
+
+    private fun hookStatusBarAppearance() = runCatching {
+        val displayPolicy = findClass("com.android.server.wm.DisplayPolicy")
+        displayPolicy.hookAllBefore(
+            "updateSystemBarAttributes",
+            cond = { config.overrideStatusBar }) { param ->
+            val windowState = param.thisObject.getObj("mFocusedWindow") ?: return@hookAllBefore
+            val activityRecord = windowState.getObj("mActivityRecord") ?: return@hookAllBefore
+            val currentActivity = activityRecord.getObjAsN<ComponentName>("mActivityComponent")
+                ?: return@hookAllBefore
+
+            val rules = config.overrideStatusBarRulesList
+            for (rule in rules) {
+                if (currentActivity.packageName != rule.`package`) continue
+                if (rule.component.isEmpty() || currentActivity.className == rule.component) {
+                    // logD("matched $rule")
+                    val attr = windowState.getObj("mAttrs")
+                    val insetFlags = attr.getObj("insetsFlags")
+                    val appearance = insetFlags.getObjAs<Int>("appearance")
+                    val newAppearance = if (rule.light)
+                        appearance.or(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+                    else appearance.and(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS.inv())
+                    insetFlags.setObj("appearance", newAppearance)
+                    return@hookAllBefore
+                }
+            }
+        }
+    }.onFailure {
+        logE("hookStatusBarAppearance", it)
     }
 
     private val registerBroadcast: Runnable = Runnable {

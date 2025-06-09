@@ -86,6 +86,10 @@ class SystemUIHandler : IHook() {
         configPath = File(lpparam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
         loadConfig()
         hookPlugin()
+        hookNotificationInfo()
+    }
+
+    private fun hookNotificationInfo() {
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
         }
