@@ -543,19 +543,30 @@ class Settings : IHook() {
         val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")
 
         drawerLayoutAdapterClass.hookAllAfter("resetItems") { param ->
-            val items = param.thisObject.getObjAs<ArrayList<Any?>>("items")
-            val sepIdx = items.lastIndexOf(null)
-            val settingsIdx = sepIdx - 1
-            val settingsItem = items[settingsIdx]
-            // getItemViewType() return 3 by default
-            val mySettingsItem =
-                itemClass.newInst(114514, "MyInjector", settingsItem.getObjAs<Int>("icon"))
-            mySettingsItem.setObj("listener", object : View.OnClickListener {
-                override fun onClick(v: View) {
-                    SettingDialog.show(v.context)
+            val adapter = param.thisObject
+            val items = adapter.getObjAs<ArrayList<Any?>>("items")
+            var settingsIdx = -1
+            for (i in items.indices) {
+                val item = items[i]
+                if (item != null && itemClass.isInstance(item)) {
+                    val itemId = item.getObjAs<Int>("id")
+                    if (itemId == 8) {
+                        settingsIdx = i
+                        break
+                    }
                 }
-            })
-            items.add(sepIdx, mySettingsItem)
+            }
+            if (settingsIdx != -1) {
+                val settingsItem = items[settingsIdx]
+                val mySettingsItem =
+                    itemClass.newInst(114514, "MyInjector", settingsItem.getObjAs<Int>("icon"))
+                mySettingsItem.setObj("listener", object : View.OnClickListener {
+                    override fun onClick(v: View) {
+                        SettingDialog.show(v.context)
+                    }
+                })
+                items.add(settingsIdx + 1, mySettingsItem)
+            }
         }
     }
 }
