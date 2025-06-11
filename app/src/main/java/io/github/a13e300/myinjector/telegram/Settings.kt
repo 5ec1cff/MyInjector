@@ -543,7 +543,7 @@ class Settings : IHook() {
         val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")
 
         drawerLayoutAdapterClass.hookAllAfter("resetItems") { param ->
-                        val items = param.thisObject.getObjAs<ArrayList<Any?>>("items")
+            val items = param.thisObject.getObjAs<ArrayList<Any?>>("items")
             val settingsIdx = items.indexOfFirst { it.getObjAs<Int>("id") == 8 }
             val settingsItem = items[settingsIdx]
             // getItemViewType() return 3 by default
