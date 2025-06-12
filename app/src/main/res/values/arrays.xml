@@ -20,5 +20,6 @@
         <item>com.android.intentresolver</item>
         <item>com.meizu.customizecenter</item>
         <item>com.exteragram.messenger</item>
+        <item>com.telegram.plus</item>
     </string-array>
 </resources>
