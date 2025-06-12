@@ -67,11 +67,14 @@ com.termux
 org.telegram.messenger
 org.telegram.messenger.web
 org.telegram.messenger.beta
+org.telegram.plus
+com.exteragram.messenger
 ```
 
-注：作者仅适配官方 `org.telegram.messenger` ，因此其他的第三方端，或 web, beta 等都不保证能用
+注：作者仅适配官方 `org.telegram.messenger` ，因此其他的第三方端，或 web, beta 等都不保证可用
 
-- 左侧抽屉（侧拉栏）中包含设置入口
+左侧抽屉（侧拉栏）中包含模块的设置入口（大部分功能即时生效，无需重启 app）
+
 - 用户列表中的双向联系人的右侧会显示一个↑↓图标
 - 禁用发送框旁语音按钮 / 相机按钮的功能
 - 点按包含非 URL 标准字符的链接时显示提示框，可以使用过滤后的结果
