@@ -507,16 +507,16 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
     companion object {
 
         fun show(context: Context) {
+            val themedContext = ContextThemeWrapper(
+                context,
+                android.R.style.Theme_DeviceDefault_DayNight
+            )
             try {
-                SettingDialog(
-                    ContextThemeWrapper(
-                        context,
-                        android.R.style.Theme_DeviceDefault_DayNight
-                    )
-                ).show()
+                SettingDialog(themedContext).show()
             } catch (_: Resources.NotFoundException) {
-                AlertDialog.Builder(context)
+                AlertDialog.Builder(themedContext)
                     .setTitle("需要重启")
+                    .setMessage("由于加载资源失败，需要重启应用以显示设置界面。")
                     .setPositiveButton("重启") { _, _ ->
                         restartApplication(context.findBaseActivity())
                     }.show()
