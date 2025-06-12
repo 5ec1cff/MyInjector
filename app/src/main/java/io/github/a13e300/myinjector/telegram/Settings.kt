@@ -544,8 +544,7 @@ class Settings : IHook() {
 
         drawerLayoutAdapterClass.hookAllAfter("resetItems") { param ->
             val items = param.thisObject.getObjAs<ArrayList<Any?>>("items")
-            val sepIdx = items.lastIndexOf(null)
-            val settingsIdx = sepIdx - 1
+            val settingsIdx = items.indexOfFirst { it != null && itemClass.isInstance(it) && it.getObjAs<Int>("id") == 8 }
             val settingsItem = items[settingsIdx]
             // getItemViewType() return 3 by default
             val mySettingsItem =
@@ -555,7 +554,7 @@ class Settings : IHook() {
                     SettingDialog.show(v.context)
                 }
             })
-            items.add(sepIdx, mySettingsItem)
+            items.add(settingsIdx + 1, mySettingsItem)
         }
     }
 }

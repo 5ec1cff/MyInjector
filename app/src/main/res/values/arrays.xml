@@ -19,5 +19,6 @@
         <item>app.landrop.landrop_flutter</item>
         <item>com.android.intentresolver</item>
         <item>com.meizu.customizecenter</item>
+        <item>com.exteragram.messenger</item>
     </string-array>
 </resources>
