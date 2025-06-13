@@ -6,7 +6,6 @@ import android.os.Bundle
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.hook
-import io.github.a13e300.myinjector.logD
 
 // 修复重复打开链接的问题
 class FixHasAppToOpen : DynHook() {
@@ -18,7 +17,6 @@ class FixHasAppToOpen : DynHook() {
         val browserClass = findClass("org.telegram.messenger.browser.Browser")
         val targetNethod =
             browserClass.declaredMethods.filter { it.name == "openUrl" }.maxBy { it.parameterCount }
-        logD("targetMethod=$targetNethod")
         targetNethod.hook(
             cond = ::isEnabled,
             before = {

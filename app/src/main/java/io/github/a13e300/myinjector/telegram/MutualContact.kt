@@ -11,7 +11,6 @@ import io.github.a13e300.myinjector.R
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.logD
 
 // 标记双向联系人（↑↓图标）
 class MutualContact : DynHook() {
@@ -25,10 +24,8 @@ class MutualContact : DynHook() {
             "update",
             cond = ::isEnabled
         ) { param ->
-            // logD("afterHookedMethod: update")
             val d = param.thisObject.getObjAs<Int>("currentDrawable")
             if (d != 0) {
-                // logD("afterHookedMethod: currentdrawable not 0: $d")
                 return@hookAllAfter
             }
             val current = param.thisObject.getObj("currentObject")
@@ -50,9 +47,7 @@ class MutualContact : DynHook() {
                         ).toInt()
                     leftMargin
                 }
-                // logD("afterHookedMethod: set mutual contact $current")
             }
         }
-        logD("hookMutualContact: done")
     }
 }

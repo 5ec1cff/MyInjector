@@ -3,8 +3,8 @@ package io.github.a13e300.myinjector.telegram
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import io.github.a13e300.myinjector.TelegramSettings
 import io.github.a13e300.myinjector.arch.IHook
-import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
+import io.github.a13e300.myinjector.logI
 import java.io.File
 
 abstract class DynHook : IHook() {
@@ -63,7 +63,7 @@ object TelegramHandler : IHook() {
             logE("read settings failed", it)
             settingFile.delete()
         }.getOrDefault(TelegramSettings.getDefaultInstance())
-        logD("current settings $settings")
+        logI("current settings $settings")
     }
 
     private val hooks = mutableListOf<DynHook>()

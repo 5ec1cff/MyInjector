@@ -9,7 +9,6 @@ import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.newInst
-import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
 import java.lang.reflect.Proxy
 
@@ -80,6 +79,5 @@ class LongClickMention : DynHook() {
             }
             listView.call("setOnItemLongClickListener", proxy)
         }
-        logD("hookLongClickMention: Done")
     }
 }

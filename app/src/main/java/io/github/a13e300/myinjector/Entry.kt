@@ -22,7 +22,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        logD("handleLoadPackage: ${lpparam.packageName} ${lpparam.processName}")
+        logI("MyInjector: ${lpparam.packageName} ${lpparam.processName}")
         val handler = when (lpparam.packageName) {
             "com.fooview.android.fooview" -> FvXposedHandler()
             "com.lbe.security.miui" -> LbeHandler()

@@ -13,9 +13,7 @@ class LanDropHandler : IHook() {
         // guessType
         // "image", "video", "text", "url"
         findClass("b4.a").hookAfter("c", String::class.java) { param ->
-            logD("afterHookedMethod: ${param.result}")
             if (param.result == fileTypeText) {
-                logD("afterHookedMethod: replaces")
                 param.result = fileTypeFile
             }
         }

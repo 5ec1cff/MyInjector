@@ -50,7 +50,7 @@ class SystemServerHandler : IHook() {
     private lateinit var handler: Handler
 
     override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
-        logD("handleLoadPackage: initialize")
+        logI("hook system")
         config = readConfig()
         hookNoWakePath()
         hookNoMiuiIntent()
@@ -79,7 +79,7 @@ class SystemServerHandler : IHook() {
 
         if (file == null) {
             file = File(dir, "${CONFIG_PREFIX}${UUID.randomUUID()}")
-            logD("findOrCreateConfigFile: created config $file")
+            logI("findOrCreateConfigFile: created config $file")
             file.createNewFile()
         }
 
@@ -172,18 +172,18 @@ class SystemServerHandler : IHook() {
             if (enabled) {
                 add("com.android.shell")
                 add("com.xiaomi.xmsf")
-                logD("add required packages to whitelist")
+                logI("add required packages to whitelist")
             } else {
                 remove("com.android.shell")
                 remove("com.xiaomi.xmsf")
-                logD("remove required packages to whitelist")
+                logI("remove required packages to whitelist")
             }
         }
         classXSpaceManager.getObjSAs<MutableList<String>?>(
             "sPublicActionList"
         )?.run {
             clear()
-            logD("clear publicActionList")
+            logI("clear publicActionList")
         }
     }
 
@@ -203,7 +203,7 @@ class SystemServerHandler : IHook() {
             val sourceInfo = sourceRecord?.getObjAsN<ActivityInfo>("info")
             if (config.forceNewTaskDebug) {
                 val resultWho = request.getObj("resultWho")
-                logD("new intent start requestCode=$requestCode intent=$intent resultWho=$resultWho source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
+                logI("new intent start requestCode=$requestCode intent=$intent resultWho=$resultWho source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
             }
             if (intent == null) return@hookAllBefore
             if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return@hookAllBefore
@@ -234,7 +234,7 @@ class SystemServerHandler : IHook() {
                     // do not handle startActivityForResult, except user forced.
                     val requestCode = request.getObjAs<Int>("requestCode")
                     if (requestCode >= 0 && !it.ignoreResult) {
-                        logD("not handling requestCode >= 0: $requestCode")
+                        if (config.forceNewTaskDebug) logI("not handling requestCode >= 0: $requestCode")
                         return@forEach
                     }
                     if (config.forceNewTaskDebug) logI("forceNewTask: matched $it")
@@ -269,7 +269,7 @@ class SystemServerHandler : IHook() {
                     intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
                         config = SystemServerConfig.parseFrom(it)
                         findOrCreateConfigFile().writeBytes(it)
-                        logD("onReceive: update config $config")
+                        logI("onReceive: update config $config")
                     }
                 } else {
                     logE("onReceive: invalid caller $caller")
@@ -325,7 +325,7 @@ class SystemServerHandler : IHook() {
                 handler,
                 flags
             )
-            logD("registerBroadcast: registered")
+            logI("registerBroadcast: registered")
         } catch (t: Throwable) {
             logE("registerBroadcast: ", t)
             handler.postDelayed(registerBroadcast, 1000)

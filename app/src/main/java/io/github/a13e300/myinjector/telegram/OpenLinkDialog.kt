@@ -14,7 +14,6 @@ import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
-import io.github.a13e300.myinjector.logD
 
 // 自动修正一些包含了错误字符的链接，在打开时提供 fix 选项以打开修复后的链接
 class OpenLinkDialog : DynHook() {
@@ -27,7 +26,6 @@ class OpenLinkDialog : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.openLinkDialog
 
     override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
-        logD("hookOpenLinkDialog")
         val classBaseFragment = findClass("org.telegram.ui.ActionBar.BaseFragment")
 
         val fixLink = ThreadLocal<FixLink>()
@@ -35,8 +33,6 @@ class OpenLinkDialog : DynHook() {
         val escapeChars = Regex("[^!#\$&'*+\\(\\),-./:;%=\\?@_~0-9A-Za-z]")
         val classBrowser = findClass("org.telegram.messenger.browser.Browser")
         val classChatActivity = findClass("org.telegram.ui.ChatActivity")
-
-        logD("hookOpenLinkDialog: start hook")
 
         classChatActivity.hookAllBefore("processExternalUrl", cond = ::isEnabled) { param ->
             val url = param.args[1] as String
@@ -70,7 +66,6 @@ class OpenLinkDialog : DynHook() {
                     val inlineReturn = if (classChatActivity.isInstance(frag))
                         frag.call("getInlineReturn")
                     else 0
-                    logD("open ${it.url}")
                     classBrowser.callS(
                         "openUrl",
                         frag.call("getParentActivity"),

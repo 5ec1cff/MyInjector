@@ -13,7 +13,6 @@ import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
-import io.github.a13e300.myinjector.logD
 
 // 在 emoji 和 sticker 查看页面增加更多按钮，包括查看创建者(id)和导出 emoji 信息
 class EmojiStickerMenu : DynHook() {
@@ -72,7 +71,6 @@ class EmojiStickerMenu : DynHook() {
                 ).show()
             }
             if (param.args[0] != MENU_DUMP) return@hookAllBefore
-            logD("dump: clicked")
             val customEmojiPacks = param.thisObject.getObj("customEmojiPacks")
             val stickerSets = customEmojiPacks.getObj("stickerSets") as List<*>
             val str = StringBuilder()

@@ -1,8 +1,8 @@
 package io.github.a13e300.myinjector.arch
 
 import android.content.pm.ApplicationInfo
-import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
+import io.github.a13e300.myinjector.logI
 import org.json.JSONObject
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.result.FieldData
@@ -76,7 +76,7 @@ fun IHook.createObfsTable(
                     outMap[rk] = methodInfo
                 }
             }
-            logD("use cached obfs-table $name $tableFile")
+            logI("use cached obfs-table $name $tableFile")
             return outMap
         }.onFailure {
             logE("parsing obfs-table $tableFile", it)
@@ -104,7 +104,7 @@ fun IHook.createObfsTable(
         }.onFailure {
             logE("save obfs-table $tableFile", it)
         }.onSuccess {
-            logD("created obfs-table $name $tableFile")
+            logI("created obfs-table $name $tableFile")
         }
     }
 }

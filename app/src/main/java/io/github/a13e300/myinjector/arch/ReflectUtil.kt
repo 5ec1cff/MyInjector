@@ -4,7 +4,6 @@ package io.github.a13e300.myinjector.arch
 
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
-import io.github.a13e300.myinjector.logD
 import java.lang.reflect.Member
 import java.lang.reflect.Method
 
@@ -53,7 +52,6 @@ private val deoptimizeMethodMethod: Method by lazy {
 }
 
 fun Method.deoptimize() {
-    logD("deoptimizing $this")
     deoptimizeMethodMethod.invoke(null, this)
 }
 

@@ -25,7 +25,6 @@ class FvXposedHandler : IHook() {
             findClass("dalvik.system.VMRuntime")
                 .callS("getRuntime")
                 .call("setHiddenApiExemptions", arrayOf("L"))
-            logD("success to bypass")
         } catch (t: Throwable) {
             logE("failed to bypass", t)
         }

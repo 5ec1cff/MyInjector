@@ -22,7 +22,6 @@ class ChromeHandler : IHook() {
         hookNoDetectObscure()
         if (loadPackageParam.processName.contains(":")) return
         val name = loadPackageParam.appInfo.className
-        logD("app name $name")
         // ensure split apk (split-chrome) is loaded, see:
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitCompatAppComponentFactory.java;l=136?q=SplitCompatAppComponentFactory&ss=chromium
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitChromeApplication.java;l=33?q=SplitChromeApplication&ss=chromium
@@ -34,7 +33,6 @@ class ChromeHandler : IHook() {
             m.hookAfter { param ->
                 // real classloader will be available after onCreate
                 val loader = (param.thisObject as Context).classLoader
-                logD("afterHookedMethod: get classloader $loader")
                 hookSwipeRefresh(loader)
             }
         } else {
@@ -61,13 +59,11 @@ class ChromeHandler : IHook() {
                     usingStrings("SwipeRefreshHandler.pull")
                 }
             }.single()
-            logD("prepare: found method: $pullMethod")
             val releaseMethod = pullMethod.declaredClass!!.findMethod {
                 matcher {
                     usingStrings("SwipeRefreshHandler.release")
                 }
             }.single()
-            logD("prepare: found method: $releaseMethod")
 
             mutableMapOf(
                 KEY_swipeRefreshHander_Pull to pullMethod.toObfsInfo(),

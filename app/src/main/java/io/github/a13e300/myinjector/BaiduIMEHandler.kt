@@ -33,7 +33,6 @@ class BaiduIMEHandler : IHook() {
             val activity = param.thisObject as Activity
             val intent = activity.intent ?: return@hookAllAfter
             if (intent.hasExtra("ime.intent_keys.next_route_path")) {
-                logD("afterHookedMethod: finish it")
                 activity.finish()
             }
         }

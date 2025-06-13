@@ -1,7 +1,5 @@
 package io.github.a13e300.myinjector;
 
-import static io.github.a13e300.myinjector.LogKt.logD;
-
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
@@ -91,7 +89,6 @@ public class SettingsActivity extends Activity {
         }
 
         private void commitSystem() {
-            logD("commit", null);
             var context = getContext();
             var intent = new Intent("io.github.a13e300.myinjector.UPDATE_SYSTEM_CONFIG");
             var pendingIntent = PendingIntent.getBroadcast(context, 1, intent, PendingIntent.FLAG_IMMUTABLE);
@@ -188,7 +185,6 @@ public class SettingsActivity extends Activity {
         }
 
         private void commitSystemUI() {
-            logD("commitSystemUI", null);
             var context = getContext();
             var intent = new Intent("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG");
             var pendingIntent = PendingIntent.getBroadcast(context, 1, intent, PendingIntent.FLAG_IMMUTABLE);

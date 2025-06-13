@@ -41,19 +41,12 @@ class ZhihuXposedHandler : IHook() {
                     matcher {
                         usingEqStrings("FeedRepository", "use cache")
                     }
-                }.also {
-                    it.forEach { m ->
-                        logD("$m")
-                    }
-
                 }.single()
-                logD("prepare: found method: $method")
                 val field = method.declaredClass!!.findField {
                     matcher {
                         type(ClassMatcher().className("io.reactivex.subjects.ReplaySubject"))
                     }
                 }.single()
-                logD("prepare: found field: $field")
 
                 mutableMapOf(
                     KEY_localSourceMethod to method.toObfsInfo(),
@@ -67,7 +60,6 @@ class ZhihuXposedHandler : IHook() {
                 val b = param.thisObject.getObj(field.memberName) // ReplaySubject
                 b.call("onComplete") // call onComplete to prevent from update
             }
-            logD("hookDisableAutoRefresh success")
         }.onFailure {
             logE("hookDisableAutoRefresh: failed", it)
         }

@@ -42,7 +42,7 @@ class MIUISecurityCenterHandler : IHook() {
             null
         )?.use { c ->
             if (c.moveToNext()) {
-                return c.getInt(0).also { logD("get $packageName flags $it") }
+                return c.getInt(0)
             }
         }
         return 0
@@ -212,7 +212,6 @@ class MIUISecurityCenterHandler : IHook() {
             val dimenAmMainPageMarginSe =
                 ctx.resources.getIdentifier("am_main_page_margin_se", "dimen", pkgName)
 
-            logD("id=$idAmDetailAs")
             val viewAmDetailAs = ctx.findViewById<View>(idAmDetailAs)
             val container = viewAmDetailAs.parent as? LinearLayout ?: return@hookAfter
             val idx = container.indexOfChild(viewAmDetailAs)

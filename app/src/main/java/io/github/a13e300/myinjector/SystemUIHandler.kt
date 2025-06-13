@@ -71,10 +71,10 @@ class SystemUIHandler : IHook() {
     private fun loadConfig() = runCatching {
         if (configPath.isFile) {
             config = configPath.inputStream().use { SystemUIConfig.parseFrom(it) }
-            logD("loaded config $config")
+            logI("loaded config $config")
         } else {
             config = SystemUIConfig.getDefaultInstance()
-            logD("use default config")
+            logI("use default config")
         }
     }.onFailure {
         logE("failed to load config from $configPath", it)
@@ -261,7 +261,7 @@ class SystemUIHandler : IHook() {
                     intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
                         config = SystemUIConfig.parseFrom(it)
                         configPath.writeBytes(it)
-                        logD("onReceive: update config $config")
+                        logI("onReceive: update config $config")
                     }
                 } else {
                     logE("onReceive: invalid caller $caller")
@@ -284,7 +284,7 @@ class SystemUIHandler : IHook() {
                 null,
                 flags
             )
-            logD("registerBroadcast: registered")
+            logI("registerBroadcast: registered")
         } catch (t: Throwable) {
             logE("registerBroadcast: ", t)
         }
