@@ -17,16 +17,17 @@ android
 
 可以在模块列表找到本模块进入设置以配置系统服务的相关 hook ，部分功能的配置即时生效。
 
-- 强制 NEW_TASK 规则：给某些 Activity 自动加上 NEW_TASK 或者 NEW_DOCUMENT flag
-  ，支持通过启动来源的包名/组件名和被启动的包名/组件名编写规则来匹配
-- 一行一个规则，形如 `<source>:<target>[:options]` ，source/target可以是包名或组件名(用/分隔)
-  ，可以用*表示除了自己之外的所有包。options用逗号分割，支持的选项包含ir(
-  ignoreResult，允许startActivityForResult也使用NEW_TASK，这会导致返回值失效)和 `nd` (
-  newDocument，默认使用新窗口打开，效果取决于目标 activity 的类型)
-- 例 1： `com.tencent.mm/com.tencent.mm.plugin.appbrand.ui.AppBrandUI*:com.android.contacts:ir`
-  表示微信小程序打开电话时设置 new task ，忽略结果
-- 例 2： `tv.danmaku.bili/tv.danmaku.bili.ui.intent.IntentHandlerActivity:tv.danmaku.bili:nd` 哔哩哔哩内部
-  intent 分发器打开自身都使用 new task + new document
+- 强制 NEW_TASK 规则：给某些 Activity 自动加上 NEW_TASK 或者 NEW_DOCUMENT
+  flag，支持通过启动来源的包名/组件名和被启动的包名/组件名编写规则来匹配
+  - 一行一个规则，形如 `<source>:<target>[:options]` ，source/target可以是包名或组件名(用/分隔)
+    ，可以用*表示除了自己之外的所有包。options用逗号分割，支持的选项包含ir(
+    ignoreResult，允许startActivityForResult也使用NEW_TASK，这会导致返回值失效)和 `nd` (
+    newDocument，默认使用新窗口打开，效果取决于目标 activity 的类型)
+  - 例 1： `com.tencent.mm/com.tencent.mm.plugin.appbrand.ui.AppBrandUI*:com.android.contacts:ir`
+    表示微信小程序打开电话时设置 new task ，忽略结果
+  - 例 2： `tv.danmaku.bili/tv.danmaku.bili.ui.intent.IntentHandlerActivity:tv.danmaku.bili:nd`
+    哔哩哔哩内部
+    intent 分发器打开自身都使用 new task + new document
 - 剪切板白名单（允许某些 app 后台监听剪切板）
 - 允许关闭 miui wakepath 功能（即跨 app 打开启动可能弹出的询问）
 - 允许移除某些 miui 锁定的 intent
@@ -198,5 +199,5 @@ com.meizu.customizecenter
 
 # Credits
 
-[哔哩漫游](https://github.com/yujincheng08/BiliRoaming)
-[DexKit](https://github.com/LuckyPray/DexKit)
+[哔哩漫游](https://github.com/yujincheng08/BiliRoaming)  
+[DexKit](https://github.com/LuckyPray/DexKit)  
