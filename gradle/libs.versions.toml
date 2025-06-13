@@ -1,10 +1,10 @@
 [versions]
-dexkit = "2.0.1"
+dexkit = "2.0.5"
 kotlin = "2.1.21"
-agp = "8.10.0"
+agp = "8.10.1"
 xposed = "82"
 annotation = "1.9.1"
-protobuf = "4.29.3"
+protobuf = "4.31.1"
 
 [libraries]
 dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
@@ -19,4 +19,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-protobuf = { id = "com.google.protobuf", version = "0.9.4" }
+protobuf = { id = "com.google.protobuf", version = "0.9.5" }
