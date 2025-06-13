@@ -4,10 +4,10 @@ plugins {
 
 android {
     namespace = "io.github.a13e300.hidden_api"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
-        minSdk = 30
+        minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
     }
 
