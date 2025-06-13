@@ -1,7 +1,7 @@
 import com.android.build.gradle.tasks.PackageAndroidArtifact
 import com.google.protobuf.gradle.id
-import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
+import java.nio.charset.StandardCharsets
 import java.util.Properties
 
 plugins {
@@ -17,15 +17,17 @@ val keystoreProperties = if (keystorePropertiesFile.exists() && keystoreProperti
     }
 } else null
 
-fun String.execute(currentWorkingDir: File = file("./")): String {
-    val byteOut = ByteArrayOutputStream()
-    project.exec {
-        workingDir = currentWorkingDir
-        commandLine = split("\\s".toRegex())
-        standardOutput = byteOut
-    }
-    return String(byteOut.toByteArray()).trim()
-}
+fun String.execute(): String =
+    Runtime.getRuntime().exec(split("\\s".toRegex()).toTypedArray())
+        .let { proc ->
+            proc.waitFor()
+            val result = proc.inputStream.use {
+                it.readBytes()
+            }.toString(StandardCharsets.UTF_8).trim()
+            proc.destroy()
+            result
+        }
+
 
 val gitCommitCount = "git rev-list HEAD --count".execute().toInt()
 val gitCommitHash = "git rev-parse --verify --short HEAD".execute()
@@ -49,7 +51,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "$gitCommitCount-$gitCommitHash"
-        setProperty("archivesBaseName", "MyInjector-$versionName")
+
+        base.archivesName = "MyInjector-$versionName"
         ndk {
             //noinspection ChromeOsAbiSupport
             abiFilters += "arm64-v8a"
