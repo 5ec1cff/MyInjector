@@ -126,6 +126,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "hidePhoneNumberForSelfOnly" ->
                 settings.hidePhoneNumberForSelfOnly = v
+
+            "alwaysShowStorySaveIcon" ->
+                settings.alwaysShowStorySaveIcon = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -218,6 +221,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
                     "sendImageWithHighQualityByDefault" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.sendImageWithHighQualityByDefault
+
+                    "alwaysShowStorySaveIcon" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.alwaysShowStorySaveIcon
 
                     "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.hidePhoneNumber
@@ -381,6 +387,10 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                     "默认发送高清晰度图像",
                     "sendImageWithHighQualityByDefault",
                     "需要 11.12.0 (5997) 或更高版本"
+                )
+                switchPreference(
+                    "总是允许保存动态图片",
+                    "alwaysShowStorySaveIcon"
                 )
             }
 

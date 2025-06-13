@@ -26,4 +26,5 @@ message TelegramSettings {
   optional bool sendImageWithHighQualityByDefault = 17;
   optional bool hidePhoneNumber = 18;
   optional bool hidePhoneNumberForSelfOnly = 19;
+  optional bool alwaysShowStorySaveIcon = 20;
 }

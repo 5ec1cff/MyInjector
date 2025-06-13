@@ -90,6 +90,7 @@ object TelegramHandler : IHook() {
         subHook(SendImageWithHighQualityByDefault())
         subHook(HidePhoneNumber())
         subHook(Settings())
+        subHook(AlwaysShowStorySaveIcon())
     }
 
     private fun subHook(hook: DynHook) {
