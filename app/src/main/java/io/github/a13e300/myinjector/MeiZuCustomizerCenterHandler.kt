@@ -8,7 +8,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 import java.io.File
 
 class MeiZuCustomizerCenterHandler : IHook() {
-    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         hookDir()
     }
 

@@ -7,7 +7,7 @@ import io.github.a13e300.myinjector.arch.hookConstantIf
 class FakeInstallPermission : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.fakeInstallPermission
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         findClass("android.app.ApplicationPackageManager").hookConstantIf(
             "canRequestPackageInstalls",
             constant = true

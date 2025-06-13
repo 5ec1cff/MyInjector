@@ -155,7 +155,7 @@ object CustomEmojiMapping : DynHook() {
         }
     }
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         hookPasteCustomEmoji()
         hookEmojiManage()
     }

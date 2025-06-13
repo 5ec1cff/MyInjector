@@ -68,8 +68,8 @@ object TelegramHandler : IHook() {
 
     private val hooks = mutableListOf<DynHook>()
 
-    override fun onHook(param: LoadPackageParam) {
-        settingFile = File(param.appInfo.dataDir, "my_injector_settings")
+    override fun onHook(loadPackageParam: LoadPackageParam) {
+        settingFile = File(loadPackageParam.appInfo.dataDir, "my_injector_settings")
         readSettings()
 
         subHook(OpenLinkDialog())

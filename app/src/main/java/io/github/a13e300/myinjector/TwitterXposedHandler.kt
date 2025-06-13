@@ -13,9 +13,12 @@ val TWITTER_BROKEN_ACTIVITIES = listOf(
 )
 
 class TwitterXposedHandler : IHook() {
-    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (lpparam.packageName != "com.twitter.android" || !lpparam.processName.startsWith("com.twitter.android")) return
-        logI("inject twitter, pid=${Process.myPid()}, processName=${lpparam.processName}")
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+        if (loadPackageParam.packageName != "com.twitter.android" || !loadPackageParam.processName.startsWith(
+                "com.twitter.android"
+            )
+        ) return
+        logI("inject twitter, pid=${Process.myPid()}, processName=${loadPackageParam.processName}")
         findClass("android.app.Activity").hookAllAfter("onCreate") { param ->
             if (param.thisObject.javaClass.name in TWITTER_BROKEN_ACTIVITIES) {
                 // 修复 bitwarden 在 twitter 的搜索页面中错误地显示自动填充的问题

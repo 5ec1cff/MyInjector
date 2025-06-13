@@ -17,7 +17,7 @@ import io.github.a13e300.myinjector.arch.hookBefore
 // https://cs.android.com/android/platform/superproject/main/+/main:packages/modules/IntentResolver/java/src/com/android/intentresolver/ResolverActivity.java;l=229;drc=dc5cdc53ca218c912d9ffe0d3fcc0a99538cdb60
 
 class IntentResolverHandler : IHook() {
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val ra = findClass("com.android.intentresolver.ResolverActivity")
         ra.hookBefore("onCreate", Bundle::class.java) { param ->
             (param.thisObject as Activity).intent.run {

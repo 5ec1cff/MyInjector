@@ -10,7 +10,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 class AutoUncheckSharePhoneNumber : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoUncheckSharePhoneNumber
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         findClass("org.telegram.ui.ContactAddActivity").hookAllAfter(
             "createView",
             cond = ::isEnabled

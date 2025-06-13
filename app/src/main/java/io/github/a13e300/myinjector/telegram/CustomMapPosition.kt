@@ -16,7 +16,7 @@ import io.github.a13e300.myinjector.arch.hookAllCAfter
 class CustomMapPosition : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customMapPosition
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         // 聊天发送
         val caall = findClass("org.telegram.ui.Components.ChatAttachAlertLocationLayout")
         caall.hookAllCAfter(cond = ::isEnabled) { param ->

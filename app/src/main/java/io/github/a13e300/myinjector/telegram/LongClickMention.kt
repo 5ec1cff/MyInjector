@@ -17,7 +17,7 @@ import java.lang.reflect.Proxy
 class LongClickMention : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.longClickMention
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val longClickListenerClass =
             findClass("org.telegram.ui.Components.RecyclerListView\$OnItemLongClickListener")
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")

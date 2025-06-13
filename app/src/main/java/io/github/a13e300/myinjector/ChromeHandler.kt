@@ -18,10 +18,10 @@ class ChromeHandler : IHook() {
         private const val KEY_swipeRefreshHander_Release = "swipeRefreshHander_Release"
     }
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         hookNoDetectObscure()
-        if (param.processName.contains(":")) return
-        val name = param.appInfo.className
+        if (loadPackageParam.processName.contains(":")) return
+        val name = loadPackageParam.appInfo.className
         logD("app name $name")
         // ensure split apk (split-chrome) is loaded, see:
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitCompatAppComponentFactory.java;l=136?q=SplitCompatAppComponentFactory&ss=chromium

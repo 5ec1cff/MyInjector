@@ -29,5 +29,5 @@ abstract class IHook {
     protected fun findClassOrNull(name: String): Class<*>? =
         XposedHelpers.findClassIfExists(name, classLoader)
 
-    protected abstract fun onHook(param: XC_LoadPackage.LoadPackageParam)
+    protected abstract fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam)
 }

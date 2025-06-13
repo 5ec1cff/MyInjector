@@ -9,7 +9,7 @@ class SendImageWithHighQualityByDefault : DynHook() {
     override fun isFeatureEnabled(): Boolean =
         TelegramHandler.settings.sendImageWithHighQualityByDefault
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val classMediaEditState =
             findClass("org.telegram.messenger.MediaController\$MediaEditState")
         classMediaEditState.hookAllCAfter(cond = ::isEnabled) { param ->

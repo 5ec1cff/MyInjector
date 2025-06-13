@@ -49,7 +49,7 @@ class SystemServerHandler : IHook() {
     private lateinit var thread: HandlerThread
     private lateinit var handler: Handler
 
-    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         logD("handleLoadPackage: initialize")
         config = readConfig()
         hookNoWakePath()

@@ -12,7 +12,7 @@ import io.github.a13e300.myinjector.logD
 class FixHasAppToOpen : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.fixHasAppToOpen
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val inBrowserOpenUrl = ThreadLocal<Boolean>()
         val started = ThreadLocal<Boolean>()
         val browserClass = findClass("org.telegram.messenger.browser.Browser")

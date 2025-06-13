@@ -26,7 +26,7 @@ class OpenLinkDialog : DynHook() {
 
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.openLinkDialog
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         logD("hookOpenLinkDialog")
         val classBaseFragment = findClass("org.telegram.ui.ActionBar.BaseFragment")
 

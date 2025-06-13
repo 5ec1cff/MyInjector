@@ -17,9 +17,10 @@ class FvXposedHandler : IHook() {
         private val KEY_CallsShowDialog = "CallsShowDialog"
         private val KEY_backToHome = "BackToHome"
     }
-    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (lpparam.packageName != "com.fooview.android.fooview") return
-        logI("inject fv, pid=${Process.myPid()}, processName=${lpparam.processName}")
+
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+        if (loadPackageParam.packageName != "com.fooview.android.fooview") return
+        logI("inject fv, pid=${Process.myPid()}, processName=${loadPackageParam.processName}")
         try {
             findClass("dalvik.system.VMRuntime")
                 .callS("getRuntime")
@@ -29,7 +30,7 @@ class FvXposedHandler : IHook() {
             logE("failed to bypass", t)
         }
 
-        if (lpparam.processName.endsWith(":fv"))
+        if (loadPackageParam.processName.endsWith(":fv"))
             hookNoTipNotificationPerm()
     }
 

@@ -64,8 +64,8 @@ class MIUISecurityCenterHandler : IHook() {
     }
 
     @SuppressLint("DiscouragedApi")
-    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (lpparam.packageName == "com.miui.securitycenter") {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+        if (loadPackageParam.packageName == "com.miui.securitycenter") {
             hookSkipWarning()
             hookAddKeepAutoStart()
         }
@@ -76,12 +76,12 @@ class MIUISecurityCenterHandler : IHook() {
             "com.miui.permcenter.privacymanager.SpecialPermissionInterceptActivity"
         )
         var method: Method? = null
-        var clz = activityClass
+        var clz: Class<*> = activityClass
         while (method == null) {
             try {
                 method = clz.getDeclaredMethod("onCreate", Bundle::class.java)
             } catch (_: NoSuchMethodException) {
-                clz = clz.superclass
+                clz = clz.superclass!!
             }
         }
         method.hookBefore { param ->
@@ -107,6 +107,7 @@ class MIUISecurityCenterHandler : IHook() {
         }
     }.onFailure { logE("hookSkipAdbWarning: ", it) }
 
+    @SuppressLint("DiscouragedApi")
     private fun hookAddKeepAutoStart() = runCatching {
         val classAppDetailsActivity =
             findClass(

@@ -27,8 +27,8 @@ class ZhihuXposedHandler : IHook() {
         private const val KEY_localSourceField = "localSourceField"
     }
 
-    override fun onHook(lpparam: LoadPackageParam) {
-        if (lpparam.packageName != "com.zhihu.android") return
+    override fun onHook(loadPackageParam: LoadPackageParam) {
+        if (loadPackageParam.packageName != "com.zhihu.android") return
         hookDisableFeedAutoRefresh()
         hookClipboard()
     }

@@ -8,8 +8,6 @@ import android.preference.PreferenceCategory
 import android.preference.PreferenceGroup
 import android.preference.PreferenceManager
 import android.preference.SwitchPreference
-import android.view.View
-import android.view.ViewGroup
 
 class SwitchPreferenceCompat(context: Context) : SwitchPreference(context) {
     @Deprecated("Deprecated in Java")
@@ -19,10 +17,6 @@ class SwitchPreferenceCompat(context: Context) : SwitchPreference(context) {
 }
 
 class PreferenceCompat(context: Context) : Preference(context) {
-    override fun onCreateView(parent: ViewGroup?): View? {
-        return super.onCreateView(parent).also { }
-    }
-
     @Deprecated("Deprecated in Java")
     override fun onAttachedToHierarchy(preferenceManager: PreferenceManager?) {
 

@@ -13,7 +13,7 @@ import io.github.a13e300.myinjector.arch.hookBefore
 class AutoCheckDeleteMessageOption : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoCheckDeleteMessageOption
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val isCreating = ThreadLocal<Boolean>()
         val alertDialogClass = findClass("org.telegram.ui.ActionBar.AlertDialog")
         val checkBoxCellClass = findClass("org.telegram.ui.Cells.CheckBoxCell")

@@ -17,7 +17,8 @@ import io.github.a13e300.myinjector.logD
 class MutualContact : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.mutualContact
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    @Suppress("DEPRECATION")
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val drawable = Entry.moduleRes.getDrawable(R.drawable.ic_mutual_contact)
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
         findClass("org.telegram.ui.Cells.UserCell").hookAllAfter(

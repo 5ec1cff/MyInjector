@@ -1,5 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.annotation.SuppressLint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.view.View
@@ -19,7 +20,8 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 class HidePhoneNumber : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.hidePhoneNumber
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    @SuppressLint("DiscouragedApi")
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val classDrawerProfileCell = findClass("org.telegram.ui.Cells.DrawerProfileCell")
         var show = false
         classDrawerProfileCell.hookAllAfter("setUser", cond = ::isEnabled) { param ->

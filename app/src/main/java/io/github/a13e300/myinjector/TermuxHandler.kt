@@ -10,8 +10,8 @@ import io.github.a13e300.myinjector.arch.hookAllNop
 import io.github.a13e300.myinjector.arch.hookBefore
 
 class TermuxHandler : IHook() {
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
-        if (param.packageName != "com.termux") return
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+        if (loadPackageParam.packageName != "com.termux") return
         val mainActivity = findClass("com.termux.app.TermuxActivity")
         Activity::class.java.hookBefore("finish") { param ->
             if (param.thisObject.javaClass == mainActivity) {

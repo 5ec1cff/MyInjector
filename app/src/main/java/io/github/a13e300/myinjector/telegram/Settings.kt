@@ -538,7 +538,7 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 }
 
 class Settings : IHook() {
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val drawerLayoutAdapterClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter")
         val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")
 

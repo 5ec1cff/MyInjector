@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DisableVoiceOrCameraButton : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableVoiceOrCameraButton
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         val subHookFound = AtomicBoolean(false)
         findClass("org.telegram.ui.Components.ChatActivityEnterView").hookAllCAfter { param ->
             if (!isEnabled()) return@hookAllCAfter

@@ -41,7 +41,7 @@ fun Context.addModuleAssets(path: String) {
     resources.assets.call("addAssetPath", path)
 }
 
-@SuppressWarnings("deprecation")
+@Suppress("deprecation")
 fun <T : Parcelable> Intent.getParcelableExtraCompat(key: String, clz: Class<T>): T? =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         getParcelableExtra(key, clz)

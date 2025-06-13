@@ -15,7 +15,7 @@ class BaiduIMEHandler : IHook() {
         private const val KEY_showMethod = "showMethod"
     }
 
-    override fun onHook(param: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
         hookSplash()
         hookContactSuggestion()
     }

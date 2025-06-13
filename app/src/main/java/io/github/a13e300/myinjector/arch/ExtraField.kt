@@ -4,8 +4,10 @@ import de.robv.android.xposed.XposedHelpers
 import kotlin.reflect.KProperty
 
 class ExtraField<T>(private val bound: Any, private val name: String, private val defValue: T) {
+    @Suppress("UNCHECKED_CAST")
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
-        return XposedHelpers.getAdditionalInstanceField(bound, name) as? T ?: defValue
+        // It should be a `T?`
+        return XposedHelpers.getAdditionalInstanceField(bound, name) as T? ?: defValue
     }
 
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {

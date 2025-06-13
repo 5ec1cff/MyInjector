@@ -81,9 +81,10 @@ class SystemUIHandler : IHook() {
     }
 
     @SuppressLint("SetTextI18n")
-    override fun onHook(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (lpparam.packageName != "com.android.systemui") return
-        configPath = File(lpparam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
+    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+        if (loadPackageParam.packageName != "com.android.systemui") return
+        configPath =
+            File(loadPackageParam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
         loadConfig()
         hookPlugin()
         hookNotificationInfo()
