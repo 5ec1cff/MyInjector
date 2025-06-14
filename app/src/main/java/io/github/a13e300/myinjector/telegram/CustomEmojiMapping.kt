@@ -52,12 +52,13 @@ object CustomEmojiMapping : DynHook() {
                     val m2 = _emotionMap
                     if (m2 == null) {
                         val f = AndroidAppHelper.currentApplication().getEmotionMapFile()
-                        val mp = try {
-                            loadEmotionMap(f.readText())
-                        } catch (t: Throwable) {
-                            logE("load emotion map from $f failed  ", t)
-                            EmotionMap(emptyMap(), Regex(""))
-                        }
+                        val mp = runCatching {
+                            if (f.isFile)
+                                loadEmotionMap(f.readText())
+                            else null
+                        }.onFailure {
+                            logE("load emotion map from $f failed  ", it)
+                        }.getOrNull() ?: EmotionMap(emptyMap(), Regex(""))
                         _emotionMap = mp
                         return mp
                     }
