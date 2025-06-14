@@ -28,7 +28,18 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.lbe.security.miui" -> LbeHandler()
             "com.miui.securitycenter" -> MIUISecurityCenterHandler()
             "com.twitter.android" -> TwitterXposedHandler()
-            "org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.messenger.beta", "org.telegram.plus", "com.exteragram.messenger" -> TelegramHandler
+            in listOf(
+                "org.telegram.messenger",
+                "org.telegram.messenger.web",
+                "org.telegram.messenger.beta",
+                "org.telegram.plus",
+                "com.exteragram.messenger",
+                "com.radolyn.ayugram",
+                "uz.unnarsx.cherrygram",
+                "xyz.nextalone.nagram",
+                "nu.gpu.nagram",
+                "com.xtaolabs.pagergram"
+            ) -> TelegramHandler
             "com.termux" -> TermuxHandler()
             "com.android.systemui" -> SystemUIHandler()
             "com.zhihu.android" -> ZhihuXposedHandler()
