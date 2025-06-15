@@ -129,6 +129,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "alwaysShowStorySaveIcon" ->
                 settings.alwaysShowStorySaveIcon = v
+
+            "removeArchiveFolder" ->
+                settings.removeArchiveFolder = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -224,6 +227,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
                     "alwaysShowStorySaveIcon" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.alwaysShowStorySaveIcon
+
+                    "removeArchiveFolder" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.removeArchiveFolder
 
                     "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.hidePhoneNumber
@@ -391,6 +397,10 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                 switchPreference(
                     "总是允许保存动态图片",
                     "alwaysShowStorySaveIcon"
+                )
+                switchPreference(
+                    "移除下拉归档",
+                    "removeArchiveFolder"
                 )
             }
 

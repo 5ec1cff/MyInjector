@@ -27,4 +27,5 @@ message TelegramSettings {
   optional bool hidePhoneNumber = 18;
   optional bool hidePhoneNumberForSelfOnly = 19;
   optional bool alwaysShowStorySaveIcon = 20;
+  optional bool removeArchiveFolder = 21;
 }

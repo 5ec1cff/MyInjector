@@ -91,6 +91,7 @@ object TelegramHandler : IHook() {
         subHook(HidePhoneNumber())
         subHook(Settings())
         subHook(AlwaysShowStorySaveIcon())
+        subHook(RemoveArchiveFolder())
     }
 
     private fun subHook(hook: DynHook) {
