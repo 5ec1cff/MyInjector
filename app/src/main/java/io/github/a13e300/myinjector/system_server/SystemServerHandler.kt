@@ -1,7 +1,6 @@
-package io.github.a13e300.myinjector
+package io.github.a13e300.myinjector.system_server
 
-import android.app.ActivityThread
-import android.app.PendingIntent
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -9,26 +8,36 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
-import android.os.Build
-import android.os.Handler
-import android.os.HandlerThread
-import android.os.ServiceManager
 import android.view.View
 import android.view.WindowInsetsController
-import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.SystemServerConfig
 import io.github.a13e300.myinjector.arch.callS
+import io.github.a13e300.myinjector.arch.findClass
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjSAs
-import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
+import io.github.a13e300.myinjector.bridge.HotLoadHook
+import io.github.a13e300.myinjector.bridge.LoadPackageParam
+import io.github.a13e300.myinjector.bridge.Unhook
+import io.github.a13e300.myinjector.logE
+import io.github.a13e300.myinjector.logI
+import io.github.a13e300.myinjector.logW
 import java.io.File
+import java.lang.Long
 import java.util.UUID
-
+import kotlin.Boolean
+import kotlin.Int
+import kotlin.String
+import kotlin.Suppress
+import kotlin.let
+import kotlin.onFailure
+import kotlin.run
+import kotlin.runCatching
 
 fun matchSimple(p: String, s: String?): Boolean {
     if (s == null) return false
@@ -38,27 +47,43 @@ fun matchSimple(p: String, s: String?): Boolean {
     return p == s
 }
 
-class SystemServerHandler : IHook() {
+class SystemServerHandler : HotLoadHook() {
     companion object {
         private const val CONFIG_PATH = "/data/misc"
         private const val CONFIG_PREFIX = "my_injector_system_"
+
     }
 
     private lateinit var config: SystemServerConfig
-    private lateinit var thread: HandlerThread
-    private lateinit var handler: Handler
+    private lateinit var broadcastManager: BroadcastManager
 
-    override fun onHook() {
+    private lateinit var loadPackageParam: LoadPackageParam
+    private val hooks = mutableListOf<Unhook>()
+
+    fun findClass(name: String) = loadPackageParam.classLoader.findClass(name)
+
+    override fun onLoad(param: LoadPackageParam) {
+        loadPackageParam = param
         logI("hook system")
         config = readConfig()
+        logI("config for system server: $config")
         hookNoWakePath()
         hookNoMiuiIntent()
         hookClipboardWhitelist()
         hookFixSync()
-        setXSpace()
+        setXSpace(config.xSpace)
         hookForceNewTask()
         hookStatusBarAppearance()
+        broadcastManager = BroadcastManager("MyInjector-SystemServer")
         runConfigListener()
+    }
+
+    override fun onUnload() {
+        broadcastManager.unregister(receiver)
+        broadcastManager.stop()
+        setXSpace(false)
+        hooks.forEach { it.unhook() }
+        hooks.clear()
     }
 
     private fun findOrCreateConfigFile(): File {
@@ -103,39 +128,41 @@ class SystemServerHandler : IHook() {
     }
 
     private fun hookNoWakePath() = runCatching {
-        findClass("miui.app.ActivitySecurityHelper").hookAllNopIf("getCheckStartActivityIntent") {
+        hooks.addAll(findClass("miui.app.ActivitySecurityHelper").hookAllNopIf("getCheckStartActivityIntent") {
             config.noWakePath
-        }
-        findClass("miui.security.SecurityManager").hookAllNopIf("getCheckStartActivityIntent") {
+        })
+        hooks.addAll(findClass("miui.security.SecurityManager").hookAllNopIf("getCheckStartActivityIntent") {
             config.noWakePath
-        }
+        })
     }.onFailure {
         logE("hookNoWakePath: ", it)
     }
 
     private fun hookNoMiuiIntent() = runCatching {
-        findClass("com.android.server.pm.PackageManagerServiceImpl").hookBefore(
+        hooks.add(
+            findClass("com.android.server.pm.PackageManagerServiceImpl").hookBefore(
             "hookChooseBestActivity",
             Intent::class.java,
             String::class.java,
-            java.lang.Long.TYPE,
+                Long.TYPE,
             List::class.java,
             Integer.TYPE,
             ResolveInfo::class.java
         ) { param ->
             param.result = param.args[5] // defaultValue
-        }
+            })
     }.onFailure {
         logE("hookNoMiuiIntent: ", it)
     }
 
     private fun hookClipboardWhitelist() = runCatching {
-        findClass("com.android.server.clipboard.ClipboardService")
+        hooks.addAll(
+            findClass("com.android.server.clipboard.ClipboardService")
             .hookAllBefore("clipboardAccessAllowed") { param ->
                 if (!config.clipboardWhitelist) return@hookAllBefore
                 val pkg = param.args[1]?.toString() ?: return@hookAllBefore
                 if (config.clipboardWhitelistPackagesList.contains(pkg)) param.result = true
-            }
+            })
     }.onFailure {
         logE("hookClipboardWhitelist: ", it)
     }
@@ -143,7 +170,8 @@ class SystemServerHandler : IHook() {
     private fun hookFixSync() = runCatching {
         // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/services/core/java/com/android/server/wm/WindowState.java;l=5756;drc=4eb30271c338af7ee6abcbd2b7a9a0721db0595b
         // some gone accessibility windows does not get synced
-        findClass("com.android.server.wm.WindowState")
+        hooks.addAll(
+            findClass("com.android.server.wm.WindowState")
             .hookAllBefore("isSyncFinished") { param ->
                 if (!config.fixSync) return@hookAllBefore
                 if (param.thisObject.getObj(
@@ -154,35 +182,40 @@ class SystemServerHandler : IHook() {
                     // XposedBridge.log("no wait on " + param.thisObject);
                     param.result = true
                 }
-            }
+            })
     }.onFailure {
         logE("hookFixSync: ", it)
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun setXSpace() {
-        val enabled = config.xSpace
-        val classXSpaceManager = findClass(
-            "com.miui.server.xspace.XSpaceManagerServiceImpl"
-        )
-        classXSpaceManager.getObjSAs<MutableList<String>?>(
-            "sCrossUserCallingPackagesWhiteList"
-        )?.run {
-            if (enabled) {
-                add("com.android.shell")
-                add("com.xiaomi.xmsf")
-                logI("add required packages to whitelist")
-            } else {
-                remove("com.android.shell")
-                remove("com.xiaomi.xmsf")
-                logI("remove required packages to whitelist")
+    private fun setXSpace(enabled: Boolean) {
+        runCatching {
+            val classXSpaceManager = findClass(
+                "com.miui.server.xspace.XSpaceManagerServiceImpl"
+            )
+            classXSpaceManager.getObjSAs<MutableList<String>?>(
+                "sCrossUserCallingPackagesWhiteList"
+            )?.run {
+                if (enabled) {
+                    add("com.android.shell")
+                    add("com.xiaomi.xmsf")
+                    logI("add required packages to whitelist")
+                } else {
+                    remove("com.android.shell")
+                    remove("com.xiaomi.xmsf")
+                    logI("remove required packages to whitelist")
+                }
             }
-        }
-        classXSpaceManager.getObjSAs<MutableList<String>?>(
-            "sPublicActionList"
-        )?.run {
-            clear()
-            logI("clear publicActionList")
+            if (enabled) {
+                classXSpaceManager.getObjSAs<MutableList<String>?>(
+                    "sPublicActionList"
+                )?.run {
+                    clear()
+                    logI("clear publicActionList")
+                }
+            }
+        }.onFailure {
+            logE("setXSpace $enabled", it)
         }
     }
 
@@ -190,7 +223,7 @@ class SystemServerHandler : IHook() {
         val activityStarter =
             findClass("com.android.server.wm.ActivityStarter")
         val activityRecordClass = findClass("com.android.server.wm.ActivityRecord")
-        activityStarter.hookAllBefore("executeRequest") { param ->
+        hooks.addAll(activityStarter.hookAllBefore("executeRequest") { param ->
             if (!config.forceNewTask && !config.forceNewTaskDebug) return@hookAllBefore
             val request = param.args[0]
             val requestCode = request.getObjAs<Int>("requestCode")
@@ -244,37 +277,31 @@ class SystemServerHandler : IHook() {
                     return@hookAllBefore
                 }
             }
-        }
+        })
     }.onFailure {
         logE("hookForceNewTask: ", it)
     }
 
     private fun runConfigListener() {
-        thread = HandlerThread("MyInjector")
-        thread.start()
-        handler = Handler(thread.looper)
-        handler.post(waitAms)
+        broadcastManager.register(
+            IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEM_CONFIG"),
+            receiver
+        )
     }
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent?) {
+        override fun onReceive(context: Context?, intent: Intent?) {
             intent ?: return
             runCatching {
-                val pendingIntent =
-                    intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
-                val caller = pendingIntent?.creatorPackage
-                var oldXSpace = config.xSpace
-                if (caller == BuildConfig.APPLICATION_ID) {
-                    intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
-                        config = SystemServerConfig.parseFrom(it)
-                        findOrCreateConfigFile().writeBytes(it)
-                        logI("onReceive: update config $config")
-                    }
-                } else {
-                    logE("onReceive: invalid caller $caller")
+                if (!isCallerTrusted(intent)) return
+                val oldXSpace = config.xSpace
+                intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
+                    config = SystemServerConfig.parseFrom(it)
+                    findOrCreateConfigFile().writeBytes(it)
+                    logI("onReceive: update config $config")
                 }
                 if (oldXSpace != config.xSpace) {
-                    setXSpace()
+                    setXSpace(config.xSpace)
                 }
             }.onFailure {
                 logE("onReceive: ", it)
@@ -282,9 +309,12 @@ class SystemServerHandler : IHook() {
         }
     }
 
+
+    @SuppressLint("InlinedApi")
     private fun hookStatusBarAppearance() = runCatching {
         val displayPolicy = findClass("com.android.server.wm.DisplayPolicy")
-        displayPolicy.hookAllBefore(
+        hooks.addAll(
+            displayPolicy.hookAllBefore(
             "updateSystemBarAttributes",
             cond = { config.overrideStatusBar }) { param ->
             val windowState = param.thisObject.getObj("mFocusedWindow") ?: return@hookAllBefore
@@ -307,39 +337,8 @@ class SystemServerHandler : IHook() {
                     return@hookAllBefore
                 }
             }
-        }
+            })
     }.onFailure {
         logE("hookStatusBarAppearance", it)
-    }
-
-    private val registerBroadcast: Runnable = Runnable {
-        try {
-            val ctx = ActivityThread.currentActivityThread().systemContext as Context
-            val flags =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
-            ctx.registerReceiver(
-                receiver,
-                IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEM_CONFIG"),
-                null,
-                handler,
-                flags
-            )
-            logI("registerBroadcast: registered")
-        } catch (t: Throwable) {
-            logE("registerBroadcast: ", t)
-            handler.postDelayed(registerBroadcast, 1000)
-        }
-    }
-
-    private val waitAms: Runnable = Runnable {
-        try {
-            if (ServiceManager.getService("activity") != null) {
-                handler.post(registerBroadcast)
-                return@Runnable
-            }
-        } catch (_: Throwable) {
-
-        }
-        handler.postDelayed(waitAms, 1000)
     }
 }

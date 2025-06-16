@@ -3,6 +3,11 @@
     <PreferenceCategory
         android:key="system"
         android:title="system">
+        <Preference
+            android:key="checkHotUpdate"
+            android:persistent="false"
+            android:summary="热更新系统模块"
+            android:title="检查更新" />
         <SwitchPreference
             android:defaultValue="false"
             android:key="noWakePath"

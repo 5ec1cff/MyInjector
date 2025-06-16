@@ -15,7 +15,7 @@ abstract class IHook {
         try {
             onHook()
         } catch (t: Throwable) {
-            logE("hook failed: ${this::class.simpleName}", t)
+            logE("hook failed: ${this.javaClass.simpleName}", t)
         }
     }
 

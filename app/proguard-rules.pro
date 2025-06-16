@@ -9,11 +9,12 @@
 }
 
 -keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
-  <fields>;
+    <fields>;
 }
 
 -keepnames class * extends io.github.a13e300.myinjector.arch.IHook
+-keep class io.github.a13e300.myinjector.system_server.SystemServerHandler
 
 -keep class io.github.a13e300.myinjector.bridge.* {
-  *;
+    *;
 }

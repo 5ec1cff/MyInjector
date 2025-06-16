@@ -5,6 +5,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.bridge.LoadPackageParam
+import io.github.a13e300.myinjector.system_server.SystemServerHookLoader
 import io.github.a13e300.myinjector.telegram.TelegramHandler
 
 class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
@@ -48,7 +49,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.baidu.input" -> BaiduIMEHandler()
             "com.miui.home" -> MiuiHomeHandler()
             "android" -> {
-                if (lpparam.processName == "android") SystemServerHandler()
+                if (lpparam.processName == "android") SystemServerHookLoader
                 else return
             }
             "com.android.settings" -> SettingsHandler()
@@ -57,7 +58,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.meizu.customizecenter" -> MeiZuCustomizerCenterHandler()
             else -> return
         }
-        logPrefix = "[${handler::class.java.simpleName}] "
+        logPrefix = "[${handler.javaClass.simpleName}] "
         handler.hook(LoadPackageParam(lpparam))
     }
 }
