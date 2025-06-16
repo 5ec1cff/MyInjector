@@ -29,7 +29,6 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListAdapter
 import android.widget.ListView
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
 import io.github.a13e300.myinjector.arch.IHook
@@ -558,7 +557,7 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 }
 
 class Settings : IHook() {
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val drawerLayoutAdapterClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter")
         val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")
 

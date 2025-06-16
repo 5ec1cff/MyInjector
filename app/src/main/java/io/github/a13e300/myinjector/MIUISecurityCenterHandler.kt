@@ -13,7 +13,6 @@ import android.view.View
 import android.widget.CompoundButton
 import android.widget.LinearLayout
 import android.widget.Toast
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.addModuleAssets
 import io.github.a13e300.myinjector.arch.call
@@ -64,7 +63,7 @@ class MIUISecurityCenterHandler : IHook() {
     }
 
     @SuppressLint("DiscouragedApi")
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         if (loadPackageParam.packageName == "com.miui.securitycenter") {
             hookSkipWarning()
             hookAddKeepAutoStart()

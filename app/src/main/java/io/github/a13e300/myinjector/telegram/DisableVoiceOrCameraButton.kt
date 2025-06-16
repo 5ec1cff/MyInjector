@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllConstantIf
@@ -10,7 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DisableVoiceOrCameraButton : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableVoiceOrCameraButton
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val subHookFound = AtomicBoolean(false)
         findClass("org.telegram.ui.Components.ChatActivityEnterView").hookAllCAfter { param ->
             if (!isEnabled()) return@hookAllCAfter

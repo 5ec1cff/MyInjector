@@ -1,15 +1,14 @@
 package io.github.a13e300.myinjector.arch
 
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodHook.MethodHookParam
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
+import io.github.a13e300.myinjector.bridge.HookParam
+import io.github.a13e300.myinjector.bridge.MethodHookCallback
+import io.github.a13e300.myinjector.bridge.Unhook
+import io.github.a13e300.myinjector.bridge.Xposed
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 
-
-typealias HookCallback = (MethodHookParam) -> Unit
-typealias HookReplacement = (MethodHookParam) -> Any?
+typealias HookCallback = (HookParam) -> Unit
+typealias HookReplacement = (HookParam) -> Any?
 
 // Class.allMethods
 inline fun Class<*>.hookAll(
@@ -17,13 +16,13 @@ inline fun Class<*>.hookAll(
     crossinline cond: () -> Boolean = { true },
     crossinline before: HookCallback = {},
     crossinline after: HookCallback = {}
-): MutableSet<XC_MethodHook.Unhook> =
-    XposedBridge.hookAllMethods(this, name, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: MethodHookParam) {
+): MutableSet<Unhook> =
+    Xposed.hookAllMethods(this, name, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) before(param)
         }
 
-        override fun afterHookedMethod(param: MethodHookParam) {
+        override fun afterHook(param: HookParam) {
             if (cond()) after(param)
         }
     })
@@ -46,9 +45,9 @@ inline fun Class<*>.hookAllReplace(
     name: String,
     crossinline cond: () -> Boolean = { true },
     crossinline replacement: HookReplacement
-): MutableSet<XC_MethodHook.Unhook> =
-    XposedBridge.hookAllMethods(this, name, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: XC_MethodHook.MethodHookParam) {
+): MutableSet<Unhook> =
+    Xposed.hookAllMethods(this, name, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) {
                 try {
                     param.result = replacement(param)
@@ -59,22 +58,22 @@ inline fun Class<*>.hookAllReplace(
         }
     })
 
-fun Class<*>.hookAllConstant(name: String, constant: Any?): MutableSet<XC_MethodHook.Unhook> =
-    XposedBridge.hookAllMethods(this, name, XC_MethodReplacement.returnConstant(constant))
-
 fun Class<*>.hookAllConstantIf(
     name: String,
     constant: Any?,
     cond: () -> Boolean
-): MutableSet<XC_MethodHook.Unhook> =
-    XposedBridge.hookAllMethods(this, name, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: XC_MethodHook.MethodHookParam) {
+): MutableSet<Unhook> =
+    Xposed.hookAllMethods(this, name, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) param.result = constant
         }
     })
 
-fun Class<*>.hookAllNop(name: String): MutableSet<XC_MethodHook.Unhook> =
-    XposedBridge.hookAllMethods(this, name, XC_MethodReplacement.DO_NOTHING)
+fun Class<*>.hookAllConstant(name: String, constant: Any?): MutableSet<Unhook> =
+    hookAllConstantIf(name, constant, { true })
+
+fun Class<*>.hookAllNop(name: String): MutableSet<Unhook> =
+    hookAllConstant(name, null)
 
 inline fun Class<*>.hookAllNopIf(name: String, crossinline cond: () -> Boolean) =
     hookAllBefore(name) {
@@ -87,13 +86,13 @@ inline fun Class<*>.hookAllC(
     crossinline cond: () -> Boolean = { true },
     crossinline before: HookCallback = {},
     crossinline after: HookCallback = {}
-): MutableSet<XC_MethodHook.Unhook> =
-    XposedBridge.hookAllConstructors(this, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: MethodHookParam) {
+): MutableSet<Unhook> =
+    Xposed.hookAllConstructors(this, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) before(param)
         }
 
-        override fun afterHookedMethod(param: MethodHookParam) {
+        override fun afterHook(param: HookParam) {
             if (cond()) after(param)
         }
     })
@@ -115,13 +114,13 @@ inline fun Method.hook(
     crossinline cond: () -> Boolean = { true },
     crossinline before: HookCallback = {},
     crossinline after: HookCallback = {}
-): XC_MethodHook.Unhook =
-    XposedBridge.hookMethod(this, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: MethodHookParam) {
+): Unhook =
+    Xposed.hookMethod(this, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) before(param)
         }
 
-        override fun afterHookedMethod(param: MethodHookParam) {
+        override fun afterHook(param: HookParam) {
             if (cond()) after(param)
         }
     })
@@ -140,9 +139,9 @@ inline fun Method.hookBefore(
 inline fun Method.hookReplace(
     crossinline cond: () -> Boolean = { true },
     crossinline replacement: HookReplacement
-): XC_MethodHook.Unhook =
-    XposedBridge.hookMethod(this, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: XC_MethodHook.MethodHookParam) {
+): Unhook =
+    Xposed.hookMethod(this, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) {
                 try {
                     param.result = replacement(param)
@@ -153,18 +152,18 @@ inline fun Method.hookReplace(
         }
     })
 
-fun Method.hookConstant(constant: Any?): XC_MethodHook.Unhook =
-    XposedBridge.hookMethod(this, XC_MethodReplacement.returnConstant(constant))
-
-fun Method.hookConstantIf(constant: Any?, cond: () -> Boolean): XC_MethodHook.Unhook =
-    XposedBridge.hookMethod(this, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: XC_MethodHook.MethodHookParam) {
+fun Method.hookConstantIf(constant: Any?, cond: () -> Boolean): Unhook =
+    Xposed.hookMethod(this, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) param.result = constant
         }
     })
 
-fun Method.hookNop(): XC_MethodHook.Unhook =
-    XposedBridge.hookMethod(this, XC_MethodReplacement.DO_NOTHING)
+fun Method.hookConstant(constant: Any?): Unhook =
+    hookConstantIf(constant, { true })
+
+fun Method.hookNop(): Unhook =
+    hookConstant(null)
 
 inline fun Method.hookNopIf(crossinline cond: () -> Boolean) =
     hookBefore {
@@ -177,13 +176,13 @@ inline fun Constructor<*>.hook(
     crossinline cond: () -> Boolean = { true },
     crossinline before: HookCallback = {},
     crossinline after: HookCallback = {}
-): XC_MethodHook.Unhook =
-    XposedBridge.hookMethod(this, object : XC_MethodHook() {
-        override fun beforeHookedMethod(param: MethodHookParam) {
+): Unhook =
+    Xposed.hookMethod(this, object : MethodHookCallback() {
+        override fun beforeHook(param: HookParam) {
             if (cond()) before(param)
         }
 
-        override fun afterHookedMethod(param: MethodHookParam) {
+        override fun afterHook(param: HookParam) {
             if (cond()) after(param)
         }
     })
@@ -206,8 +205,8 @@ inline fun Class<*>.hook(
     name: String, vararg types: Class<*>, crossinline cond: () -> Boolean = { true },
     crossinline before: HookCallback = {},
     crossinline after: HookCallback = {}
-): XC_MethodHook.Unhook =
-    XPBridge.findMethodExact(this, name, types).hook(cond, before, after)
+): Unhook =
+    Xposed.findMethodExact(this, name, types).hook(cond, before, after)
 
 inline fun Class<*>.hookAfter(
     name: String,
@@ -228,25 +227,25 @@ inline fun Class<*>.hookReplace(
     vararg types: Class<*>,
     crossinline cond: () -> Boolean = { true },
     crossinline replacement: HookReplacement
-): XC_MethodHook.Unhook =
-    XPBridge.findMethodExact(this, name, types).hookReplace(cond, replacement)
+): Unhook =
+    Xposed.findMethodExact(this, name, types).hookReplace(cond, replacement)
 
 fun Class<*>.hookConstant(
     name: String,
     vararg types: Class<*>,
     constant: Any?
-): XC_MethodHook.Unhook =
-    XPBridge.findMethodExact(this, name, types).hookConstant(constant)
+): Unhook =
+    Xposed.findMethodExact(this, name, types).hookConstant(constant)
 
 fun Class<*>.hookConstantIf(
     name: String,
     vararg types: Class<*>,
     constant: Any?, cond: () -> Boolean
-): XC_MethodHook.Unhook =
-    XPBridge.findMethodExact(this, name, types).hookConstantIf(constant, cond)
+): Unhook =
+    Xposed.findMethodExact(this, name, types).hookConstantIf(constant, cond)
 
-fun Class<*>.hookNop(name: String, vararg types: Class<*>): XC_MethodHook.Unhook =
-    XPBridge.findMethodExact(this, name, types).hookNop()
+fun Class<*>.hookNop(name: String, vararg types: Class<*>): Unhook =
+    Xposed.findMethodExact(this, name, types).hookNop()
 
 inline fun Class<*>.hookNopIf(
     name: String,
@@ -264,8 +263,8 @@ inline fun Class<*>.hookC(
     crossinline cond: () -> Boolean = { true },
     crossinline before: HookCallback = {},
     crossinline after: HookCallback = {}
-): XC_MethodHook.Unhook =
-    XPBridge.findConstructorExact(this, types).hook(cond = cond, before = before, after = after)
+): Unhook =
+    Xposed.findConstructorExact(this, types).hook(cond = cond, before = before, after = after)
 
 inline fun Class<*>.hookCAfter(
     vararg types: Class<*>,

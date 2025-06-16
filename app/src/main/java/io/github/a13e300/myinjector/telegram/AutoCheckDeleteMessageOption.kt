@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector.telegram
 
 import android.app.Dialog
 import android.view.ViewGroup
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.findView
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -13,7 +12,7 @@ import io.github.a13e300.myinjector.arch.hookBefore
 class AutoCheckDeleteMessageOption : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoCheckDeleteMessageOption
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val isCreating = ThreadLocal<Boolean>()
         val alertDialogClass = findClass("org.telegram.ui.ActionBar.AlertDialog")
         val checkBoxCellClass = findClass("org.telegram.ui.Cells.CheckBoxCell")

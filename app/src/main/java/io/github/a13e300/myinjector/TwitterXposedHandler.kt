@@ -3,7 +3,6 @@ package io.github.a13e300.myinjector
 import android.app.Activity
 import android.os.Process
 import android.view.View
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.hookAllAfter
 
@@ -13,7 +12,7 @@ val TWITTER_BROKEN_ACTIVITIES = listOf(
 )
 
 class TwitterXposedHandler : IHook() {
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         if (loadPackageParam.packageName != "com.twitter.android" || !loadPackageParam.processName.startsWith(
                 "com.twitter.android"
             )

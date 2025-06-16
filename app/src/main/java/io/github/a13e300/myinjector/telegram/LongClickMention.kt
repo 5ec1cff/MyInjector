@@ -2,8 +2,6 @@ package io.github.a13e300.myinjector.telegram
 
 import android.text.SpannableString
 import android.text.Spanned
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -16,7 +14,7 @@ import java.lang.reflect.Proxy
 class LongClickMention : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.longClickMention
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val longClickListenerClass =
             findClass("org.telegram.ui.Components.RecyclerListView\$OnItemLongClickListener")
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
@@ -28,11 +26,8 @@ class LongClickMention : DynHook() {
         ) { param ->
             val obj = Object()
             val thiz = param.thisObject
-            val mentionContainer = XposedHelpers.getObjectField(thiz, "mentionContainer")
-            val listView = XposedHelpers.callMethod(
-                mentionContainer,
-                "getListView"
-            ) // RecyclerListView
+            val mentionContainer = thiz.getObj("mentionContainer")
+            val listView = mentionContainer.call("getListView") // RecyclerListView
             val proxy = Proxy.newProxyInstance(
                 classLoader, arrayOf(longClickListenerClass)
             ) { _, method, args ->
@@ -53,7 +48,7 @@ class LongClickMention : DynHook() {
                         )
                         val spannable = SpannableString("$name ")
                         val span = classURLSpanUserMention.newInst(
-                            XposedHelpers.getObjectField(item, "id").toString(),
+                            item.getObj("id").toString(),
                             3
                         )
                         spannable.setSpan(

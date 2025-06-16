@@ -1,18 +1,17 @@
 package io.github.a13e300.myinjector
 
 import android.os.Environment
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.hookAllAfter
+import io.github.a13e300.myinjector.bridge.Unhook
 import java.io.File
 
 class MeiZuCustomizerCenterHandler : IHook() {
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         hookDir()
     }
 
-    private lateinit var unhook: XC_MethodHook.Unhook
+    private lateinit var unhook: Unhook
 
     private fun hookDir() = runCatching {
         var meetSAA = false

@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.createObfsTable
@@ -27,7 +26,7 @@ class ZhihuXposedHandler : IHook() {
         private const val KEY_localSourceField = "localSourceField"
     }
 
-    override fun onHook(loadPackageParam: LoadPackageParam) {
+    override fun onHook() {
         if (loadPackageParam.packageName != "com.zhihu.android") return
         hookDisableFeedAutoRefresh()
         hookClipboard()

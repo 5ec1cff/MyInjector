@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector
 
 import android.app.Activity
 import android.content.Intent
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -15,7 +14,7 @@ class BaiduIMEHandler : IHook() {
         private const val KEY_showMethod = "showMethod"
     }
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         hookSplash()
         hookContactSuggestion()
     }

@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector
 
 import android.content.Context
 import android.view.MotionEvent
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.findClass
@@ -18,7 +17,7 @@ class ChromeHandler : IHook() {
         private const val KEY_swipeRefreshHander_Release = "swipeRefreshHander_Release"
     }
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         hookNoDetectObscure()
         if (loadPackageParam.processName.contains(":")) return
         val name = loadPackageParam.appInfo.className

@@ -3,7 +3,6 @@ package io.github.a13e300.myinjector.telegram
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.hook
 
@@ -11,7 +10,7 @@ import io.github.a13e300.myinjector.arch.hook
 class FixHasAppToOpen : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.fixHasAppToOpen
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val inBrowserOpenUrl = ThreadLocal<Boolean>()
         val started = ThreadLocal<Boolean>()
         val browserClass = findClass("org.telegram.messenger.browser.Browser")

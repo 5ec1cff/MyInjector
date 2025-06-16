@@ -15,7 +15,6 @@ import android.os.HandlerThread
 import android.os.ServiceManager
 import android.view.View
 import android.view.WindowInsetsController
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -49,7 +48,7 @@ class SystemServerHandler : IHook() {
     private lateinit var thread: HandlerThread
     private lateinit var handler: Handler
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         logI("hook system")
         config = readConfig()
         hookNoWakePath()
@@ -135,7 +134,7 @@ class SystemServerHandler : IHook() {
             .hookAllBefore("clipboardAccessAllowed") { param ->
                 if (!config.clipboardWhitelist) return@hookAllBefore
                 val pkg = param.args[1]?.toString() ?: return@hookAllBefore
-                if (config.clipboardWhitelistPackagesList.contains(pkg)) param.setResult(true)
+                if (config.clipboardWhitelistPackagesList.contains(pkg)) param.result = true
             }
     }.onFailure {
         logE("hookClipboardWhitelist: ", it)
@@ -153,7 +152,7 @@ class SystemServerHandler : IHook() {
                     && param.thisObject.getObj("mActivityRecord") == null
                 ) {
                     // XposedBridge.log("no wait on " + param.thisObject);
-                    param.setResult(true)
+                    param.result = true
                 }
             }
     }.onFailure {

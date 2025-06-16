@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.hookBefore
@@ -10,7 +9,7 @@ import io.github.a13e300.myinjector.arch.setObj
 class DefaultSearchTab : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.defaultSearchTab
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val chatActivity = findClass("org.telegram.ui.ChatActivity")
         val viewPagerFixedTabsView =
             findClass("org.telegram.ui.Components.ViewPagerFixed\$TabsView")

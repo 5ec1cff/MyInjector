@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.Toast
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -156,7 +155,7 @@ object CustomEmojiMapping : DynHook() {
         }
     }
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         hookPasteCustomEmoji()
         hookEmojiManage()
     }

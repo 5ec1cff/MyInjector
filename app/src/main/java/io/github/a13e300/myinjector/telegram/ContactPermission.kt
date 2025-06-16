@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.setObj
 
@@ -8,7 +7,7 @@ import io.github.a13e300.myinjector.arch.setObj
 class ContactPermission : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.contactPermission
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         findClass("org.telegram.ui.ContactsActivity").hookAllBefore(
             "onResume",
             cond = ::isEnabled

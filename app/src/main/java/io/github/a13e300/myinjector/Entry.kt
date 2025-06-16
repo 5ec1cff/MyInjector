@@ -4,6 +4,7 @@ import android.content.res.XModuleResources
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.a13e300.myinjector.bridge.LoadPackageParam
 import io.github.a13e300.myinjector.telegram.TelegramHandler
 
 class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
@@ -57,6 +58,6 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             else -> return
         }
         logPrefix = "[${handler::class.java.simpleName}] "
-        handler.hook(lpparam)
+        handler.hook(LoadPackageParam(lpparam))
     }
 }

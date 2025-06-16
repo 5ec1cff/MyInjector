@@ -6,7 +6,6 @@ import android.location.Location
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Toast
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
@@ -16,7 +15,7 @@ import io.github.a13e300.myinjector.arch.hookAllCAfter
 class CustomMapPosition : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customMapPosition
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         // 聊天发送
         val caall = findClass("org.telegram.ui.Components.ChatAttachAlertLocationLayout")
         caall.hookAllCAfter(cond = ::isEnabled) { param ->

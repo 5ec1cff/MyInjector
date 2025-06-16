@@ -8,7 +8,6 @@ import android.os.ServiceManager
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -16,7 +15,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllConstant
 
 class MiuiHomeHandler : IHook() {
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         hookDragKill()
         hookPreLaunch()
     }

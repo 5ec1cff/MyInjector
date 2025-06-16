@@ -1,11 +1,10 @@
 package io.github.a13e300.myinjector
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.hookAllBefore
 
 class SettingsHandler : IHook() {
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         hookNotDisableNotificationSwitches()
     }
 

@@ -1,7 +1,6 @@
 package io.github.a13e300.myinjector
 
 import android.os.Process
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
@@ -18,7 +17,7 @@ class FvXposedHandler : IHook() {
         private val KEY_backToHome = "BackToHome"
     }
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         if (loadPackageParam.packageName != "com.fooview.android.fooview") return
         logI("inject fv, pid=${Process.myPid()}, processName=${loadPackageParam.processName}")
         try {

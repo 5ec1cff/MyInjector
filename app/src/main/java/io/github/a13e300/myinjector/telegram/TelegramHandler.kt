@@ -1,8 +1,8 @@
 package io.github.a13e300.myinjector.telegram
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import io.github.a13e300.myinjector.TelegramSettings
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.bridge.LoadPackageParam
 import io.github.a13e300.myinjector.logE
 import io.github.a13e300.myinjector.logI
 import java.io.File
@@ -68,7 +68,7 @@ object TelegramHandler : IHook() {
 
     private val hooks = mutableListOf<DynHook>()
 
-    override fun onHook(loadPackageParam: LoadPackageParam) {
+    override fun onHook() {
         settingFile = File(loadPackageParam.appInfo.dataDir, "my_injector_settings")
         readSettings()
 

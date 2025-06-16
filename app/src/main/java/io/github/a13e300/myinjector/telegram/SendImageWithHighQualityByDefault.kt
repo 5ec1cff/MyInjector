@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
@@ -11,7 +10,7 @@ class SendImageWithHighQualityByDefault : DynHook() {
     override fun isFeatureEnabled(): Boolean =
         TelegramHandler.settings.sendImageWithHighQualityByDefault
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val classMediaEditState =
             findClass("org.telegram.messenger.MediaController\$MediaEditState")
         classMediaEditState.hookAllCAfter(cond = ::isEnabled) { param ->

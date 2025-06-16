@@ -1,7 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.view.View
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -10,7 +9,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 class AutoUncheckSharePhoneNumber : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoUncheckSharePhoneNumber
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         findClass("org.telegram.ui.ContactAddActivity").hookAllAfter(
             "createView",
             cond = ::isEnabled

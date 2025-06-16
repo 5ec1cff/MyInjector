@@ -4,7 +4,6 @@ import android.app.AndroidAppHelper
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -23,7 +22,7 @@ class EmojiStickerMenu : DynHook() {
 
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.emojiStickerMenu
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val emojiPacksAlert = findClass("org.telegram.ui.Components.EmojiPacksAlert")
         val emojiPacksAlertEmojiPackHeader =
             findClass("org.telegram.ui.Components.EmojiPacksAlert\$EmojiPackHeader")

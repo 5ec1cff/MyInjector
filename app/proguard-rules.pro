@@ -13,3 +13,7 @@
 }
 
 -keepnames class * extends io.github.a13e300.myinjector.arch.IHook
+
+-keep class io.github.a13e300.myinjector.bridge.* {
+  *;
+}

@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -11,7 +10,7 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 class AvatarPagerScrollToCurrent : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.avatarPageScrollToCurrent
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val pgvClass = findClass("org.telegram.ui.Components.ProfileGalleryView")
         pgvClass.hookAllBefore("resetCurrentItem", cond = ::isEnabled) { param ->
             if (!param.thisObject.javaClass.name.startsWith("org.telegram.ui.ProfileActivity")) return@hookAllBefore

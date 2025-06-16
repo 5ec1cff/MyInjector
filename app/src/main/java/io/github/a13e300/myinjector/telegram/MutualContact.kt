@@ -5,7 +5,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
 import io.github.a13e300.myinjector.arch.getObj
@@ -17,7 +16,7 @@ class MutualContact : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.mutualContact
 
     @Suppress("DEPRECATION")
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val drawable = Entry.moduleRes.getDrawable(R.drawable.ic_mutual_contact)
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
         findClass("org.telegram.ui.Cells.UserCell").hookAllAfter(

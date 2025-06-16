@@ -7,7 +7,6 @@ import android.net.Uri
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.StyleSpan
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -25,7 +24,7 @@ class OpenLinkDialog : DynHook() {
 
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.openLinkDialog
 
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         val classBaseFragment = findClass("org.telegram.ui.ActionBar.BaseFragment")
 
         val fixLink = ThreadLocal<FixLink>()

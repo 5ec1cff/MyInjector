@@ -17,8 +17,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import dalvik.system.PathClassLoader
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.dp2px
@@ -81,7 +79,7 @@ class SystemUIHandler : IHook() {
     }
 
     @SuppressLint("SetTextI18n")
-    override fun onHook(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    override fun onHook() {
         if (loadPackageParam.packageName != "com.android.systemui") return
         configPath =
             File(loadPackageParam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
@@ -90,6 +88,7 @@ class SystemUIHandler : IHook() {
         hookNotificationInfo()
     }
 
+    @SuppressLint("DiscouragedPrivateApi", "NewApi")
     private fun hookNotificationInfo() {
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
@@ -138,26 +137,21 @@ class SystemUIHandler : IHook() {
 
                 val tv = root.getChildAt(0) as TextView
                 val entry = param.args[0] // NotificationEntry
-                val sbn = entry?.let {
-                    XposedHelpers.getObjectField(
-                        it,
-                        "mSbn"
-                    )
-                } as? StatusBarNotification
+                val sbn = entry?.getObj("mSbn") as? StatusBarNotification
                 // MIUI will fake Sbn.getPackageName, so we should get the real package name from the original field
-                val field =
-                    XposedHelpers.findFieldIfExists(StatusBarNotification::class.java, "pkg")
+                val field = try {
+                    StatusBarNotification::class.java.getDeclaredField("pkg")
                         .also { it.isAccessible = true }
+                } catch (_: NoSuchFieldException) {
+                    null
+                }
                 if (sbn != null) {
                     val realPkgName = field?.let { it.get(sbn) as String } ?: sbn.packageName
                     val pkgName = sbn.packageName
                     val channel = kotlin.runCatching {
                         nm.getNotificationChannel(
                             "com.android.systemui",
-                            XposedHelpers.callMethod(
-                                XposedHelpers.getObjectField(sbn, "user"),
-                                "getIdentifier"
-                            ) as Int,
+                            sbn.getObj("user").call("getIdentifier") as Int,
                             realPkgName,
                             sbn.notification.channelId
                         )
@@ -171,12 +165,7 @@ class SystemUIHandler : IHook() {
                         if (sbn.opPkg != pkgName) append("opPkg=${sbn.opPkg}\n")
                         append("id=${sbn.id}\n")
                         append(
-                            "initialPid=${
-                                XposedHelpers.getObjectField(
-                                    sbn,
-                                    "initialPid"
-                                )
-                            }\n"
+                            "initialPid=${sbn.getObj("initialPid")}\n"
                         )
                         append(
                             "time=${sbn.postTime} (${
