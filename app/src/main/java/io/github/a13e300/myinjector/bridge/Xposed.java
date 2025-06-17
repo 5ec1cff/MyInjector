@@ -8,6 +8,7 @@ import java.util.Set;
 
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
+import io.github.a13e300.myinjector.LogKt;
 
 // This class was used to wrap vararg methods by array argument methods to prevent from coping array
 // when using spread operator (*) to call in kotlin.
@@ -17,6 +18,18 @@ import de.robv.android.xposed.XposedHelpers;
 // https://youtrack.jetbrains.com/issue/KT-27538/Avoid-Arrays.copyOf-when-inlining-a-function-call-with-vararg
 // Now it's just a wrapper
 public class Xposed {
+    private static final Method deoptimizeMethod;
+
+    static {
+        Method m = null;
+        try {
+            m = XposedBridge.class.getDeclaredMethod("deoptimizeMethod", Member.class);
+            m.setAccessible(true);
+        } catch (Throwable t) {
+            LogKt.logE("get deoptimizeMethod", t);
+        }
+        deoptimizeMethod = m;
+    }
     public static Object callMethod(Object thiz, String name, Object[] args) {
         return XposedHelpers.callMethod(thiz, name, args);
     }
@@ -60,7 +73,13 @@ public class Xposed {
     }
 
     public static void deoptimizeMethod(Member method) {
-        // TODO
+        if (deoptimizeMethod != null) {
+            try {
+                deoptimizeMethod.invoke(null, method);
+            } catch (Throwable t) {
+                LogKt.logE("deoptimize " + method, t);
+            }
+        }
     }
 
     public static Object getObjectField(Object obj, String fieldName) {
