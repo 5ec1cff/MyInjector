@@ -92,6 +92,7 @@ object TelegramHandler : IHook() {
         subHook(Settings())
         subHook(AlwaysShowStorySaveIcon())
         subHook(RemoveArchiveFolder())
+        subHook(AlwaysShowDownloadManager())
     }
 
     private fun subHook(hook: DynHook) {
