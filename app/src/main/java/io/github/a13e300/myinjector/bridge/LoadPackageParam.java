@@ -9,7 +9,7 @@ public class LoadPackageParam {
     public final ApplicationInfo appInfo;
     public final boolean isFirstApplication;
     public LoadPackageParam(de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam p) {
-        packageName = p.processName;
+        packageName = p.packageName;
         processName = p.processName;
         classLoader = p.classLoader;
         appInfo = p.appInfo;
