@@ -72,6 +72,11 @@ org.telegram.messenger.web
 org.telegram.messenger.beta
 org.telegram.plus
 com.exteragram.messenger
+com.radolyn.ayugram
+uz.unnarsx.cherrygram
+xyz.nextalone.nagram
+nu.gpu.nagram
+com.xtaolabs.pagergram
 ```
 
 注：作者仅适配官方 `org.telegram.messenger` ，因此其他的第三方端，或 web, beta 等都不保证可用
@@ -93,8 +98,10 @@ com.exteragram.messenger
 - 点击 hashtag 的时候总是默认使用「此聊天」而不是「公开帖子」
 - 发送位置和设置位置（企业版功能）时支持自定义经纬度（长按地图右下角的定位按钮）
 - 用户资料界面自动滚动到当前头像（而不是第一个头像）
-- 默认发送高清晰度图像（需要 11.12.0 (5997) 或更高版本）
+- 默认发送高清晰度图像（需要 11.12.0 (5997) 或更高版本），并移除图片预览左下角的高清标志
 - 隐藏主页抽屉的电话号码，点按文本切换显示状态；隐藏资料页面的电话号码，点按右侧按钮切换显示状态
+- 移除下拉归档（对 exteraGram 特殊适配了不移除侧栏的归档元素）
+- 总是显示下载管理器
 
 ### 知乎
 

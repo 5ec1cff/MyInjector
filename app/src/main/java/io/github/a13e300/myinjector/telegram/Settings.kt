@@ -131,6 +131,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "removeArchiveFolder" ->
                 settings.removeArchiveFolder = v
+
+            "alwaysShowDownloadManager" ->
+                settings.alwaysShowDownloadManager = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -229,6 +232,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
                     "removeArchiveFolder" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.removeArchiveFolder
+
+                    "alwaysShowDownloadManager" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.alwaysShowDownloadManager
 
                     "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.hidePhoneNumber
@@ -391,15 +397,15 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                 switchPreference(
                     "默认发送高清晰度图像",
                     "sendImageWithHighQualityByDefault",
-                    "需要 11.12.0 (5997) 或更高版本"
+                    "需要 11.12.0 (5997) 或更高版本，并移除图片预览左下角的高清标志"
                 )
                 switchPreference(
                     "总是允许保存动态图片",
                     "alwaysShowStorySaveIcon"
                 )
                 switchPreference(
-                    "移除下拉归档",
-                    "removeArchiveFolder"
+                    "总是显示下载管理器",
+                    "alwaysShowDownloadManager"
                 )
             }
 
@@ -481,6 +487,10 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                     "标记双向联系人",
                     "mutualContact",
                     "在联系人列表标记你的双向联系人（↑↓）"
+                )
+                switchPreference(
+                    "移除下拉归档",
+                    "removeArchiveFolder"
                 )
             }
         }
