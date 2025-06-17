@@ -134,6 +134,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "alwaysShowDownloadManager" ->
                 settings.alwaysShowDownloadManager = v
+
+            "hideFloatFab" ->
+                settings.hideFloatFab = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -244,6 +247,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                             TelegramHandler.settings.hidePhoneNumberForSelfOnly
                         isEnabled = TelegramHandler.settings.hidePhoneNumber
                     }
+
+                    "hideFloatFab" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.hideFloatFab
                 }
             }
             val searchItem = SearchItem(
@@ -491,6 +497,10 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                 switchPreference(
                     "移除下拉归档",
                     "removeArchiveFolder"
+                )
+                switchPreference(
+                    "移除主页浮动按钮",
+                    "hideFloatFab"
                 )
             }
         }
