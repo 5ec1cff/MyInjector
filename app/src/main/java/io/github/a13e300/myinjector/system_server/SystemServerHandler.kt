@@ -12,7 +12,9 @@ import android.view.View
 import android.view.WindowInsetsController
 import io.github.a13e300.myinjector.SystemServerConfig
 import io.github.a13e300.myinjector.arch.callS
+import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.findClass
+import io.github.a13e300.myinjector.arch.findClassN
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -61,6 +63,7 @@ class SystemServerHandler : HotLoadHook() {
     private val hooks = mutableListOf<Unhook>()
 
     fun findClass(name: String) = loadPackageParam.classLoader.findClass(name)
+    fun findClassN(name: String) = loadPackageParam.classLoader.findClassN(name)
 
     override fun onLoad(param: LoadPackageParam) {
         loadPackageParam = param
@@ -128,12 +131,17 @@ class SystemServerHandler : HotLoadHook() {
     }
 
     private fun hookNoWakePath() = runCatching {
-        hooks.addAll(findClass("miui.app.ActivitySecurityHelper").hookAllNopIf("getCheckStartActivityIntent") {
-            config.noWakePath
-        })
-        hooks.addAll(findClass("miui.security.SecurityManager").hookAllNopIf("getCheckStartActivityIntent") {
-            config.noWakePath
-        })
+        findClassN("miui.app.ActivitySecurityHelper")?.let { clz ->
+            hooks.addAll(clz.hookAllNopIf("getCheckStartActivityIntent") {
+                config.noWakePath
+            })
+            clz.deoptimize("getCheckIntent")
+        }
+        findClassN("miui.security.SecurityManager")?.let { clz ->
+            hooks.addAll(clz.hookAllNopIf("getCheckStartActivityIntent") {
+                config.noWakePath
+            })
+        }
     }.onFailure {
         logE("hookNoWakePath: ", it)
     }
