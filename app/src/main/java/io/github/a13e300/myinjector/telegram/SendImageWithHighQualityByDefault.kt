@@ -1,8 +1,8 @@
 package io.github.a13e300.myinjector.telegram
 
 import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.setObj
 
@@ -20,29 +20,25 @@ class SendImageWithHighQualityByDefault : DynHook() {
             param.thisObject.setObj("highQuality", true)
         }
         val photoAttachPhotoCellClass = findClass("org.telegram.ui.Cells.PhotoAttachPhotoCell")
-        photoAttachPhotoCellClass.hookAllBefore(
+        photoAttachPhotoCellClass.hookAll(
             "setHighQuality",
-            cond = ::isEnabled
-        ) { param ->
-            param.thisObject.getObj("photoEntry").setObj("highQuality", false)
-        }
-        photoAttachPhotoCellClass.hookAllAfter(
-            "setHighQuality",
-            cond = ::isEnabled
-        ) { param ->
-            param.thisObject.getObj("photoEntry").setObj("highQuality", true)
-        }
-        photoAttachPhotoCellClass.hookAllBefore(
+            cond = ::isEnabled,
+            before = { param ->
+                param.thisObject.getObj("photoEntry").setObj("highQuality", false)
+            },
+            after = { param ->
+                param.thisObject.getObj("photoEntry").setObj("highQuality", true)
+            }
+        )
+        photoAttachPhotoCellClass.hookAll(
             "setPhotoEntry",
-            cond = ::isEnabled
-        ) { param ->
-            param.thisObject.getObj("photoEntry").setObj("highQuality", false)
-        }
-        photoAttachPhotoCellClass.hookAllAfter(
-            "setPhotoEntry",
-            cond = ::isEnabled
-        ) { param ->
-            param.thisObject.getObj("photoEntry").setObj("highQuality", true)
-        }
+            cond = ::isEnabled ,
+            before = { param ->
+                param.thisObject.getObj("photoEntry").setObj("highQuality", false)
+            },
+            after = { param ->
+                param.thisObject.getObj("photoEntry").setObj("highQuality", true)
+            }
+        )
     }
 }
