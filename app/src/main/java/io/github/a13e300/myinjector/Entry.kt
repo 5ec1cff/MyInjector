@@ -56,6 +56,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "app.landrop.landrop_flutter" -> LanDropHandler()
             "com.android.intentresolver" -> IntentResolverHandler()
             "com.meizu.customizecenter" -> MeiZuCustomizerCenterHandler()
+            "com.spotify.music" -> SpotifyHandler()
             else -> return
         }
         logPrefix = "[${handler.javaClass.simpleName}] "
