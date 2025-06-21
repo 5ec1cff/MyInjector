@@ -1,5 +1,6 @@
 package io.github.a13e300.myinjector
 
+import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
 import android.content.pm.ResolveInfo
@@ -26,6 +27,10 @@ class DocumentsUIHandler : IHook() {
         val pickActivity = findClass("com.android.documentsui.picker.PickActivity")
         val unchangedDrawer = mutableListOf<WeakReference<Any>>()
         pickActivity.hookAfter("onCreate", Bundle::class.java) { param ->
+            val action = (param.thisObject as Activity).intent.action
+            if (action != Intent.ACTION_GET_CONTENT && action != Intent.ACTION_OPEN_DOCUMENT) {
+                return@hookAfter
+            }
             param.thisObject.call("setRootsDrawerOpen", true)
             unchangedDrawer.removeIf { it.get() == null }
             unchangedDrawer.add(WeakReference(param.thisObject.getObj("mDrawer")))
