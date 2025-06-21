@@ -8,11 +8,13 @@ import android.widget.ArrayAdapter
 import android.widget.ListView
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllBefore
+import java.lang.ref.WeakReference
 
 class DocumentsUIHandler : IHook() {
     override fun onHook() {
@@ -22,8 +24,11 @@ class DocumentsUIHandler : IHook() {
 
     private fun hookShowDrawerAndScroll() = runCatching {
         val pickActivity = findClass("com.android.documentsui.picker.PickActivity")
+        val unchangedDrawer = mutableListOf<WeakReference<Any>>()
         pickActivity.hookAfter("onCreate", Bundle::class.java) { param ->
             param.thisObject.call("setRootsDrawerOpen", true)
+            unchangedDrawer.removeIf { it.get() == null }
+            unchangedDrawer.add(WeakReference(param.thisObject.getObj("mDrawer")))
         }
 
         val rootsFragment = findClass("com.android.documentsui.sidebar.RootsFragment")
@@ -39,8 +44,28 @@ class DocumentsUIHandler : IHook() {
                 if (spacerItem.isInstance(adapter.getItem(i))) break
                 i--
             }
-            logD("select: $i")
             list.setSelection(i + 1)
+        }
+
+        // when first onBack, just finish the activity
+        val inOnBack = ThreadLocal<Boolean>()
+        val sharedInputHandler = findClass("com.android.documentsui.SharedInputHandler")
+        sharedInputHandler.hookAll(
+            "onBack",
+            before = { inOnBack.set(true) },
+            after = { inOnBack.set(false) },
+        )
+        val runtimeDrawerController =
+            findClass("com.android.documentsui.DrawerController\$RuntimeDrawerController")
+        // skip hide drawer when onBack
+        runtimeDrawerController.hookAllBefore("isOpen") { param ->
+            if (inOnBack.get() == true && unchangedDrawer.any { it.get() == param.thisObject }) {
+                unchangedDrawer.removeIf { it.get() == null || it.get() == param.thisObject }
+                param.result = false
+            }
+        }
+        runtimeDrawerController.hookAllBefore("setOpen") { param ->
+            unchangedDrawer.removeIf { it.get() == null || it.get() == param.thisObject }
         }
     }.onFailure {
         logE("hookDrawer", it)
