@@ -3,13 +3,50 @@ package io.github.a13e300.myinjector
 import android.app.Instrumentation
 import android.content.Intent
 import android.content.pm.ResolveInfo
+import android.os.Bundle
+import android.widget.ArrayAdapter
+import android.widget.ListView
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hook
+import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllBefore
 
 class DocumentsUIHandler : IHook() {
     override fun onHook() {
+        hookShowDrawerAndScroll()
+        hookForceShowAppItem()
+    }
+
+    private fun hookShowDrawerAndScroll() = runCatching {
+        val pickActivity = findClass("com.android.documentsui.picker.PickActivity")
+        pickActivity.hookAfter("onCreate", Bundle::class.java) { param ->
+            param.thisObject.call("setRootsDrawerOpen", true)
+        }
+
+        val rootsFragment = findClass("com.android.documentsui.sidebar.RootsFragment")
+        val spacerItem = findClass("com.android.documentsui.sidebar.SpacerItem")
+        rootsFragment.hookAllBefore("onCurrentRootChanged") { param ->
+            val list = param.thisObject.getObjAsN<ListView>("mList") ?: return@hookAllBefore
+            val adapter =
+                param.thisObject.getObjAsN<ArrayAdapter<*>>("mAdapter") ?: return@hookAllBefore
+
+
+            var i = adapter.count - 1
+            while (i >= 0) {
+                if (spacerItem.isInstance(adapter.getItem(i))) break
+                i--
+            }
+            logD("select: $i")
+            list.setSelection(i + 1)
+        }
+    }.onFailure {
+        logE("hookDrawer", it)
+    }
+
+    private fun hookForceShowAppItem() = runCatching {
         val inOpenDocument = ThreadLocal<Boolean>()
 
         // force add AppItem if actions == OPEN_DOCUMENT
@@ -57,5 +94,7 @@ class DocumentsUIHandler : IHook() {
             newIntent.action = Intent.ACTION_GET_CONTENT
             param.args[4] = newIntent
         }
+    }.onFailure {
+        logE("hookForceShowAppItem", it)
     }
 }
