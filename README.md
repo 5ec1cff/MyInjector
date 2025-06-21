@@ -187,6 +187,22 @@ com.android.intentresolver
 
 - 去除打开的 activity 的 EXCLUDE_FROM_RECENTS flag 。
 
+## Spotify
+
+```
+com.spotify.music
+```
+
+- 去除加号（群友请求的功能）
+
+## DocumentsUI
+
+```
+com.google.android.documentsui
+```
+
+- 如果使用 ACTION_OPEN_DOCUMENT 选择文件，强制显示 Picker Activity （类似 ACTION_GET_CONTENT 的行为）。
+
 ## 过期功能
 
 长期未维护，可能不可用
@@ -205,7 +221,7 @@ com.twitter.android
 com.meizu.customizecenter
 ```
 
-- 将本应用在 /sdcard 下创建的目录重定向到 /sdcard/Documents （不建议使用）
+- 将本应用在 /sdcard 下创建的目录重定向到 /sdcard/Documents （不建议使用）（群友请求的功能）
 
 # Credits
 
