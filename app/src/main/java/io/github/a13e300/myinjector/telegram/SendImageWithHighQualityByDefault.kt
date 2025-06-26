@@ -1,7 +1,10 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.widget.TextView
+import android.view.View
+import android.view.ViewGroup
+
 import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.setObj
@@ -19,26 +22,21 @@ class SendImageWithHighQualityByDefault : DynHook() {
         classMediaEditState.hookAllAfter("reset", cond = ::isEnabled) { param ->
             param.thisObject.setObj("highQuality", true)
         }
-        val photoAttachPhotoCellClass = findClass("org.telegram.ui.Cells.PhotoAttachPhotoCell")
-        photoAttachPhotoCellClass.hookAll(
-            "setHighQuality",
-            cond = ::isEnabled,
-            before = { param ->
-                param.thisObject.getObj("photoEntry").setObj("highQuality", false)
-            },
-            after = { param ->
-                param.thisObject.getObj("photoEntry").setObj("highQuality", true)
+        val cellClass = findClass("org.telegram.ui.Cells.PhotoAttachPhotoCell")
+        cellClass.hookAllAfter("setHighQuality", cond = ::isEnabled) { param ->
+            val photoEntry = param.thisObject.getObj("photoEntry")
+            val isVideo = photoEntry?.getObj("isVideo") == true
+            val highQuality = photoEntry?.getObj("highQuality") == true
+            val videoTextView = param.thisObject.getObj("videoTextView") as? TextView
+            val videoInfoContainer = param.thisObject.getObj("videoInfoContainer") as? View
+            val videoPlayImageView = param.thisObject.getObj("videoPlayImageView") as? View
+            val layoutParams = videoTextView?.layoutParams as? ViewGroup.MarginLayoutParams
+            if (!isVideo && highQuality) {
+                videoInfoContainer?.visibility = View.INVISIBLE
+                videoPlayImageView?.visibility = View.GONE
+                layoutParams?.leftMargin = 0
+                videoTextView?.visibility = View.GONE
             }
-        )
-        photoAttachPhotoCellClass.hookAll(
-            "setPhotoEntry",
-            cond = ::isEnabled ,
-            before = { param ->
-                param.thisObject.getObj("photoEntry").setObj("highQuality", false)
-            },
-            after = { param ->
-                param.thisObject.getObj("photoEntry").setObj("highQuality", true)
-            }
-        )
+        }
     }
 }
