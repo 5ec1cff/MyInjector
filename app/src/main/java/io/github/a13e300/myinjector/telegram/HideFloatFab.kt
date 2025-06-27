@@ -26,7 +26,7 @@ class HideFloatFab : DynHook() {
             cond = ::isEnabled
         ) { param ->
             val view = param.thisObject as? View ?: return@hookBefore
-            if (fabViews.containsKey(view) && isEnabled()) {
+            if (fabViews.containsKey(view)) {
                 param.args[0] = View.GONE
             }
         }
