@@ -204,6 +204,14 @@ com.google.android.documentsui
 - 如果使用 ACTION_OPEN_DOCUMENT 选择文件，强制显示 Picker Activity （类似 ACTION_GET_CONTENT 的行为）。
 - 打开时自动显示抽屉，且根目录列表滚动到 App （我知道你想用其他 Picker Activity ，对吧？）
 
+## Sudoku
+
+```
+com.easybrain.sudoku.android
+```
+
+- 移除广告（仍有概率看到启动广告）
+
 ## 过期功能
 
 长期未维护，可能不可用

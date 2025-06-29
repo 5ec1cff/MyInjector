@@ -28,5 +28,6 @@
         <item>com.xtaolabs.pagergram</item>
         <item>com.spotify.music</item>
         <item>com.google.android.documentsui</item>
+        <item>com.easybrain.sudoku.android</item>
     </string-array>
 </resources>

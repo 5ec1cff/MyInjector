@@ -58,6 +58,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.meizu.customizecenter" -> MeiZuCustomizerCenterHandler()
             "com.spotify.music" -> SpotifyHandler()
             "com.google.android.documentsui" -> DocumentsUIHandler()
+            "com.easybrain.sudoku.android" -> SudokuHandler()
             else -> return
         }
         logPrefix = "[${handler.javaClass.simpleName}] "
