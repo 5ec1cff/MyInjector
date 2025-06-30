@@ -210,7 +210,8 @@ com.google.android.documentsui
 com.easybrain.sudoku.android
 ```
 
-- 移除广告（仍有概率看到启动广告）
+- 移除广告（仍有概率看到广告，待解决）
+- 阻止隐藏系统导航栏
 
 ## 过期功能
 
