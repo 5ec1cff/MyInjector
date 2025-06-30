@@ -1,17 +1,21 @@
 package io.github.a13e300.myinjector
 
+import android.app.Instrumentation
+import android.content.Intent
 import android.view.View
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.createObfsTable
-import io.github.a13e300.myinjector.arch.hookAllAfter
+import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
+import org.luckypray.dexkit.query.enums.StringMatchType
+import org.luckypray.dexkit.query.matchers.base.StringMatcher
 
 class SudokuHandler : IHook() {
     companion object {
-        private const val AdsConfigImpl = "AdsConfigImpl"
-        private const val AdsConfigImplInitiator = "AdsConfigImplInitiator"
+        private const val AdsConfigDto = "AdsConfigDto"
     }
 
     override fun onHook() {
@@ -29,39 +33,34 @@ class SudokuHandler : IHook() {
     }
 
     private fun hookRemoveAd() = runCatching {
-        val tbl = createObfsTable("sudoku", 1) { bridge ->
-            val clzAdsConfigImpl = bridge.findClass {
+        val tbl = createObfsTable("sudoku", 2) { bridge ->
+            val adsConfigDto = bridge.findClass {
                 matcher {
-                    usingStrings("AdsConfigImpl")
+                    addUsingString(StringMatcher("AdsConfigDto", StringMatchType.StartsWith))
                 }
             }.single()
-            val adsConfigImplInitiator = bridge.findMethod {
+            val enabledField = adsConfigDto.findField {
                 matcher {
-                    addInvoke {
-                        name = "<init>"
-                        declaredClass = clzAdsConfigImpl.name
-                    }
-                }
-            }.single()
-            val enabledField = clzAdsConfigImpl.findField {
-                matcher {
-                    type(Boolean::class.java)
+                    type(Integer::class.java)
                 }
             }.single()
 
             mutableMapOf(
-                AdsConfigImpl to ObfsInfo(clzAdsConfigImpl.name, enabledField.name),
-                AdsConfigImplInitiator to ObfsInfo(
-                    adsConfigImplInitiator.className,
-                    adsConfigImplInitiator.name
-                )
+                AdsConfigDto to ObfsInfo(adsConfigDto.name, enabledField.name)
             )
         }
 
-        val initiator = tbl[AdsConfigImplInitiator]!!
-        val enableField = tbl[AdsConfigImpl]!!
-        findClass(initiator.className).hookAllAfter(initiator.memberName) { param ->
-            param.result.setObj(enableField.memberName, false)
+        val adsConfigDto = tbl[AdsConfigDto]!!
+        findClass(adsConfigDto.className).hookAllCAfter { param ->
+            param.thisObject.setObj(adsConfigDto.memberName, 0)
+        }
+
+        Instrumentation::class.java.hookAllBefore("execStartActivity") { param ->
+            val intent = param.args[4] as Intent
+            if (intent.component?.className == "com.easybrain.crosspromo.ui.CrossPromoActivity") {
+                logD("fuck com.easybrain.crosspromo.ui.CrossPromoActivity")
+                param.result = null
+            }
         }
     }.onFailure {
         logE("hookRemoveAd", it)
