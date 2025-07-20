@@ -3,6 +3,7 @@
 package io.github.a13e300.myinjector.arch
 
 import io.github.a13e300.myinjector.bridge.Xposed
+import java.lang.reflect.Member
 import java.lang.reflect.Method
 
 inline fun Any?.getObj(name: String): Any? = Xposed.getObjectField(this, name)
@@ -58,3 +59,6 @@ fun Class<*>.deoptimize(name: String) {
         if (it.name == name) it.deoptimize()
     }
 }
+
+inline fun Member.callOrig(receiver: Any?, vararg args: Any?) =
+    Xposed.invokeOriginalMethod(this, receiver, args)

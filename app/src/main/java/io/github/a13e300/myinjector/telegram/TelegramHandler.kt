@@ -95,6 +95,7 @@ object TelegramHandler : IHook() {
         subHook(AlwaysShowDownloadManager())
         subHook(HideFloatFab())
         subHook(OpenTgUserLink())
+        subHook(CopyPrivateChatLink())
     }
 
     private fun subHook(hook: DynHook) {

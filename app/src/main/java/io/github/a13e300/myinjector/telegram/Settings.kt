@@ -140,6 +140,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "openTgUserLink" ->
                 settings.openTgUserLink = v
+
+            "copyPrivateChatLink" ->
+                settings.copyPrivateChatLink = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -256,6 +259,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
                     "openTgUserLink" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.openTgUserLink
+
+                    "copyPrivateChatLink" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.copyPrivateChatLink
                 }
             }
             val searchItem = SearchItem(
@@ -482,6 +488,11 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                     "打开 tg 用户链接",
                     "openTgUserLink",
                     "将 tg://user?id=xxx 转换成 tg://openmessage?user_id=xxx 并打开"
+                )
+                switchPreference(
+                    "在私聊中复制消息链接",
+                    "copyPrivateChatLink",
+                    "链接仅对自己有效，tg://openmessage?user_id=xxx&message_id=yyy"
                 )
             }
 

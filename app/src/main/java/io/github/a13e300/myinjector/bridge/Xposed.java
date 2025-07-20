@@ -1,6 +1,7 @@
 package io.github.a13e300.myinjector.bridge;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -104,5 +105,9 @@ public class Xposed {
 
     public static Object setAdditionalInstanceField(Object obj, String key, Object value) {
         return XposedHelpers.setAdditionalInstanceField(obj, key, value);
+    }
+
+    public static Object invokeOriginalMethod(Member method, Object thisObject, Object[] args) throws NullPointerException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+        return XposedBridge.invokeOriginalMethod(method, thisObject, args);
     }
 }
