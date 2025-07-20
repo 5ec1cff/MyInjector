@@ -30,4 +30,5 @@ message TelegramSettings {
   optional bool removeArchiveFolder = 21;
   optional bool alwaysShowDownloadManager = 22;
   optional bool hideFloatFab = 23;
+  optional bool openTgUserLink = 24;
 }

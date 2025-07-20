@@ -137,6 +137,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "hideFloatFab" ->
                 settings.hideFloatFab = v
+
+            "openTgUserLink" ->
+                settings.openTgUserLink = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -250,6 +253,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
                     "hideFloatFab" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.hideFloatFab
+
+                    "openTgUserLink" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.openTgUserLink
                 }
             }
             val searchItem = SearchItem(
@@ -471,6 +477,11 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                     "修复链接的意外字符",
                     "openLinkDialog",
                     "如果打开的链接包含意外字符（比如可能链接和后面的文字无空格），则总是弹出对话框，并可以点击fix按钮打开去除这些意外字符的链接"
+                )
+                switchPreference(
+                    "打开 tg 用户链接",
+                    "openTgUserLink",
+                    "将 tg://user?id=xxx 转换成 tg://openmessage?user_id=xxx 并打开"
                 )
             }
 

@@ -61,11 +61,12 @@ class EmojiStickerMenu : DynHook() {
                         return@hookAllBefore
                     }
                 }
+                val userLink = "tg://openmessage?user_id=$userId"
                 AndroidAppHelper.currentApplication().getSystemService(
                     ClipboardManager::class.java
-                ).setPrimaryClip(ClipData.newPlainText("", userId.toString()))
+                ).setPrimaryClip(ClipData.newPlainText("", userLink))
                 Toast.makeText(
-                    AndroidAppHelper.currentApplication(), "User: " + userId.toString(),
+                    AndroidAppHelper.currentApplication(), "User: $userId",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -136,11 +137,12 @@ class EmojiStickerMenu : DynHook() {
                         return@hookAllBefore
                     }
                 }
+                val userLink = "tg://openmessage?user_id=$userId"
                 AndroidAppHelper.currentApplication().getSystemService(
                     ClipboardManager::class.java
-                ).setPrimaryClip(ClipData.newPlainText("", userId.toString()))
+                ).setPrimaryClip(ClipData.newPlainText("", userLink))
                 Toast.makeText(
-                    AndroidAppHelper.currentApplication(), "User: " + userId.toString(),
+                    AndroidAppHelper.currentApplication(), "User: $userId",
                     Toast.LENGTH_SHORT
                 ).show()
             }
