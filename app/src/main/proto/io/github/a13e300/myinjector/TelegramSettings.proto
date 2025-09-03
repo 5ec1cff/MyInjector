@@ -32,4 +32,5 @@ message TelegramSettings {
   optional bool hideFloatFab = 23;
   optional bool openTgUserLink = 24;
   optional bool copyPrivateChatLink = 25;
+  optional bool saveSecretMedia = 26;
 }

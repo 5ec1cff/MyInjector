@@ -143,6 +143,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
             "copyPrivateChatLink" ->
                 settings.copyPrivateChatLink = v
+
+            "saveSecretMedia" ->
+                settings.saveSecretMedia = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -262,6 +265,9 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
 
                     "copyPrivateChatLink" -> (preference as SwitchPreference).isChecked =
                         TelegramHandler.settings.copyPrivateChatLink
+
+                    "saveSecretMedia" -> (preference as SwitchPreference).isChecked =
+                        TelegramHandler.settings.saveSecretMedia
                 }
             }
             val searchItem = SearchItem(
@@ -523,6 +529,10 @@ class SettingDialog(context: Context) : AlertDialog.Builder(context),
                 switchPreference(
                     "移除主页浮动按钮",
                     "hideFloatFab"
+                )
+                switchPreference(
+                    "保存私密媒体",
+                    "saveSecretMedia"
                 )
             }
         }
