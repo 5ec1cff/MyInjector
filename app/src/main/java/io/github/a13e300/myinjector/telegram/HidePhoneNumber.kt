@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.TextView
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.addModuleAssets
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS

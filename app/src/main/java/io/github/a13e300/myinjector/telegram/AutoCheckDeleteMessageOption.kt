@@ -2,6 +2,7 @@ package io.github.a13e300.myinjector.telegram
 
 import android.app.Dialog
 import android.view.ViewGroup
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.findView
 import io.github.a13e300.myinjector.arch.getObjAsN

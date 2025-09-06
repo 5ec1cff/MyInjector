@@ -5,6 +5,7 @@ package io.github.a13e300.myinjector.telegram
 import android.app.Activity
 import android.view.View
 import android.widget.Toast
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj

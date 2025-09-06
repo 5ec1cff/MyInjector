@@ -1,9 +1,9 @@
 package io.github.a13e300.myinjector.telegram
 
-import android.widget.TextView
 import android.view.View
 import android.view.ViewGroup
-
+import android.widget.TextView
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter

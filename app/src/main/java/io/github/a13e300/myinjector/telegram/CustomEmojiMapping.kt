@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.Toast
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter

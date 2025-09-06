@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter

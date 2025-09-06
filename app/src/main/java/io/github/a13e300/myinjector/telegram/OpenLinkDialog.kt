@@ -7,6 +7,7 @@ import android.net.Uri
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.StyleSpan
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObjAs

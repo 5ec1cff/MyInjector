@@ -2,6 +2,7 @@ package io.github.a13e300.myinjector.telegram
 
 import android.view.View
 import android.widget.FrameLayout
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookBefore

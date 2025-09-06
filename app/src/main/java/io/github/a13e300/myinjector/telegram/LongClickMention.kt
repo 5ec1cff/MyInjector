@@ -2,6 +2,7 @@ package io.github.a13e300.myinjector.telegram
 
 import android.text.SpannableString
 import android.text.Spanned
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj

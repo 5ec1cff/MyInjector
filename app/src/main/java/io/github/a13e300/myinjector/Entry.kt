@@ -45,7 +45,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.termux" -> TermuxHandler()
             "com.android.systemui" -> SystemUIHandler()
             "com.zhihu.android" -> ZhihuXposedHandler()
-            "com.android.chrome", "com.kiwibrowser.browser" -> ChromeHandler()
+            "com.android.chrome", "com.kiwibrowser.browser" -> ChromeHandler
             "com.baidu.input" -> BaiduIMEHandler()
             "com.miui.home" -> MiuiHomeHandler()
             "android" -> {

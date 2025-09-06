@@ -5,13 +5,12 @@ import io.github.a13e300.myinjector.logE
 
 abstract class IHook {
     lateinit var classLoader: ClassLoader
-        private set
     lateinit var loadPackageParam: LoadPackageParam
         private set
 
-    open fun hook(param: LoadPackageParam) {
+    open fun hook(param: LoadPackageParam, loader: ClassLoader = param.classLoader) {
         loadPackageParam = param
-        classLoader = param.classLoader
+        classLoader = loader
         try {
             onHook()
         } catch (t: Throwable) {
@@ -20,7 +19,7 @@ abstract class IHook {
     }
 
     fun subHook(hook: IHook) {
-        hook.hook(loadPackageParam)
+        hook.hook(loadPackageParam, classLoader)
     }
 
     protected fun findClass(name: String): Class<*> = classLoader.findClass(name)

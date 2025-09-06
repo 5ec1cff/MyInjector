@@ -6,6 +6,7 @@ import android.location.Location
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Toast
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter

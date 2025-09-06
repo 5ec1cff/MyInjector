@@ -1,6 +1,7 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.view.View
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
