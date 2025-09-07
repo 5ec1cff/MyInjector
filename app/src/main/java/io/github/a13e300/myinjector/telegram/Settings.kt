@@ -98,6 +98,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "saveSecretMedia" ->
                 settings.saveSecretMedia = v
+
+            "disableMiuiVarFonts" ->
+                settings.disableMiuiVarFonts = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -253,6 +256,13 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "保存私密媒体",
                     "saveSecretMedia"
                 )
+                if (DisableMiuiVarFont.needsDisableMiuiVarFonts) {
+                    switchPreference(
+                        "禁用 MiuiVarFonts",
+                        "disableMiuiVarFonts",
+                        "修复一些 UI 显示问题（重启生效）"
+                    )
+                }
             }
         }
     }
@@ -343,6 +353,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "saveSecretMedia" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.saveSecretMedia
+
+            "disableMiuiVarFonts" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.disableMiuiVarFonts
         }
     }
 }

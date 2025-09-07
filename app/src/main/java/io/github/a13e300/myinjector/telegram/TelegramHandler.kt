@@ -36,6 +36,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
+        subHook(DisableMiuiVarFont())
     }
 
     override fun onReadSettings(input: InputStream): TelegramSettings =
