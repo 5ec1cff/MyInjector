@@ -29,12 +29,16 @@ if 'commits' in GITHUB_EVENT:
         else:
             commit_message = f'{msg}\n{commit_message}'
         i -= 1
-    commit_message = f'```{commit_message.strip()}\n```\n'
+    if 'forced' in GITHUB_EVENT and GITHUB_EVENT['forced']:
+        fp_info = '**Force Pushed**\n'
+    else:
+        fp_info = ''
+    commit_message = f'```{commit_message.strip()}\n```{fp_info}'
 elif 'head_commit' in GITHUB_EVENT:
     msg = GITHUB_EVENT["head_commit"]["msg"]
     if len(msg) > 256:
         msg = msg[:253] + '...'
-    commit_message = f'```{msg.strip()}\n```\n'
+    commit_message = f'```{msg.strip()}\n```'
 else:
     commit_message = ''
 
