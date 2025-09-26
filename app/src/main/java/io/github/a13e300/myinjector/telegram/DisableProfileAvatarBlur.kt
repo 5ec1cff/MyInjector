@@ -13,15 +13,16 @@ import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
-import io.github.a13e300.myinjector.logD
 
 class DisableProfileAvatarBlur : DynHook() {
 
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableProfileAvatarBlur
 
     override fun onHook() {
+        // disable blur
         findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
             .hookAllNopIf("draw", ::isEnabled)
+
         /*
         findClass("org.telegram.ui.ProfileActivity").hookAllAfter(
             "updateExtraViews",
@@ -38,11 +39,14 @@ class DisableProfileAvatarBlur : DynHook() {
                 overlaysView.requestLayout()
             }
         }*/
+
+        // let avatar gallery expand to actions area
         findClass("org.telegram.ui.Components.ProfileGalleryView")
             .hookAllCAfter(cond = ::isEnabled) { param ->
                 (param.thisObject as View).setPadding(0, 0, 0, 0)
             }
 
+        // set proper shadow
         findClass("org.telegram.ui.ProfileActivity\$OverlaysView").hookAllAfter(
             "onSizeChanged",
             cond = ::isEnabled
@@ -64,11 +68,10 @@ class DisableProfileAvatarBlur : DynHook() {
 
         fun lerp(a: Float, b: Float, f: Float) = a + f * (b - a)
 
+        // fix animation of expanding avatar
         profileActivity.hookAllAfter("setAvatarExpandProgress", cond = ::isEnabled) { param ->
-            logD("setAvatarExpandProgress")
             val actionsView = param.thisObject.getObjAsN<View>("actionsView")
             if (actionsView == null) {
-                logD("no actionsView")
                 return@hookAllAfter
             }
             val avatarsViewPager = param.thisObject.getObjAs<View>("avatarsViewPager")
@@ -82,7 +85,6 @@ class DisableProfileAvatarBlur : DynHook() {
                 realSize / avatarScale,
                 value
             ).toInt()
-            logD("updated: ${lp.height} -> $nh")
             lp.height = nh
             lp.width = nh
             // make margin fixed, call fixAvatarImageInCenter to align it
@@ -110,7 +112,6 @@ class DisableProfileAvatarBlur : DynHook() {
                     realSize / avatarScale,
                     value
                 ).toInt()
-                logD("updated: ${lp.height} -> $nh")
                 lp.height = nh
                 lp.width = nh
                 // make margin fixed, call fixAvatarImageInCenter to align it
