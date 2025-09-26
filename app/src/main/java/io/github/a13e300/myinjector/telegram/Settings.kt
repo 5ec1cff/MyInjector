@@ -101,6 +101,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "disableMiuiVarFonts" ->
                 settings.disableMiuiVarFonts = v
+
+            "disableProfilerAvatarBlur" ->
+                settings.disableProfilerAvatarBlur = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -263,6 +266,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                         "修复一些 UI 显示问题（重启生效）"
                     )
                 }
+                switchPreference(
+                    "禁用资料头像模糊",
+                    "disableProfilerAvatarBlur"
+                )
             }
         }
     }
@@ -356,6 +363,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "disableMiuiVarFonts" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.disableMiuiVarFonts
+
+            "disableProfilerAvatarBlur" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.disableProfilerAvatarBlur
         }
     }
 }

@@ -34,4 +34,5 @@ message TelegramSettings {
   optional bool copyPrivateChatLink = 25;
   optional bool saveSecretMedia = 26;
   optional bool disableMiuiVarFonts = 27;
+  optional bool disableProfilerAvatarBlur = 28;
 }
