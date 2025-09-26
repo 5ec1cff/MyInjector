@@ -7,9 +7,9 @@ import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 
-class DisableProfilerAvatarBlur : DynHook() {
+class DisableProfileAvatarBlur : DynHook() {
 
-    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableProfilerAvatarBlur
+    override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableProfileAvatarBlur
 
     override fun onHook() {
         findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
