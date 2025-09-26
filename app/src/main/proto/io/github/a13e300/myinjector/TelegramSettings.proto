@@ -35,4 +35,5 @@ message TelegramSettings {
   optional bool saveSecretMedia = 26;
   optional bool disableMiuiVarFonts = 27;
   optional bool disableProfileAvatarBlur = 28;
+  optional bool disableProfileAvatarBlurExtendAvatar = 29;
 }

@@ -104,6 +104,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "disableProfileAvatarBlur" ->
                 settings.disableProfileAvatarBlur = v
+
+            "disableProfileAvatarBlurExtendAvatar" ->
+                settings.disableProfileAvatarBlurExtendAvatar = v
         }
         TelegramHandler.updateSettings(settings.build())
         return true
@@ -270,6 +273,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "禁用资料头像模糊",
                     "disableProfileAvatarBlur"
                 )
+                switchPreference(
+                    "扩展头像显示范围到操作按钮下",
+                    "disableProfileAvatarBlurExtendAvatar",
+                    "需要同时开启「禁用资料头像模糊」才能生效"
+                )
             }
         }
     }
@@ -366,6 +374,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "disableProfileAvatarBlur" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.disableProfileAvatarBlur
+
+            "disableProfileAvatarBlurExtendAvatar" -> (preference as SwitchPreference).apply {
+                isChecked = TelegramHandler.settings.disableProfileAvatarBlurExtendAvatar
+                isEnabled = TelegramHandler.settings.disableProfileAvatarBlur
+            }
         }
     }
 }
