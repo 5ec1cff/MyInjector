@@ -1,5 +1,7 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.view.View
@@ -13,6 +15,7 @@ import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
+import io.github.a13e300.myinjector.arch.setObj
 
 class DisableProfileAvatarBlur : DynHook() {
 
@@ -119,6 +122,21 @@ class DisableProfileAvatarBlur : DynHook() {
 
                 param.thisObject.call("fixAvatarImageInCenter")
                 avatarContainer.requestLayout()
+            }
+        }
+
+        // set color to black when pulled down
+        findClass("org.telegram.ui.ProfileActivity\$TopView").hookAllAfter(
+            "updateBackgroundPaint",
+            cond = ::isEnabled
+        ) { param ->
+            val pa = param.thisObject.getObj("this\$0")
+            val actionsView = pa.getObj("actionsView") ?: return@hookAllAfter
+            val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
+            if (isPulledDown) {
+                actionsView.setObj("radialGradient", null)
+                actionsView.call("setActionsColor", Color.BLACK, false)
+                actionsView.getObjAs<Paint>("paint").alpha = 40
             }
         }
     }
