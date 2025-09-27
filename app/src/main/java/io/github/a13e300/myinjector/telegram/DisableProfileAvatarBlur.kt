@@ -48,6 +48,7 @@ class DisableProfileAvatarBlur : DynHook() {
             }
         }
 
+        // fix background turn black
         val topViewClass = findClass("org.telegram.ui.ProfileActivity\$TopView")
         topViewClass.hookAllBefore("setBackgroundColor", cond = ::isEnabled) { param ->
             if (extendAvatar) return@hookAllBefore

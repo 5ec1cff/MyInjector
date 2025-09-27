@@ -102,8 +102,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "disableMiuiVarFonts" ->
                 settings.disableMiuiVarFonts = v
 
-            "disableProfileAvatarBlur" ->
+            "disableProfileAvatarBlur" -> {
                 settings.disableProfileAvatarBlur = v
+                prefScreen.findPreference("disableProfileAvatarBlurExtendAvatar").isEnabled = v
+            }
 
             "disableProfileAvatarBlurExtendAvatar" ->
                 settings.disableProfileAvatarBlurExtendAvatar = v
