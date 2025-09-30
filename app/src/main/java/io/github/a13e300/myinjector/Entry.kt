@@ -59,6 +59,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.spotify.music" -> SpotifyHandler()
             "com.google.android.documentsui" -> DocumentsUIHandler()
             "com.easybrain.sudoku.android" -> SudokuHandler()
+            "com.xingin.xhs" -> XhsHandler()
             else -> return
         }
         logPrefix = "[${handler.javaClass.simpleName}] "

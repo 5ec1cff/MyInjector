@@ -29,5 +29,6 @@
         <item>com.spotify.music</item>
         <item>com.google.android.documentsui</item>
         <item>com.easybrain.sudoku.android</item>
+        <item>com.xingin.xhs</item>
     </string-array>
 </resources>
