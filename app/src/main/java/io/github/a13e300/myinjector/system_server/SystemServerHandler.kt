@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
+import android.os.IBinder
 import android.view.View
 import android.view.WindowInsetsController
 import io.github.a13e300.myinjector.SystemServerConfig
@@ -234,16 +235,24 @@ class SystemServerHandler : HotLoadHook() {
         hooks.addAll(activityStarter.hookAllBefore("executeRequest") { param ->
             if (!config.forceNewTask && !config.forceNewTaskDebug) return@hookAllBefore
             val request = param.args[0]
-            val requestCode = request.getObjAs<Int>("requestCode")
+            var requestCode = request.getObjAs<Int>("requestCode")
             val intent = request.getObjAsN<Intent>("intent")
             val source = request.getObjAsN<String>("callingPackage")
             val targetInfo = request.getObjAsN<ActivityInfo>("activityInfo")
-            val resultTo = request.getObj("resultTo")
+            var resultTo = request.getObj("resultTo") // IBinder
             val sourceRecord = activityRecordClass.callS("isInAnyTask", resultTo)
             val sourceInfo = sourceRecord?.getObjAsN<ActivityInfo>("info")
+            val isForwardResult = intent?.flags?.and(Intent.FLAG_ACTIVITY_FORWARD_RESULT)
+            if (requestCode < 0 && isForwardResult != 0 && sourceRecord != null) {
+                requestCode = sourceRecord.getObjAs("requestCode")
+                resultTo = sourceRecord.getObj("resultTo") // ActivityRecord
+            }
+            val hasResult = requestCode >= 0 && resultTo != null
             if (config.forceNewTaskDebug) {
-                val resultWho = request.getObj("resultWho")
-                logI("new intent start requestCode=$requestCode intent=$intent resultWho=$resultWho source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
+                val realResultRecord = if (resultTo is IBinder)
+                    activityRecordClass.callS("isInAnyTask", resultTo)
+                else resultTo
+                logI("new intent start requestCode=$requestCode intent=$intent hasResult=$hasResult resultTo=${resultTo} ${realResultRecord} source=$source (${sourceInfo?.packageName}/${sourceInfo?.name}) target=${targetInfo?.packageName}/${targetInfo?.name}")
             }
             if (intent == null) return@hookAllBefore
             if (intent.flags.and(Intent.FLAG_ACTIVITY_NEW_TASK) != 0) return@hookAllBefore
@@ -272,9 +281,8 @@ class SystemServerHandler : HotLoadHook() {
                 ))
                 if (match) {
                     // do not handle startActivityForResult, except user forced.
-                    val requestCode = request.getObjAs<Int>("requestCode")
-                    if (requestCode >= 0 && !it.ignoreResult) {
-                        if (config.forceNewTaskDebug) logI("not handling requestCode >= 0: $requestCode")
+                    if (hasResult && !it.ignoreResult) {
+                        if (config.forceNewTaskDebug) logI("not handling startActivityForResult: $requestCode")
                         return@forEach
                     }
                     if (config.forceNewTaskDebug) logI("forceNewTask: matched $it")
