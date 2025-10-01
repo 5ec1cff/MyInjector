@@ -30,5 +30,6 @@
         <item>com.google.android.documentsui</item>
         <item>com.easybrain.sudoku.android</item>
         <item>com.xingin.xhs</item>
+        <item>com.miui.gallery</item>
     </string-array>
 </resources>
