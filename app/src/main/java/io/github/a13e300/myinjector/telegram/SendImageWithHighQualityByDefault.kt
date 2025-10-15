@@ -27,15 +27,9 @@ class SendImageWithHighQualityByDefault : DynHook() {
             val photoEntry = param.thisObject.getObj("photoEntry")
             val isVideo = photoEntry?.getObj("isVideo") == true
             val highQuality = photoEntry?.getObj("highQuality") == true
-            val videoTextView = param.thisObject.getObj("videoTextView") as? TextView
             val videoInfoContainer = param.thisObject.getObj("videoInfoContainer") as? View
-            val videoPlayImageView = param.thisObject.getObj("videoPlayImageView") as? View
-            val layoutParams = videoTextView?.layoutParams as? ViewGroup.MarginLayoutParams
             if (!isVideo && highQuality) {
                 videoInfoContainer?.visibility = View.INVISIBLE
-                videoPlayImageView?.visibility = View.GONE
-                layoutParams?.leftMargin = 0
-                videoTextView?.visibility = View.GONE
             }
         }
     }
