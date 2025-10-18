@@ -11,6 +11,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
     override fun onHook() {
         super.onHook()
 
+        subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
         subHook(MutualContact())
         subHook(ContactPermission())
