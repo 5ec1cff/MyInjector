@@ -3,6 +3,9 @@ package io.github.a13e300.myinjector.telegram
 import android.os.Handler
 import android.os.HandlerThread
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAll
 import java.util.IdentityHashMap
@@ -29,10 +32,22 @@ class StickerLoadGuard : IHook() {
         synchronized(lock) {
             objects.keys.forEach { k ->
                 runCatching {
-                    k.getObjAsN<CountDownLatch>("countDownLatch")?.countDown()
+                    val cancel = runCatching {
+                        val loadOp = k.getObj("loadOperation")
+                        val state = loadOp.getObjAs<Int>("state")
+                        if (state == 5) { // stateCancelling
+                            k.call("cancel")
+                            // logD("cancelled ${k.hashCode()} which stuck in state = 5")
+                            true
+                        } else {
+                            false
+                        }
+                    }.getOrDefault(false)
+                    if (!cancel) k.getObjAsN<CountDownLatch>("countDownLatch")?.countDown()
                 }
             }
             if (objects.isNotEmpty()) {
+                // logD("checked ${objects.size}")
                 handler.postDelayed(runnable, 1000)
             }
         }
