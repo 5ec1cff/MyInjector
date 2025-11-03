@@ -12,6 +12,7 @@ import java.io.File
 val _loadDexKit by lazy { System.loadLibrary("dexkit") }
 
 typealias ObfsTable = Map<String, ObfsInfo>
+typealias MutableObfsTable = MutableMap<String, ObfsInfo>
 
 data class ObfsInfo(
     val className: String,
@@ -34,6 +35,7 @@ fun IHook.createObfsTable(
     tableVersion: Int,
     pathProvider: (ApplicationInfo) -> String = { it.sourceDir },
     classLoader: ClassLoader? = null,
+    force: Boolean = false,
     creator: (DexKitBridge) -> ObfsTable
 ): ObfsTable {
     val appInfo = loadPackageParam.appInfo
@@ -43,7 +45,7 @@ fun IHook.createObfsTable(
     tableFile.parentFile!!.mkdirs()
 
     runCatching {
-        if (tableFile.isFile) {
+        if (!force && tableFile.isFile) {
             JSONObject(tableFile.readText())
         } else {
             null
