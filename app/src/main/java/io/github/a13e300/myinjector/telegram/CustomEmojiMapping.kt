@@ -13,6 +13,7 @@ import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.logE
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -20,21 +21,47 @@ import java.io.File
 object CustomEmojiMapping : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customEmojiMapping
 
+    sealed class Emoji
+    data class SingleEmoji(val id: String, val text: String) : Emoji()
+    data class MultiEmojiItem(val id: String, val text: String, val key: String)
+    data class MultiEmoji(val list: List<MultiEmojiItem>) : Emoji()
+
     // emoji name -> (emoji id, emoji)
     data class EmotionMap(
-        val map: Map<String, Pair<String, String>>,
+        val map: Map<String, Emoji>,
         val regex: Regex
     )
 
     private var _emotionMap: EmotionMap? = null
     private fun loadEmotionMap(json: String): EmotionMap {
         val data = JSONObject(json)
-        val mp = mutableMapOf<String, Pair<String, String>>()
+        val mp = mutableMapOf<String, Emoji>()
         for (k in data.keys()) {
             val v = data.getJSONArray(k)
-            val id = v.getString(0)
-            val name = v.getJSONArray(1).getString(0)
-            mp.put(k, Pair(id, name))
+            when (v.get(0)) {
+                is String -> {
+                    val id = v.getString(0)
+                    val name = v.getJSONArray(1).getString(0)
+                    mp[k] = SingleEmoji(id, name)
+                }
+
+                is JSONArray -> {
+                    val l = mutableListOf<MultiEmojiItem>()
+                    for (i in 0 until v.length()) {
+                        val item = v.getJSONArray(i)
+                        val id = item.getString(0)
+                        val name = item.getJSONArray(1).getString(0)
+                        val key = item.getString(2)
+                        val mei = MultiEmojiItem(id, name, key)
+                        l.add(mei)
+                    }
+                    mp[k] = MultiEmoji(l)
+                }
+
+                else -> {
+                    logE("unexpected value: ${v.get(0)}")
+                }
+            }
         }
         val regex = Regex(mp.keys.joinToString("|") { Regex.escape(it) })
         return EmotionMap(mp, regex)
@@ -75,14 +102,42 @@ object CustomEmojiMapping : DynHook() {
             val item = result.getItemAt(0)
             val origText = item.text
             val newText = StringBuilder()
+            val prefKeys = mutableListOf<String>()
             var pos = 0
+            if (origText.startsWith("!!use:")) {
+                val end = origText.indexOfFirst { it == ' ' || it == '\n' }
+                if (end != -1) {
+                    prefKeys.addAll(origText.substring(6, end).split(","))
+                    pos = end + 1
+                }
+            }
             // logD("afterHookedMethod: $origText")
             val mp = emotionMap
             while (true) {
                 val r = mp.regex.find(origText, pos) ?: break
                 val kw = r.value
                 val replacement = mp.map[kw]?.let {
-                    "<animated-emoji data-document-id=\"${it.first}\">&#${it.second.firstUnicodeChar()};</animated-emoji>"
+                    val id: String
+                    val text: String
+                    when (it) {
+                        is SingleEmoji -> {
+                            id = it.id
+                            text = it.text
+                        }
+
+                        is MultiEmoji -> {
+                            var item: MultiEmojiItem? = null
+                            for (k in prefKeys) {
+                                item = it.list.find { item -> item.key == k }
+                            }
+                            if (item == null) {
+                                item = it.list.first()
+                            }
+                            id = item.id
+                            text = item.text
+                        }
+                    }
+                    "<animated-emoji data-document-id=\"${id}\">&#${text.firstUnicodeChar()};</animated-emoji>"
                 } ?: kw.toHtml()
                 newText.append(origText.substring(pos until r.range.first).toHtml())
                 newText.append(replacement)
