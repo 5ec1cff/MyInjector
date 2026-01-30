@@ -104,6 +104,37 @@ class XhsHandler : IHook() {
             logE("locateOpenStickerAsImage", it)
         }
 
+    private fun locateDisableSave(bridge: DexKitBridge, map: MutableObfsTable) = runCatching {
+        val clazz = bridge.findClass {
+            matcher {
+                fields {
+                    add {
+                        name("disable")
+                    }
+                    add {
+                        name("disableToast")
+                    }
+                    add {
+                        name("checkLogin")
+                    }
+                }
+            }
+        }.single()
+        val method = clazz.findMethod {
+            matcher {
+                usingFields {
+                    add {
+                        name("disable")
+                    }
+                }
+                returnType(java.lang.Boolean::class.java)
+            }
+        }.single()
+        map.put("disableSave", method.toObfsInfo())
+    }.onFailure {
+        logE("locateDisableSave", it)
+    }
+
     private fun hookOpenStickerAsImage(obfsTable: ObfsTable) = runCatching {
         val openStickerAsImageMagicSwitch = obfsTable["OpenStickerAsImageMagicSwitch"]!!
         findClass(openStickerAsImageMagicSwitch.className)
@@ -208,17 +239,26 @@ class XhsHandler : IHook() {
         logE("hookShare", it)
     }
 
+    private fun hookDisableSave(obfsTable: ObfsTable) = runCatching {
+        val method = obfsTable["disableSave"]!!
+        findClass(method.className).hookAllConstant(method.memberName, false)
+    }.onFailure {
+        logE("hookDisableSave", it)
+    }
+
     override fun onHook() {
-        val obfsTable = createObfsTable("", 3) { bridge ->
+        val obfsTable = createObfsTable("", 4) { bridge ->
             val map = mutableMapOf<String, ObfsInfo>()
             locateSavePic(bridge, map)
             locateOpenStickerAsImage(bridge, map)
             locateShare(bridge, map)
+            locateDisableSave(bridge, map)
             map
         }
 
         hookSavePic(obfsTable)
         hookOpenStickerAsImage(obfsTable)
         hookShare(obfsTable)
+        hookDisableSave(obfsTable)
     }
 }
