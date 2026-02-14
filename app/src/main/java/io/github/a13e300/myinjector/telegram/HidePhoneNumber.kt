@@ -20,17 +20,50 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 class HidePhoneNumber : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.hidePhoneNumber
 
-    @SuppressLint("DiscouragedApi")
+    @SuppressLint("DiscouragedApi", "SetTextI18n")
     override fun onHook() {
-        val classDrawerProfileCell = findClass("org.telegram.ui.Cells.DrawerProfileCell")
         var show = false
-        classDrawerProfileCell.hookAllAfter("setUser", cond = ::isEnabled) { param ->
-            val phoneTextView = param.thisObject.getObjAs<TextView>("phoneTextView")
-            val currentNumber = phoneTextView.text
-            phoneTextView.text = if (show) currentNumber else "点击显示电话号码"
-            phoneTextView.setOnClickListener {
-                show = !show
+        // hide phone number in drawer
+        // this only exists in older version
+        findClassOrNull("org.telegram.ui.Cells.DrawerProfileCell")?.let { classDrawerProfileCell ->
+            classDrawerProfileCell.hookAllAfter("setUser", cond = ::isEnabled) { param ->
+                val phoneTextView = param.thisObject.getObjAs<TextView>("phoneTextView")
+                val currentNumber = phoneTextView.text
                 phoneTextView.text = if (show) currentNumber else "点击显示电话号码"
+                phoneTextView.setOnClickListener {
+                    show = !show
+                    phoneTextView.text = if (show) currentNumber else "点击显示电话号码"
+                }
+            }
+        }
+
+        // hide phone number in settings
+        // exists in 12.4.0
+        val settingsActivity = findClass("org.telegram.ui.SettingsActivity")
+        if (settingsActivity.declaredFields.any { it.name == "subtitleView" }) {
+            settingsActivity.hookAllAfter("setInfo", cond = ::isEnabled) { param ->
+                val subtitleView = param.thisObject.getObjAs<TextView>("subtitleView")
+                val oldText = subtitleView.text.toString()
+                val indexAfterPhone = oldText.indexOf(" • @")
+                val currentNumber =
+                    if (indexAfterPhone >= 0) oldText.substring(0 until indexAfterPhone) else oldText
+                val textAfterPhone =
+                    if (indexAfterPhone >= 0) oldText.substring(indexAfterPhone until oldText.length) else ""
+
+                subtitleView.text =
+                    (if (show) currentNumber else "点击显示电话号码") + textAfterPhone
+                subtitleView.setOnClickListener {
+                    show = !show
+                    subtitleView.text =
+                        (if (show) currentNumber else "点击显示电话号码") + textAfterPhone
+                }
+                // subtitleView is too thin, so also allow click title to switch state
+                val titleView = param.thisObject.getObjAs<TextView>("titleView")
+                titleView.setOnClickListener {
+                    show = !show
+                    subtitleView.text =
+                        (if (show) currentNumber else "点击显示电话号码") + textAfterPhone
+                }
             }
         }
 

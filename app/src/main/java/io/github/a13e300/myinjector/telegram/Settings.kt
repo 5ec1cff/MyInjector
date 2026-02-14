@@ -8,6 +8,8 @@ import android.preference.SwitchPreference
 import android.view.View
 import io.github.a13e300.myinjector.SettingDialog
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.category
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -386,23 +388,56 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 }
 
 class Settings : IHook() {
+    @Suppress("UNCHECKED_CAST")
     override fun onHook() {
-        val drawerLayoutAdapterClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter")
-        val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")
+        // removed after 12.4.0
+        findClassOrNull("org.telegram.ui.Adapters.DrawerLayoutAdapter")?.let { drawerLayoutAdapterClass ->
+            val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")
 
-        drawerLayoutAdapterClass.hookAllAfter("resetItems") { param ->
-            val items = param.thisObject.getObjAs<ArrayList<Any?>>("items")
-            val settingsIdx = items.indexOfFirst { it != null && itemClass.isInstance(it) && it.getObjAs<Int>("id") == 8 }
-            val settingsItem = items[settingsIdx]
-            // getItemViewType() return 3 by default
-            val mySettingsItem =
-                itemClass.newInst(114514, "MyInjector", settingsItem.getObjAs<Int>("icon"))
-            mySettingsItem.setObj("listener", object : View.OnClickListener {
-                override fun onClick(v: View) {
-                    TgSettingsDialog(v.context).show()
+            drawerLayoutAdapterClass.hookAllAfter("resetItems") { param ->
+                val items = param.thisObject.getObjAs<ArrayList<Any?>>("items")
+                val settingsIdx = items.indexOfFirst {
+                    it != null && itemClass.isInstance(it) && it.getObjAs<Int>("id") == 8
                 }
-            })
-            items.add(settingsIdx + 1, mySettingsItem)
+                val settingsItem = items[settingsIdx]
+                // getItemViewType() return 3 by default
+                val mySettingsItem =
+                    itemClass.newInst(114514, "MyInjector", settingsItem.getObjAs<Int>("icon"))
+                mySettingsItem.setObj("listener", object : View.OnClickListener {
+                    override fun onClick(v: View) {
+                        TgSettingsDialog(v.context).show()
+                    }
+                })
+                items.add(settingsIdx + 1, mySettingsItem)
+            }
+            return
+        }
+
+        findClassOrNull("org.telegram.ui.SettingsActivity\$SettingCell\$Factory")?.let { settingsCellFactoryClass ->
+            val settingsActivity = findClass("org.telegram.ui.SettingsActivity")
+            val uItemClass = findClass("org.telegram.ui.Components.UItem")
+            settingsActivity.hookAllAfter("fillItems") { param ->
+                val items = param.args[0] as java.util.ArrayList<Any?>
+                val shadow = uItemClass.callS("asShadow", null as String?)
+                items.add(3, shadow)
+                items.add(
+                    4,
+                    settingsCellFactoryClass.callS(
+                        "of",
+                        114514,
+                        0,
+                        0,
+                        0,
+                        "MyInjector",
+                        "MyInjector Settings"
+                    )
+                )
+            }
+            settingsActivity.hookAllAfter("onClick") { param ->
+                if (param.args[0].getObjAs<Int>("id") == 114514) {
+                    TgSettingsDialog(param.thisObject.call("getContext") as Context).show()
+                }
+            }
         }
     }
 }
