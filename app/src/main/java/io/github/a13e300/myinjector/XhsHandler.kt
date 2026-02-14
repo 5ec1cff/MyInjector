@@ -168,13 +168,14 @@ class XhsHandler : IHook() {
             it.type.name.endsWith("NoteItemBean")
         }.also { it.isAccessible = true }
 
-        val longPressed = ThreadLocal<Boolean>()
+        var longPressed = false
 
         shareClass.hookAllBefore(shareMethod.memberName) { param ->
             if (param.args[0] == "TYPE_LINKED") {
                 val shareEntity = shareEntityField.get(param.thisObject)
                 val noteItem = noteItemBeanField.get(param.thisObject)
-                val longClicked = longPressed.get() == true
+                val longClicked = longPressed
+                longPressed = false
                 val pageUrl = shareEntity.getObjAs<String>("pageUrl")
                 var desc = noteItem.getObjAsN<String>("desc")
                 var title = noteItem.getObjAsN<String>("title")
@@ -227,12 +228,8 @@ class XhsHandler : IHook() {
         ) { param ->
             (param.thisObject as View).setOnLongClickListener {
                 logD("onlongclicked")
-                longPressed.set(true)
-                try {
-                    it.callOnClick()
-                } finally {
-                    longPressed.set(false)
-                }
+                longPressed = true
+                it.callOnClick()
             }
         }
     }.onFailure {
