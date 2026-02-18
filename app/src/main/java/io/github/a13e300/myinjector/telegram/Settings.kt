@@ -17,6 +17,7 @@ import io.github.a13e300.myinjector.arch.newInst
 import io.github.a13e300.myinjector.arch.preference
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.switchPreference
+import io.github.a13e300.myinjector.logE
 
 class TgSettingsDialog(context: Context) : SettingDialog(context) {
     override fun onPrefChanged(preference: Preference, newValue: Any?): Boolean {
@@ -416,25 +417,40 @@ class Settings : IHook() {
         findClassOrNull("org.telegram.ui.SettingsActivity\$SettingCell\$Factory")?.let { settingsCellFactoryClass ->
             val settingsActivity = findClass("org.telegram.ui.SettingsActivity")
             val uItemClass = findClass("org.telegram.ui.Components.UItem")
+            val VIEW_TYPE_SHADOW = 7
+            val myId = 11451419
             settingsActivity.hookAllAfter("fillItems") { param ->
                 val items = param.args[0] as java.util.ArrayList<Any?>
-                val shadow = uItemClass.callS("asShadow", null as String?)
-                items.add(3, shadow)
-                items.add(
-                    4,
-                    settingsCellFactoryClass.callS(
-                        "of",
-                        114514,
-                        0,
-                        0,
-                        0,
-                        "MyInjector",
-                        "MyInjector Settings"
+                fun addSettings(idx: Int) {
+                    items.add(
+                        idx,
+                        settingsCellFactoryClass.callS(
+                            "of",
+                            myId,
+                            0,
+                            0,
+                            0,
+                            "MyInjector",
+                            "MyInjector Settings"
+                        )
                     )
-                )
+                }
+                runCatching {
+                    val idx =
+                        items.indexOfFirst { it?.getObjAs<Int>("viewType") == VIEW_TYPE_SHADOW }
+                            .let { if (it < 0) 0 else it }
+                    addSettings(idx)
+                    if (idx > 0) {
+                        val shadow = uItemClass.callS("asShadow", null as String?)
+                        items.add(idx, shadow)
+                    }
+                }.onFailure {
+                    logE("failed to add, use fallback", it)
+                    addSettings(0)
+                }
             }
             settingsActivity.hookAllAfter("onClick") { param ->
-                if (param.args[0].getObjAs<Int>("id") == 114514) {
+                if (param.args[0].getObjAs<Int>("id") == myId) {
                     TgSettingsDialog(param.thisObject.call("getContext") as Context).show()
                 }
             }
