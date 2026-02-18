@@ -417,11 +417,14 @@ class Settings : IHook() {
         findClassOrNull("org.telegram.ui.SettingsActivity\$SettingCell\$Factory")?.let { settingsCellFactoryClass ->
             val settingsActivity = findClass("org.telegram.ui.SettingsActivity")
             val uItemClass = findClass("org.telegram.ui.Components.UItem")
-            val VIEW_TYPE_SHADOW = 7
             val myId = 11451419
             settingsActivity.hookAllAfter("fillItems") { param ->
                 val items = param.args[0] as java.util.ArrayList<Any?>
                 fun addSettings(idx: Int) {
+                    runCatching {
+                        val shadow = uItemClass.callS("asShadow", null as String?)
+                        items.add(idx, shadow)
+                    }
                     items.add(
                         idx,
                         settingsCellFactoryClass.callS(
@@ -436,14 +439,11 @@ class Settings : IHook() {
                     )
                 }
                 runCatching {
+                    // always before id == 1
                     val idx =
-                        items.indexOfFirst { it?.getObjAs<Int>("viewType") == VIEW_TYPE_SHADOW }
+                        items.indexOfFirst { it?.getObjAs<Int>("id") == 1 }
                             .let { if (it < 0) 0 else it }
                     addSettings(idx)
-                    if (idx > 0) {
-                        val shadow = uItemClass.callS("asShadow", null as String?)
-                        items.add(idx, shadow)
-                    }
                 }.onFailure {
                     logE("failed to add, use fallback", it)
                     addSettings(0)
