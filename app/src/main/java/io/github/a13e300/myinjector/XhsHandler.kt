@@ -1,14 +1,10 @@
 package io.github.a13e300.myinjector
 
-import android.app.Activity
 import android.app.AndroidAppHelper
-import android.app.Instrumentation
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.preference.Preference
 import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
@@ -21,11 +17,9 @@ import io.github.a13e300.myinjector.arch.DynHookManager
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
-import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllConstantIf
@@ -366,24 +360,9 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
 
 class SettingsHook : IHook() {
     override fun onHook() {
-        Activity::class.java.hookAllAfter("performNewIntent") { param ->
-            val activity = param.thisObject as Activity
-            val intent = param.args[0] as Intent
-            if (intent.action == "io.github.a13e300.myinjector.SHOW_SETTINGS") {
-                XhsSettingsDialog(activity).show()
-            }
+        addSettingsIntentInterceptor { activity ->
+            XhsSettingsDialog(activity).show()
         }
-
-        Activity::class.java.hookAfter("performCreate", Bundle::class.java) { param ->
-            val activity = param.thisObject as Activity
-            val intent = activity.intent
-            if (intent.action == "io.github.a13e300.myinjector.SHOW_SETTINGS") {
-                XhsSettingsDialog(activity).show()
-            }
-        }
-
-        Instrumentation::class.java.deoptimize("callActivityOnCreate")
-        Instrumentation::class.java.deoptimize("callActivityOnNewIntent")
 
         val creator = XhsHandler.creator
         val buttonClassInfo = creator.create("settingshook.buttonClass") { bridge ->

@@ -2,6 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <queries>
+        <package android:name="com.xingin.xhs" />
+        <package android:name="com.kiwibrowser.browser" />
+        <package android:name="com.android.chrome" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+        <package android:name="org.telegram.messenger.beta" />
+        <package android:name="org.telegram.plus" />
+        <package android:name="com.exteragram.messenger" />
+        <package android:name="com.radolyn.ayugram" />
+        <package android:name="uz.unnarsx.cherrygram" />
+        <package android:name="xyz.nextalone.nagram" />
+        <package android:name="nu.gpu.nagram" />
+        <package android:name="com.xtaolabs.pagergram" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"

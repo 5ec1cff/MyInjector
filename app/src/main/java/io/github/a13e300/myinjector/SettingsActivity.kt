@@ -9,10 +9,12 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
+import android.content.pm.PackageManager
 import android.graphics.Insets
 import android.os.Build
 import android.os.Bundle
 import android.preference.Preference
+import android.preference.PreferenceCategory
 import android.preference.PreferenceFragment
 import android.view.LayoutInflater
 import android.view.View
@@ -22,6 +24,7 @@ import android.widget.Button
 import android.widget.TextView
 import io.github.a13e300.myinjector.system_server.ResultReceiver
 import java.util.Arrays
+import java.util.UUID
 import java.util.stream.Collectors
 
 @Suppress("deprecation")
@@ -41,6 +44,68 @@ class SettingsActivity : Activity() {
             super.onCreate(savedInstanceState)
             preferenceManager.sharedPreferencesName = "system_server"
             addPreferencesFromResource(R.xml.prefs)
+
+            val pm = context.packageManager
+
+            val cat = PreferenceCategory(context).apply {
+                title = "Apps"
+            }
+            var added = false
+
+            fun addPackageSettings(pkg: String) {
+                runCatching {
+                    val info = try {
+                        pm.getApplicationInfo(pkg, 0)
+                    } catch (_: PackageManager.NameNotFoundException) {
+                        return
+                    }
+                    val label = info.loadLabel(pm)
+                    if (!added) {
+                        preferenceScreen.addPreference(cat)
+                        added = true
+                    }
+                    Preference(context).apply {
+                        cat.addPreference(this)
+                        title = "打开 $label 设置"
+                        setOnPreferenceClickListener {
+                            runCatching {
+                                val intent = pm.getLaunchIntentForPackage(pkg)!!
+                                intent.action = "io.github.a13e300.myinjector.SHOW_SETTINGS"
+                                intent.categories.clear()
+                                intent.addCategory("io.github.a13e300.myinjector.SHOW_SETTINGS")
+                                intent.addCategory(UUID.randomUUID().toString())
+                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                startActivity(intent)
+                            }.onFailure {
+                                logE("failed to open settings for $pkg:", it)
+                            }
+                            true
+                        }
+                    }
+                }.onFailure {
+                    logE("addPackageSettings $pkg")
+                }
+            }
+
+            val list = listOf(
+                "com.xingin.xhs",
+                "com.kiwibrowser.browser",
+                "com.android.chrome",
+                "org.telegram.messenger",
+                "org.telegram.messenger.web",
+                "org.telegram.messenger.beta",
+                "org.telegram.plus",
+                "com.exteragram.messenger",
+                "com.radolyn.ayugram",
+                "uz.unnarsx.cherrygram",
+                "xyz.nextalone.nagram",
+                "nu.gpu.nagram",
+                "com.xtaolabs.pagergram",
+            )
+
+            for (l in list) {
+                addPackageSettings(l)
+            }
         }
 
         @Deprecated("Deprecated in Java")

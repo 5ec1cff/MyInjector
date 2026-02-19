@@ -74,6 +74,9 @@ object ChromeHandler : DynHookManager<ChromeSettings>() {
     override fun onHook() {
         if (loadPackageParam.processName.contains(":")) return
         super.onHook()
+        addSettingsIntentInterceptor {
+            ChromeSettingsDialog(it).show()
+        }
         val name = loadPackageParam.appInfo.className
         // ensure split apk (split-chrome) is loaded, see:
         // https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/base/SplitCompatAppComponentFactory.java;l=136?q=SplitCompatAppComponentFactory&ss=chromium

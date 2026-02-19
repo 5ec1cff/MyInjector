@@ -7,6 +7,7 @@ import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
 import android.view.View
 import io.github.a13e300.myinjector.SettingDialog
+import io.github.a13e300.myinjector.addSettingsIntentInterceptor
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
@@ -391,6 +392,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 class Settings : IHook() {
     @Suppress("UNCHECKED_CAST")
     override fun onHook() {
+        addSettingsIntentInterceptor {
+            TgSettingsDialog(it).show()
+        }
+
         // removed after 12.4.0
         findClassOrNull("org.telegram.ui.Adapters.DrawerLayoutAdapter")?.let { drawerLayoutAdapterClass ->
             val itemClass = findClass("org.telegram.ui.Adapters.DrawerLayoutAdapter\$Item")

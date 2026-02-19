@@ -2,11 +2,15 @@
 
 package io.github.a13e300.myinjector
 
+import android.app.Activity
 import android.app.AlertDialog
+import android.app.Instrumentation
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.Resources
 import android.graphics.Typeface
+import android.os.Bundle
 import android.preference.ListPreference
 import android.preference.MultiSelectListPreference
 import android.preference.Preference
@@ -29,9 +33,13 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListAdapter
 import android.widget.ListView
+import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.forceSetSelection
 import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.hookAfter
+import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.inflateLayout
 import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.arch.restartApplication
@@ -312,4 +320,29 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
                 }.show()
         }
     }
+}
+
+fun IHook.addSettingsIntentInterceptor(callback: (activity: Activity) -> Unit) = runCatching {
+    Activity::class.java.hookAllAfter("performNewIntent") { param ->
+        val activity = param.thisObject as Activity
+        val intent = param.args[0] as Intent
+        // logD("newIntent $intent")
+        if (intent.action == "io.github.a13e300.myinjector.SHOW_SETTINGS" || intent.hasCategory("io.github.a13e300.myinjector.SHOW_SETTINGS")) {
+            callback(activity)
+        }
+    }
+
+    Activity::class.java.hookAfter("performCreate", Bundle::class.java) { param ->
+        val activity = param.thisObject as Activity
+        val intent = activity.intent
+        // logD("create Intent $intent")
+        if (intent.action == "io.github.a13e300.myinjector.SHOW_SETTINGS" || intent.hasCategory("io.github.a13e300.myinjector.SHOW_SETTINGS")) {
+            callback(activity)
+        }
+    }
+
+    Instrumentation::class.java.deoptimize("callActivityOnCreate")
+    Instrumentation::class.java.deoptimize("callActivityOnNewIntent")
+}.onFailure {
+    logE("addSettingsInterceptor", it)
 }
