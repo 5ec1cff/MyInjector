@@ -59,7 +59,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.spotify.music" -> SpotifyHandler()
             "com.google.android.documentsui" -> DocumentsUIHandler()
             "com.easybrain.sudoku.android" -> SudokuHandler()
-            "com.xingin.xhs" -> XhsHandler()
+            "com.xingin.xhs" -> XhsHandler
             "com.miui.gallery" -> MiuiGalleryHandler()
             else -> return
         }

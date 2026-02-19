@@ -16,7 +16,7 @@ abstract class DynHookManager<T : Any> : IHook() {
     lateinit var settingFile: File
         protected set
 
-    fun onChanged() {
+    open fun onChanged() {
         hooks.forEach {
             subHook(it as IHook)
         }

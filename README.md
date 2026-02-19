@@ -221,6 +221,7 @@ com.easybrain.sudoku.android
 com.xingin.xhs
 ```
 
+- 在「我」页面的侧边栏打开模块设置
 - 保存原图
 - 用打开图像方式打开表情
 - 重写分享中的复制链接功能，可以用 html 形式复制分享内容，长按可复制完整内容

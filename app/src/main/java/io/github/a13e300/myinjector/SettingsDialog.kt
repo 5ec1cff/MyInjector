@@ -4,6 +4,7 @@ package io.github.a13e300.myinjector
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.res.Resources
 import android.graphics.Typeface
 import android.preference.ListPreference
@@ -28,7 +29,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListAdapter
 import android.widget.ListView
-import io.github.a13e300.myinjector.arch.addModuleAssets
+import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.forceSetSelection
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.inflateLayout
@@ -38,12 +39,30 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.sp2px
 import io.github.a13e300.myinjector.telegram.findBaseActivity
 
-abstract class SettingDialog(ctx: Context) : Preference.OnPreferenceChangeListener,
+abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreferenceChangeListener,
     Preference.OnPreferenceClickListener {
-    val context = ContextThemeWrapper(
-        ctx,
+    val appCtx = activityCtx.call(
+        "createApplicationContext",
+        ApplicationInfo(activityCtx.applicationInfo).apply {
+            packageName = BuildConfig.APPLICATION_ID
+            sourceDir = Entry.modulePath
+            publicSourceDir = Entry.modulePath
+            splitSourceDirs = null
+            splitPublicSourceDirs = null
+            splitNames = null
+        }, 0
+    ) as Context
+    val context = object : ContextThemeWrapper(
+        activityCtx,
         android.R.style.Theme_DeviceDefault_DayNight
-    )
+    ) {
+        override fun getResources(): Resources = this@SettingDialog.appCtx.resources
+
+        override fun getSystemService(name: String): Any? {
+            if (name == LAYOUT_INFLATER_SERVICE) return appCtx.getSystemService(name)
+            return super.getSystemService(name)
+        }
+    }
 
     private lateinit var listView: ListView
     private lateinit var adapter: BaseAdapter
@@ -270,8 +289,8 @@ abstract class SettingDialog(ctx: Context) : Preference.OnPreferenceChangeListen
 
     fun show() {
         try {
-            val activity = context.findBaseActivity()
-            activity.addModuleAssets(Entry.modulePath)
+            val activity = activityCtx.findBaseActivity()
+            // activity.addModuleAssets(Entry.modulePath)
 
             AlertDialog.Builder(context).apply {
 
@@ -283,12 +302,13 @@ abstract class SettingDialog(ctx: Context) : Preference.OnPreferenceChangeListen
                 }
 
             }.show()
-        } catch (_: Resources.NotFoundException) {
+        } catch (e: Resources.NotFoundException) {
+            logE("res:", e)
             AlertDialog.Builder(context)
                 .setTitle("需要重启")
                 .setMessage("由于加载资源失败，需要重启应用以显示设置界面。")
                 .setPositiveButton("重启") { _, _ ->
-                    restartApplication(context.findBaseActivity())
+                    restartApplication(activityCtx.findBaseActivity())
                 }.show()
         }
     }
