@@ -20,11 +20,12 @@ import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
+import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllConstantIf
-import io.github.a13e300.myinjector.arch.hookAllReplace
 import io.github.a13e300.myinjector.arch.hookCAfter
+import io.github.a13e300.myinjector.arch.hookReplace
 import io.github.a13e300.myinjector.arch.newInst
 import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.arch.setObj
@@ -80,11 +81,13 @@ data class XhsHookConfig(
     }
 }
 
+class SaveOriginalImageAbort(var f: File) : Throwable()
+
 class SaveOriginalImage : DynHook() {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.saveOriginalImage
 
     override fun onHook() {
-        val savePicMethod = XhsHandler.creator.create("savePicMethod") { bridge ->
+        val savePicMethodInfo = XhsHandler.creator.create("savePicMethod") { bridge ->
             bridge.findMethod {
                 matcher {
                     usingEqStrings(
@@ -94,20 +97,84 @@ class SaveOriginalImage : DynHook() {
                 }
             }.single().toObfsInfo()
         }
+        val savePicClass = findClass(savePicMethodInfo.className)
+        val savePicMethod =
+            savePicClass.declaredMethods.single { it.name == savePicMethodInfo.memberName }
+        val picCacheClass = savePicMethod.parameters[1].type
+        val picCacheFileField =
+            picCacheClass.declaredFields.single { f -> f.type == File::class.java }
+                .also { it.isAccessible = true }
 
         val kotlinPair = findClass("kotlin.Pair")
 
-        findClass(savePicMethod.className).hookAllReplace(
-            savePicMethod.memberName,
+        savePicMethod.hookReplace(
             cond = ::isEnabled
         ) { param ->
-            val f = param.args[1].let {
-                it.javaClass.declaredFields.single { f -> f.type == File::class.java }
-                    .apply { isAccessible = true }
-                    .get(it) as File
+            val f = param.args[1].let { picCacheFileField.get(it) as File }
+            logD("save original $f")
+            param.args.last().apply {
+                call("onNext", kotlinPair.newInst("success", f))
+                call("onComplete")
             }
-            param.args.last().call("onNext", kotlinPair.newInst("success", f))
         }
+
+        // 保存多图时可能会见到这个方法
+
+        val savePicWithUrlInfo = XhsHandler.creator.create("savePicWithUrl") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    declaredClass(savePicMethodInfo.className)
+                    usingEqStrings(
+                        "save image failed without watermark"
+                    )
+                }
+            }.single { it.methodName != savePicMethodInfo.memberName }.toObfsInfo()
+        }
+        val picCacheInterface = picCacheClass.interfaces.single()
+        val getCacheMethod = XhsHandler.creator.create("getImageCache") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    addCaller {
+                        declaredClass(savePicWithUrlInfo.className)
+                        name(savePicWithUrlInfo.memberName)
+                    }
+                    returnType(picCacheInterface.name)
+                }
+            }.single().toObfsInfo()
+        }
+        val tls = ThreadLocal<Boolean>()
+        findClass(getCacheMethod.className).hookAllAfter(
+            getCacheMethod.memberName,
+            cond = ::isEnabled
+        ) { param ->
+            val res = param.result
+            if (tls.get() == true && picCacheClass.isInstance(res)) {
+                val f = res.let { picCacheFileField.get(it) as File }
+                param.throwable = SaveOriginalImageAbort(f)
+            }
+        }
+        savePicClass.hookAll(
+            savePicWithUrlInfo.memberName, cond = ::isEnabled,
+            before = {
+                tls.set(true)
+            },
+            after = { param ->
+                runCatching {
+                    (param.throwable as? SaveOriginalImageAbort)?.let {
+                        param.throwable = null
+                        param.result = null
+                        val f = it.f
+                        logD("save original with url $f")
+                        param.args.last().apply {
+                            call("onNext", kotlinPair.newInst("success", f))
+                            call("onComplete")
+                        }
+                    }
+                }
+
+                tls.set(false)
+            }
+        )
     }
 }
 
