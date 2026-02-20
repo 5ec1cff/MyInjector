@@ -155,6 +155,7 @@ class ForceSaveImage : DynHook() {
 
     override fun onHook() {
         runCatching {
+            // 单张图片保存
             val method = XhsHandler.creator.create("disableSave") { bridge ->
                 val clazz = bridge.findClass {
                     matcher {
@@ -185,6 +186,41 @@ class ForceSaveImage : DynHook() {
             }
             findClass(method.className).hookAllConstantIf(
                 method.memberName,
+                false,
+                cond = ::isEnabled
+            )
+            // 笔记分享的保存所有图片
+            // ShareInfoDetail$Operate
+            val method2 = XhsHandler.creator.create("disableSaveAll") { bridge ->
+                val clazz = bridge.findClass {
+                    matcher {
+                        fields {
+                            add {
+                                name("disable")
+                            }
+                            add {
+                                name("disableToast")
+                            }
+                            add {
+                                name("labelImageUrl")
+                            }
+                        }
+                    }
+                }.single()
+                val method = clazz.findMethod {
+                    matcher {
+                        usingFields {
+                            add {
+                                name("disable")
+                            }
+                        }
+                        returnType(java.lang.Boolean.TYPE)
+                    }
+                }.single()
+                method.toObfsInfo()
+            }
+            findClass(method2.className).hookAllConstantIf(
+                method2.memberName,
                 false,
                 cond = ::isEnabled
             )
