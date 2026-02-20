@@ -6,11 +6,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.view.View
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.DynHook
-import io.github.a13e300.myinjector.arch.getObjAs
-import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.logE
 import org.json.JSONArray
@@ -156,6 +153,8 @@ object CustomEmojiMapping : DynHook() {
         }
     }
 
+    private const val IMPORT_EMOJI_REQUEST_CODE = 114514
+
     fun importEmojiMap(context: Context) {
 
         Toast.makeText(context, "选择一个 emoji 映射的 json 配置文件", Toast.LENGTH_SHORT)
@@ -165,27 +164,13 @@ object CustomEmojiMapping : DynHook() {
             Intent(Intent.ACTION_GET_CONTENT).apply {
                 type = "*/*"
             },
-            114514
+            IMPORT_EMOJI_REQUEST_CODE
         )
     }
 
     private fun hookEmojiManage() {
-        val chatActivityEnterView = findClass(
-            "org.telegram.ui.Components.ChatActivityEnterView"
-        )
-
-        val cst = chatActivityEnterView.declaredConstructors.maxBy { it.parameterCount }!!
-            .also { it.isAccessible = true }
-        cst.hookAfter(cond = ::isEnabled) { param ->
-            param.thisObject.getObjAs<View>("emojiButton")
-                .setOnLongClickListener { v ->
-                    importEmojiMap(v.context)
-                    true
-                }
-        }
-
         Activity::class.java.hookAllAfter("dispatchActivityResult") { param ->
-            if (param.args[1] == 114514) {
+            if (param.args[1] == IMPORT_EMOJI_REQUEST_CODE) {
                 // logD("dispatchActivityResult: " + param.args[3])
                 val ctx = param.thisObject as Activity
                 (param.args[3] as? Intent)?.data?.let { url ->
