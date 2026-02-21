@@ -49,7 +49,7 @@ import io.github.a13e300.myinjector.telegram.findBaseActivity
 
 abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreferenceChangeListener,
     Preference.OnPreferenceClickListener {
-    val appCtx = activityCtx.call(
+    private val appCtx = (activityCtx.call(
         "createApplicationContext",
         ApplicationInfo(activityCtx.applicationInfo).apply {
             packageName = BuildConfig.APPLICATION_ID
@@ -59,15 +59,13 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
             splitPublicSourceDirs = null
             splitNames = null
         }, 0
-    ) as Context
+    ) as Context).createConfigurationContext(activityCtx.resources.configuration)
     val context = object : ContextThemeWrapper(
-        activityCtx,
-        android.R.style.Theme_DeviceDefault_DayNight
+        appCtx,
+        R.style.AppTheme
     ) {
-        override fun getResources(): Resources = this@SettingDialog.appCtx.resources
-
         override fun getSystemService(name: String): Any? {
-            if (name == LAYOUT_INFLATER_SERVICE) return appCtx.getSystemService(name)
+            if (name == WINDOW_SERVICE) return activityCtx.getSystemService(name)
             return super.getSystemService(name)
         }
     }
