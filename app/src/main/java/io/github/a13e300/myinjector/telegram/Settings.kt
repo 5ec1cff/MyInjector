@@ -12,6 +12,7 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.category
+import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.newInst
@@ -422,6 +423,14 @@ class Settings : IHook() {
         findClassOrNull("org.telegram.ui.SettingsActivity\$SettingCell\$Factory")?.let { settingsCellFactoryClass ->
             val settingsActivity = findClass("org.telegram.ui.SettingsActivity")
             val uItemClass = findClass("org.telegram.ui.Components.UItem")
+            val viewType by lazy {
+                runCatching {
+                    uItemClass.callS("getFactory", settingsCellFactoryClass)
+                        .getObj("viewType") as Int
+                }.onFailure { t ->
+                    logE("get ViewType", t)
+                }.getOrDefault(-1)
+            }
             val myId = 11451419
             settingsActivity.hookAllAfter("fillItems") { param ->
                 val items = param.args[0] as java.util.ArrayList<Any?>
@@ -446,7 +455,7 @@ class Settings : IHook() {
                 runCatching {
                     // always before id == 1
                     val idx =
-                        items.indexOfFirst { it?.getObjAs<Int>("id") == 1 }
+                        items.indexOfFirst { it?.getObjAs<Int>("id") == 1 && it?.getObj("viewType") == viewType }
                             .let { if (it < 0) 0 else it }
                     addSettings(idx)
                 }.onFailure {
