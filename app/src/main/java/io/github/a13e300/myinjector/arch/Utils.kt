@@ -2,6 +2,7 @@ package io.github.a13e300.myinjector.arch
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.AssetManager
@@ -21,7 +22,8 @@ fun View.findView(predicate: (View) -> Boolean): View? {
     if (predicate(this)) return this
     if (this is ViewGroup) {
         for (i in 0 until childCount) {
-            val v = getChildAt(i).findView(predicate)
+            val child = getChildAt(i)
+            val v = child.findView(predicate)
             if (v != null) return v
         }
     }
@@ -75,4 +77,21 @@ fun createPackageResources(appInfo: ApplicationInfo): Resources {
     val assetManager = AssetManager::class.java.newInstance()
     assetManager.call("addAssetPath", appInfo.sourceDir)
     return Resources(assetManager, null, null)
+}
+
+fun Context.findBaseActivityOrNull(): Activity? =
+    this as? Activity
+        ?: (this as? ContextWrapper)?.baseContext?.findBaseActivityOrNull()
+
+fun Context.findBaseActivity(): Activity =
+    this.findBaseActivityOrNull()
+        ?: error("not activity: $this")
+
+fun ViewGroup.containsClass(clazz: Class<*>): Boolean {
+    for (i in 0 until childCount) {
+        if (clazz.isInstance(getChildAt(i))) {
+            return true
+        }
+    }
+    return false
 }

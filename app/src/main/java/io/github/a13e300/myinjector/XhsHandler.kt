@@ -1,22 +1,41 @@
 package io.github.a13e300.myinjector
 
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.AlertDialog
 import android.app.AndroidAppHelper
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.graphics.PixelFormat
 import android.net.Uri
 import android.preference.Preference
 import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
 import android.util.AttributeSet
+import android.view.ContextThemeWrapper
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.DynHookManager
+import io.github.a13e300.myinjector.arch.FindObjectConfiguration
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.dp2px
+import io.github.a13e300.myinjector.arch.extraField
+import io.github.a13e300.myinjector.arch.findBaseActivity
+import io.github.a13e300.myinjector.arch.findBaseActivityOrNull
+import io.github.a13e300.myinjector.arch.findPathToObject
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -56,19 +75,30 @@ fun toHtmlText(title: String?, desc: String?, url: String): String {
     return sb.toString()
 }
 
+fun JSONObject.boolOrDefault(k: String, def: Boolean): Boolean =
+    runCatching {
+        if (has(k))
+            getBoolean(k)
+        else
+            def
+    }.getOrDefault(def)
+
+
 data class XhsHookConfig(
     val saveOriginalImage: Boolean = true,
     val forceSaveImage: Boolean = true,
     val openStickerAsImage: Boolean = true,
     val betterShare: Boolean = true,
+    val extractVideoLink: Boolean = true,
 ) {
     companion object {
         fun readFromJson(obj: JSONObject): XhsHookConfig {
             return XhsHookConfig(
-                saveOriginalImage = obj.getBoolean("saveOriginalImage"),
-                forceSaveImage = obj.getBoolean("forceSaveImage"),
-                openStickerAsImage = obj.getBoolean("openStickerAsImage"),
-                betterShare = obj.getBoolean("betterShare")
+                saveOriginalImage = obj.boolOrDefault("saveOriginalImage", true),
+                forceSaveImage = obj.boolOrDefault("forceSaveImage", true),
+                openStickerAsImage = obj.boolOrDefault("openStickerAsImage", true),
+                betterShare = obj.boolOrDefault("betterShare", true),
+                extractVideoLink = obj.boolOrDefault("extractVideoLink", true),
             )
         }
     }
@@ -78,6 +108,7 @@ data class XhsHookConfig(
         obj.put("forceSaveImage", forceSaveImage)
         obj.put("openStickerAsImage", openStickerAsImage)
         obj.put("betterShare", betterShare)
+        obj.put("extractVideoLink", extractVideoLink)
     }
 }
 
@@ -392,6 +423,171 @@ class BetterShare : DynHook() {
     }
 }
 
+class ExtractVideoLink : DynHook() {
+    override fun isFeatureEnabled(): Boolean = XhsHandler.settings.extractVideoLink
+
+    override fun onHook() {
+        val noteFeedClass = findClass("com.xingin.entities.notedetail.NoteFeed")
+
+        fun locateNoteFeed(context: Context): Any {
+            val base = context.findBaseActivity()
+            val presenter = base.getObj("linker")
+                .getObj("controller")
+                .getObj("presenter")!!
+            val path = findPathToObject(
+                presenter, FindObjectConfiguration(
+                    targetClz = noteFeedClass, maxDepth = 4, maxTries = Int.MAX_VALUE, first = true
+                )
+            ).first()
+            return path.obj
+        }
+
+        val detailFeedActivity = findClass("com.xingin.matrix.detail.activity.DetailFeedActivity")
+
+        fun View.decorViewActivity(): Activity? {
+            val view = this
+            val contentView = (view.getObj("mContentRoot") as View)
+            val activity = contentView.context.findBaseActivityOrNull() ?: return null
+            if (activity.window !== view.getObj("mWindow")) return null
+            return activity
+        }
+
+        @SuppressLint("ViewConstructor")
+        class FloatingWindow(private val activity: Activity, private val context: Context) :
+            FrameLayout(context) {
+            val contentView: View
+            val winWidth: Int = 40.dp2px(activity.resources).toInt()
+            val winHeight: Int = winWidth
+            val wm = activity.windowManager
+            val lp = WindowManager.LayoutParams().apply {
+                gravity = Gravity.LEFT or Gravity.TOP
+                format = PixelFormat.RGBA_8888
+                type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
+                x = context.resources.displayMetrics.widthPixels - winWidth
+                y = context.resources.displayMetrics.heightPixels.times(0.9).toInt()
+                alpha = 0.7f
+                width = winWidth
+                height = winHeight
+                flags =
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            }
+
+            init {
+                val v = LayoutInflater.from(context).inflate(R.layout.floating_window, null, false)
+                v.setOnClickListener {
+                    runCatching {
+                        val feed = locateNoteFeed(activity)
+                        val video = feed.getObj("video")
+                        val urlInfoList = video.getObjAs<List<*>>("urlInfoList")
+                        val dialogCtx = object : ContextThemeWrapper(context, R.style.AppTheme) {
+                            override fun getSystemService(name: String): Any? {
+                                if (name == WINDOW_SERVICE) {
+                                    return activity.getSystemService(name)
+                                }
+                                return super.getSystemService(name)
+                            }
+                        }
+                        AlertDialog.Builder(dialogCtx)
+                            .setTitle("视频链接")
+                            .setView(ScrollView(dialogCtx).also { sv ->
+                                sv.addView(LinearLayout(dialogCtx).also { lv ->
+                                    lv.orientation = LinearLayout.VERTICAL
+                                    urlInfoList.forEach { info ->
+                                        runCatching {
+                                            val url = info.getObjAs<String>("url")
+                                            val desc = info.getObjAs<String>("desc")
+                                            val btn = Button(dialogCtx)
+                                            btn.text = desc
+                                            btn.setOnClickListener {
+                                                dialogCtx.getSystemService(ClipboardManager::class.java)
+                                                    .setPrimaryClip(ClipData.newPlainText("", url))
+                                            }
+                                            lv.addView(btn)
+                                        }.onFailure { t ->
+                                            logE("add url btn $info", t)
+                                        }
+                                    }
+                                })
+                            }).show()
+                    }.onFailure { t ->
+                        logE("show url dialog", t)
+                    }
+                }
+                addView(v)
+                contentView = v
+            }
+
+            private var lastX: Int = 0
+            private var lastY: Int = 0
+
+            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+                when (ev.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lastX = ev.rawX.toInt()
+                        lastY = ev.rawY.toInt()
+                    }
+
+                    MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        val curX = ev.rawX.toInt()
+                        val curY = ev.rawY.toInt()
+                        val dx = curX - lastX
+                        val dy = curY - lastY
+                        lastX = curX
+                        lastY = curY
+                        val coords = IntArray(2)
+                        getLocationOnScreen(coords)
+                        lp.x = coords[0] + dx
+                        lp.y = coords[1] + dy
+
+                        wm.updateViewLayout(this, lp)
+                    }
+                }
+                return super.dispatchTouchEvent(ev)
+            }
+
+            fun addToWindow() {
+                wm.addView(this, lp)
+            }
+
+            fun removeFromWindow() {
+                wm.removeViewImmediate(this)
+            }
+        }
+
+        val decorViewClass = findClass("com.android.internal.policy.DecorView")
+
+        decorViewClass.hookAllAfter("onAttachedToWindow", cond = ::isEnabled) { param ->
+            val view = param.thisObject as View
+            val activity = view.decorViewActivity() ?: return@hookAllAfter
+            logD("attachedToWindow $activity")
+            if (activity.javaClass !== detailFeedActivity) return@hookAllAfter
+            var floatingWindow by extraField<FloatingWindow?>(activity, "floatingWindow", null)
+            floatingWindow = FloatingWindow(
+                activity, activity.call(
+                "createApplicationContext",
+                ApplicationInfo(activity.applicationInfo).apply {
+                    packageName = BuildConfig.APPLICATION_ID
+                    sourceDir = Entry.modulePath
+                    publicSourceDir = Entry.modulePath
+                    splitSourceDirs = null
+                    splitPublicSourceDirs = null
+                    splitNames = null
+                }, 0
+            ) as Context
+            ).apply { addToWindow() }
+        }
+
+        decorViewClass.hookAllAfter("onDetachedFromWindow") { param ->
+            val view = param.thisObject as View
+            val activity = view.decorViewActivity() ?: return@hookAllAfter
+            logD("onDetachedFromWindow $activity")
+            if (activity.javaClass !== detailFeedActivity) return@hookAllAfter
+            var floatingWindow by extraField<FloatingWindow?>(activity, "floatingWindow", null)
+            floatingWindow?.removeFromWindow()
+        }
+    }
+}
+
 @Suppress("deprecation")
 class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
     override fun onPrefChanged(
@@ -414,6 +610,10 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
 
             "betterShare" -> {
                 settings.copy(betterShare = newValue as Boolean)
+            }
+
+            "extractVideoLink" -> {
+                settings.copy(extractVideoLink = newValue as Boolean)
             }
 
             else -> return false
@@ -447,6 +647,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 (preference as SwitchPreference).isChecked =
                     XhsHandler.settings.betterShare
             }
+
+            "extractVideoLink" -> {
+                (preference as SwitchPreference).isChecked =
+                    XhsHandler.settings.extractVideoLink
+            }
         }
     }
 
@@ -456,6 +661,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
             switchPreference("移除保存图片限制", "forceSaveImage")
             switchPreference("用打开图片方式打开表情", "openStickerAsImage")
             switchPreference("增强分享", "betterShare")
+            switchPreference(
+                "提取视频链接",
+                "extractVideoLink",
+                summary = "在视频页面显示悬浮按钮，点击可提取视频链接"
+            )
         }
     }
 
@@ -532,6 +742,7 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         subHook(OpenStickerAsImage())
         subHook(ForceSaveImage())
         subHook(BetterShare())
+        subHook(ExtractVideoLink())
 
         _creator?.let {
             it.persist()

@@ -1,9 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-
 fun String.firstUnicodeChar(): Int {
     val c = get(0).code
     if (c >= 0xd800 && c <= 0xdfff) {
@@ -30,8 +26,3 @@ fun String.toHtml(): String = StringBuilder().apply {
         }
     }
 }.toString()
-
-fun Context.findBaseActivity(): Activity =
-    this as? Activity
-        ?: (this as? ContextWrapper)?.baseContext?.findBaseActivity()
-        ?: error("not activity: $this")

@@ -36,6 +36,7 @@ import android.widget.ListView
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.deoptimize
+import io.github.a13e300.myinjector.arch.findBaseActivity
 import io.github.a13e300.myinjector.arch.forceSetSelection
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
@@ -45,7 +46,6 @@ import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.arch.restartApplication
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.sp2px
-import io.github.a13e300.myinjector.telegram.findBaseActivity
 
 abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreferenceChangeListener,
     Preference.OnPreferenceClickListener {
