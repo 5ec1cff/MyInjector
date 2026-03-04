@@ -121,7 +121,7 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
     override fun onPrefClicked(preference: Preference): Boolean {
         if (preference.key == "customEmojiMappingConfig") {
-            CustomEmojiMapping.importEmojiMap(context)
+            CustomEmojiMapping.importEmojiMap(activityCtx)
             return true
         }
         return false

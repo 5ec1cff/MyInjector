@@ -16,6 +16,7 @@ import org.json.JSONObject
 import java.io.File
 
 // 支持导入和使用自定义 emoji 文本映射
+// 参见： https://github.com/5ec1cff/my-tg-emoji
 object CustomEmojiMapping : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customEmojiMapping
 
@@ -31,8 +32,8 @@ object CustomEmojiMapping : DynHook() {
     )
 
     private var _emotionMap: EmotionMap? = null
-    private fun loadEmotionMap(json: String): EmotionMap {
-        val data = JSONObject(json)
+
+    private fun loadEmojiMapLegacy(data: JSONObject): EmotionMap {
         val mp = mutableMapOf<String, Emoji>()
         for (k in data.keys()) {
             val v = data.getJSONArray(k)
@@ -63,6 +64,66 @@ object CustomEmojiMapping : DynHook() {
         }
         val regex = Regex(mp.keys.joinToString("|") { Regex.escape(it) })
         return EmotionMap(mp, regex)
+    }
+
+    private fun loadEmojiMap(data: JSONObject): EmotionMap {
+        val packs = data.getJSONArray("packs")
+        val mp = mutableMapOf<String, MutableList<MultiEmojiItem>>()
+        val keyOrder: List<String> = (data.opt("key_order") as? JSONArray)?.let { o ->
+            mutableListOf<String>().apply {
+                for (i in 0 until o.length()) {
+                    add(o.getString(i))
+                }
+            }
+        } ?: emptyList()
+        val comparator = object : Comparator<MultiEmojiItem> {
+            override fun compare(
+                p0: MultiEmojiItem,
+                p1: MultiEmojiItem
+            ): Int {
+                val k0 = keyOrder.indexOf(p0.key).let { if (it == -1) keyOrder.size else it }
+                val k1 = keyOrder.indexOf(p1.key).let { if (it == -1) keyOrder.size else it }
+                if (k0 == k1) {
+                    return p0.key.compareTo(p1.key)
+                } else {
+                    return k0.compareTo(k1)
+                }
+            }
+
+        }
+        for (i in 0 until packs.length()) {
+            val pack = packs.getJSONObject(i)
+            val emojis = pack.getJSONArray("emojis")
+            val key = pack.opt("key") as? String ?: ""
+            for (j in 0 until emojis.length()) {
+                val emoji = emojis.getJSONObject(j)
+                val name = emoji.getString("name")
+                val tgId = emoji.getString("telegram_custom_emoji_id")
+                val emojiStr = emoji.getString("emoji")
+                val l = mp[name] ?: mutableListOf<MultiEmojiItem>().also { mp[name] = it }
+                l.add(MultiEmojiItem(tgId, emojiStr, key))
+            }
+        }
+        val m = mp.mapValues {
+            if (it.value.size == 1) {
+                val s = it.value.single()
+                SingleEmoji(s.id, s.text)
+            } else {
+                it.value.sortWith(comparator)
+                MultiEmoji(it.value)
+            }
+        }
+        val regex = Regex(m.keys.joinToString("|") { Regex.escape(it) })
+        return EmotionMap(m, regex)
+    }
+
+    private fun loadEmotionMap(json: String): EmotionMap {
+        val data = JSONObject(json)
+        if (data.has("packs")) {
+            return loadEmojiMap(data)
+        } else {
+            return loadEmojiMapLegacy(data)
+        }
     }
 
     private fun Context.getEmotionMapFile(): File {
