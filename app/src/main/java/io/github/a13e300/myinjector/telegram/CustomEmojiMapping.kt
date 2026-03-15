@@ -172,6 +172,7 @@ object CustomEmojiMapping : DynHook() {
             }
             // logD("afterHookedMethod: $origText")
             val mp = emotionMap
+            if (mp.map.isEmpty()) return@hookAllAfter
             while (true) {
                 val r = mp.regex.find(origText, pos) ?: break
                 val kw = r.value
