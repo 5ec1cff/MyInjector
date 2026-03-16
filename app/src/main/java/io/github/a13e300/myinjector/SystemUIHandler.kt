@@ -21,8 +21,10 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.dp2px
 import io.github.a13e300.myinjector.arch.findClassOf
+import io.github.a13e300.myinjector.arch.findView
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -32,7 +34,9 @@ import io.github.a13e300.myinjector.arch.hookCAfter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
+import kotlin.concurrent.thread
 
+class MyFrameLayout(context: Context) : FrameLayout(context)
 
 class SystemUIHandler : IHook() {
     private lateinit var config: SystemUIConfig
@@ -88,22 +92,25 @@ class SystemUIHandler : IHook() {
         hookNotificationInfo()
     }
 
-    @SuppressLint("DiscouragedPrivateApi", "NewApi")
+    @SuppressLint("DiscouragedPrivateApi", "NewApi", "SetTextI18n")
     private fun hookNotificationInfo() {
         val nm by lazy {
             INotificationManager.Stub.asInterface(ServiceManager.getService("notification"))
         }
-        findClass("com.android.systemui.statusbar.notification.modal.ModalWindowView")
-            .hookAllAfter("enterModal") { param ->
+        val modalWindowViewClass =
+            findClass("com.android.systemui.statusbar.notification.modal.ModalWindowView")
+        modalWindowViewClass.hookAllAfter("enterModal") { param ->
                 val modalWindowView = param.thisObject as FrameLayout
                 val parent = modalWindowView.parent as FrameLayout
                 val context = modalWindowView.context.applicationContext
-                if (parent.childCount == 1) {
+            val findRoot =
+                parent.findView { it.javaClass == MyFrameLayout::class.java } as? MyFrameLayout
+            if (findRoot == null) {
                     if (!config.showNotificationDetail) {
                         return@hookAllAfter
                     }
                     parent.addView(
-                        FrameLayout(context).apply {
+                        MyFrameLayout(context).apply {
                             setBackgroundColor(0x99ffffff.toInt())
                             addView(
                                 TextView(context),
@@ -127,7 +134,8 @@ class SystemUIHandler : IHook() {
                     )
                 }
 
-                val root = parent.getChildAt(1) as ViewGroup
+            val root = findRoot
+                ?: parent.findView { it.javaClass == MyFrameLayout::class.java } as MyFrameLayout
                 if (!config.showNotificationDetail) {
                     root.visibility = View.GONE
                     return@hookAllAfter
@@ -177,16 +185,25 @@ class SystemUIHandler : IHook() {
                     val dependencyClass = findClass(
                         "com.android.systemui.Dependency"
                     )
-                    val modalControllerClass = findClass(
-                        "com.android.systemui.statusbar.notification.modal.ModalController"
-                    )
                     val commandQueueClass = findClass(
                         "com.android.systemui.statusbar.CommandQueue"
                     )
                     val dep by lazy { dependencyClass.getObjS("sDependency") }
+                    fun getModalControllerLegacy(): Any {
+                        val modalControllerClass =
+                            findClass("com.android.systemui.statusbar.notification.modal.ModalController")
+                        return dep.call("getDependencyInner", modalControllerClass)!!
+                    }
+
+                    fun getModalController(): Any? {
+                        runCatching {
+                            return modalWindowView.getObjAsN("mModalController")
+                        }
+                        return null
+                    }
                     (tv.parent as View).setOnClickListener {
                         runCatching {
-                            val mc = dep.call("getDependencyInner", modalControllerClass)
+                            val mc = getModalController() ?: getModalControllerLegacy()
                             mc.call(
                                 "animExitModal",
                                 50L,
@@ -228,11 +245,13 @@ class SystemUIHandler : IHook() {
     private fun hookExpandNotification() = runCatching {
         val clz =
             findClass("com.android.systemui.statusbar.notification.row.ExpandableNotificationRow")
+        val hasIsExpandable = clz.declaredMethods.any { it.name == "isExpandable" }
         val rootViewClz = findClass("com.android.systemui.shade.NotificationShadeWindowView")
         clz.hookAllBefore("isExpanded") { param ->
             if (!config.alwaysExpandNotification) return@hookAllBefore
             if ((param.thisObject as View).rootView.javaClass == rootViewClz) {
-                param.result = param.thisObject.call("isExpandable$1")
+                param.result = if (hasIsExpandable) param.thisObject.call("isExpandable")
+                else param.thisObject.call("isExpandable$1")
             }
         }
     }.onFailure {
@@ -262,20 +281,26 @@ class SystemUIHandler : IHook() {
     }
 
     private fun registerBroadcast() {
-        try {
-            val ctx = ActivityThread.currentActivityThread().systemContext as Context
-            val flags =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
-            ctx.registerReceiver(
-                receiver,
-                IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG"),
-                null,
-                null,
-                flags
-            )
-            logI("registerBroadcast: registered")
-        } catch (t: Throwable) {
-            logE("registerBroadcast: ", t)
+        thread {
+            try {
+                while (true) {
+                    Thread.sleep(1000)
+                    val ctx = ActivityThread.currentActivityThread().application ?: continue
+                    val flags =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
+                    ctx.registerReceiver(
+                        receiver,
+                        IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG"),
+                        null,
+                        null,
+                        flags
+                    )
+                    logI("registerBroadcast: registered")
+                    break
+                }
+            } catch (t: Throwable) {
+                logE("registerBroadcast: ", t)
+            }
         }
     }
 }
