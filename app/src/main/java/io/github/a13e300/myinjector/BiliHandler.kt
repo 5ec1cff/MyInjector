@@ -1,5 +1,7 @@
 package io.github.a13e300.myinjector
 
+import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import io.github.a13e300.myinjector.arch.IHook
@@ -75,6 +77,15 @@ class BiliHandler : IHook() {
     }
 
     private fun hookSplashAd(obfsTable: ObfsTable) = runCatching {
+        Activity::class.java.hookAllBefore("startActivity") { param ->
+            val intent = param.args[0] as Intent
+            if (intent.component?.className?.contains("HotSplashActivity") == true
+                || intent.data?.toString() == "bilibili://main/hot-splash2"
+            ) {
+                logD("fuck hotsplash ad")
+                param.result = null
+            }
+        }
         val m = obfsTable["showSplashAd"]!!
         findClass(m.className).hookAllBefore(m.memberName) { param ->
             param.args[1] = null
