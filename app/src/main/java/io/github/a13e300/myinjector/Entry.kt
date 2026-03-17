@@ -61,6 +61,7 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
             "com.easybrain.sudoku.android" -> SudokuHandler()
             "com.xingin.xhs" -> XhsHandler
             "com.miui.gallery" -> MiuiGalleryHandler()
+            "tv.danmaku.bili" -> BiliHandler()
             else -> return
         }
         logPrefix = "[${handler.javaClass.simpleName}] "
