@@ -3,10 +3,14 @@ package io.github.a13e300.myinjector
 import android.net.Uri
 import android.os.Bundle
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.MutableObfsTable
+import io.github.a13e300.myinjector.arch.ObfsInfo
+import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNop
 import io.github.a13e300.myinjector.arch.toObfsInfo
+import org.luckypray.dexkit.DexKitBridge
 
 class BiliHandler : IHook() {
     private fun hookShare() {
@@ -35,19 +39,22 @@ class BiliHandler : IHook() {
         }
     }
 
-    private fun hookAd() {
+    private fun locateAd(bridge: DexKitBridge, obfsTable: MutableObfsTable) = runCatching {
+        val method =
+            bridge.findMethod {
+                matcher {
+                    usingEqStrings("DetailAdService", "-", "onCreateViews")
+                }
+            }.single().toObfsInfo()
+
+        obfsTable["DetailAdService-onCreateViews"] = method
+    }.onFailure {
+        logE("locateAd", it)
+    }
+
+    private fun hookAd(tbl: ObfsTable) {
         runCatching {
             // 视频底部广告
-            val tbl = createObfsTable("bili", 1) { bridge ->
-                val method =
-                    bridge.findMethod {
-                        matcher {
-                            usingEqStrings("DetailAdService", "-", "onCreateViews")
-                        }
-                    }.single().toObfsInfo()
-
-                mutableMapOf("DetailAdService-onCreateViews" to method)
-            }
             val adCreateView = tbl["DetailAdService-onCreateViews"]!!
             findClass(adCreateView.className).hookAllNop(adCreateView.memberName)
         }.onFailure {
@@ -55,8 +62,39 @@ class BiliHandler : IHook() {
         }
     }
 
+    private fun locateSplashAd(bridge: DexKitBridge, obfsTable: MutableObfsTable) = runCatching {
+        val method = bridge.findMethod {
+            matcher {
+                usingEqStrings("show splash id = ", "ADSplashFragment")
+            }
+        }.single().toObfsInfo()
+
+        obfsTable["showSplashAd"] = method
+    }.onFailure {
+        logE("locateSplashAd", it)
+    }
+
+    private fun hookSplashAd(obfsTable: ObfsTable) = runCatching {
+        val m = obfsTable["showSplashAd"]!!
+        findClass(m.className).hookAllBefore(m.memberName) { param ->
+            param.args[1] = null
+            logD("fuck splash ad")
+        }
+    }.onFailure {
+        logE("hookSplashAd", it)
+    }
+
     override fun onHook() {
         hookShare()
-        hookAd()
+        val tbl = createObfsTable("bili", 1) { bridge ->
+            val res = mutableMapOf<String, ObfsInfo>()
+
+            locateAd(bridge, res)
+            locateSplashAd(bridge, res)
+
+            res
+        }
+        hookAd(tbl)
+        hookSplashAd(tbl)
     }
 }
