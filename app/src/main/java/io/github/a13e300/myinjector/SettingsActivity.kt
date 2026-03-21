@@ -294,6 +294,7 @@ class SettingsActivity : Activity() {
                 .setAlwaysExpandNotification(sp.getBoolean("alwaysExpandNotification", false))
                 .setNoDndNotification(sp.getBoolean("noDndNotification", false))
                 .setShowNotificationDetail(sp.getBoolean("showNotificationDetail", false))
+                .setFixWhiteSplash(sp.getBoolean("fixWhiteSplash", false))
                 .build()
             intent.putExtra("EXTRA_CREDENTIAL", pendingIntent)
             intent.putExtra("EXTRA_CONFIG", config.toByteArray())

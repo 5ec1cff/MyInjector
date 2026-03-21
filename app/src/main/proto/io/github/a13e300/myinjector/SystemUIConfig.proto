@@ -10,4 +10,5 @@ message SystemUIConfig {
   optional bool showNotificationDetail = 1;
   optional bool noDndNotification = 2;
   optional bool alwaysExpandNotification = 3;
+  optional bool fixWhiteSplash = 4;
 }

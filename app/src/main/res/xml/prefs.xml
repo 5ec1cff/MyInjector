@@ -84,6 +84,11 @@
             android:key="alwaysExpandNotification"
             android:summary="以便使用按钮"
             android:title="总是展开通知" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="fixWhiteSplash"
+            android:summary="夜间模式将具有纯白背景的 Splash 变为黑色"
+            android:title="修复纯白 Splash" />
         <Preference
             android:key="commitSysUI"
             android:persistent="false"

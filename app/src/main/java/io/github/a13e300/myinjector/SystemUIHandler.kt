@@ -8,6 +8,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.LayerDrawable
 import android.os.Build
 import android.os.ServiceManager
 import android.provider.Settings
@@ -31,6 +36,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.hookCAfter
+import io.github.a13e300.myinjector.arch.setObj
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -90,6 +96,7 @@ class SystemUIHandler : IHook() {
         loadConfig()
         hookPlugin()
         hookNotificationInfo()
+        hookSplashScreen()
     }
 
     @SuppressLint("DiscouragedPrivateApi", "NewApi", "SetTextI18n")
@@ -256,6 +263,56 @@ class SystemUIHandler : IHook() {
         }
     }.onFailure {
         logE("hookExpandNotification", it)
+    }
+
+    companion object {
+        private val sBlackDrawable = ColorDrawable(Color.BLACK)
+
+        private fun fixDrawable(d: Drawable): Drawable {
+            if (d is ColorDrawable) {
+                if (d.color == Color.WHITE) {
+                    logD("replace white color drawable with black")
+                    return sBlackDrawable
+                }
+            } else if (d is LayerDrawable) {
+                val dup = d.mutate() as LayerDrawable
+                val len = dup.numberOfLayers
+                for (i in 0 until len) {
+                    val old = dup.getDrawable(i)
+                    val newDrawable = fixDrawable(old)
+                    if (newDrawable !== old) {
+                        logD("replace layer $i")
+                    }
+                    dup.setDrawable(i, newDrawable)
+                }
+                return dup
+            }
+
+            logD("nothing to fix")
+            return d
+        }
+    }
+
+    private fun hookSplashScreen() = runCatching {
+        findClass("android.window.SplashScreenView\$Builder").hookAllBefore("build") { param ->
+            if (!config.fixWhiteSplash) return@hookAllBefore
+            val context = param.thisObject.getObjAs<Context>("mContext")
+            val uiModeNight =
+                context.resources.configuration.uiMode.and(Configuration.UI_MODE_NIGHT_MASK)
+            logD("uiModeNight: $uiModeNight")
+            if (uiModeNight == Configuration.UI_MODE_NIGHT_YES) {
+                // This is intended to fix bilibili's white splash screen
+                // TODO: fix more
+
+                // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/java/android/window/SplashScreenView.java;l=248;drc=b46cbdac287350ce7d4f5bd1b5f656922c1a2186
+                // https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/WindowManager/Shell/src/com/android/wm/shell/startingsurface/SplashscreenContentDrawer.java;l=506-524;drc=80c4470f99351053b43bdfd778d087a691b508bb
+                val overlayDrawable =
+                    param.thisObject.getObjAsN<Drawable>("mOverlayDrawable") ?: return@hookAllBefore
+                param.thisObject.setObj("mOverlayDrawable", fixDrawable(overlayDrawable))
+            }
+        }
+    }.onFailure {
+        logE("hookSplashScreen", it)
     }
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
