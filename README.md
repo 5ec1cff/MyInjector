@@ -33,7 +33,7 @@ android
 - 剪切板白名单（允许某些 app 后台监听剪切板）
 - 允许关闭 miui wakepath 功能（即跨 app 打开启动可能弹出的询问）
 - 允许移除某些 miui 锁定的 intent
-- （小米）划卡不杀最近任务中上锁应用或电量管控无限制应用
+- <a id="noswipetokill"></a>（小米）划卡不杀最近任务中上锁应用或电量管控无限制应用
 - 其他功能详见设置
 
 ### 百度输入法
@@ -155,7 +155,8 @@ com.miui.home
 ```
 
 - 最近任务卡片划动时悬停 700ms
-  后再划动即可杀死进程（「清理任务」字样替换为「停止进程」，不会阻止系统的划卡杀，需要配合其他划卡杀白名单模块使用，如 [NoSwipeToKill](https://github.com/dantmnf/NoSwipeToKill)）
+  后再划动即可杀死进程（「清理任务」字样替换为「停止进程」，不会阻止系统的划卡杀，需要配合其他划卡杀白名单模块使用，如 [NoSwipeToKill](https://github.com/dantmnf/NoSwipeToKill)
+  ，当然现在已经[集成进来了](#noswipetokill)，在系统服务设置中开启即可）
 - 禁用 app 预启动
 
 ### FV 悬浮球
