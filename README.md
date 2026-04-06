@@ -158,6 +158,7 @@ com.miui.home
   后再划动即可杀死进程（「清理任务」字样替换为「停止进程」，不会阻止系统的划卡杀，需要配合其他划卡杀白名单模块使用，如 [NoSwipeToKill](https://github.com/dantmnf/NoSwipeToKill)
   ，当然现在已经[集成进来了](#noswipetokill)，在系统服务设置中开启即可）
 - 禁用 app 预启动
+- 最近任务长按 app 的菜单中长按设置可打开原生设置（群友请求的功能）
 
 ### FV 悬浮球
 
@@ -191,14 +192,6 @@ com.android.intentresolver
 ```
 
 - 去除打开的 activity 的 EXCLUDE_FROM_RECENTS flag 。
-
-## Spotify
-
-```
-com.spotify.music
-```
-
-- 去除加号（群友请求的功能）
 
 ## DocumentsUI
 
@@ -260,6 +253,14 @@ com.meizu.customizecenter
 ```
 
 - 将本应用在 /sdcard 下创建的目录重定向到 /sdcard/Documents （不建议使用）（群友请求的功能）
+
+## Spotify
+
+```
+com.spotify.music
+```
+
+- 去除加号（群友请求的功能）
 
 # Credits
 

@@ -1,7 +1,10 @@
 package io.github.a13e300.myinjector
 
 import android.app.IActivityManager
+import android.app.TaskStackBuilder
 import android.content.ComponentName
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.ServiceManager
@@ -9,6 +12,7 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -18,10 +22,12 @@ class MiuiHomeHandler : IHook() {
     override fun onHook() {
         hookDragKill()
         hookPreLaunch()
+        hookOpenAOSPSettings()
     }
 
     private fun hookPreLaunch() = runCatching {
-        val clazz = findClass("com.miui.home.launcher.util.PreLaunchAppUtil")
+        val clazz = findClassOrNull("com.miui.home.isolate.Utils.PreLaunchAppUtil")
+            ?: findClass("com.miui.home.launcher.util.PreLaunchAppUtil")
         clazz.hookAllConstant("preLaunchProcess", false)
     }.onFailure {
         logE("hookPreLaunch", it)
@@ -110,5 +116,44 @@ class MiuiHomeHandler : IHook() {
                     .show()
                 logE("onChildDismissedEnd: ", it)
             }
+    }
+
+    private fun hookOpenAOSPSettings() = runCatching {
+        findClass("com.miui.home.recents.views.RecentMenuView").hookAllAfter("onFinishInflate") { param ->
+            logD("RecentMenuView")
+            val v = param.thisObject.getObjAs<View>("mMenuItemInfo")
+            val thiz = param.thisObject
+            v.setOnLongClickListener {
+                // see RecentsContainer.onMessageEvent(ShowApplicationInfoEvent)
+                // and RecentMenuView.onClick
+                runCatching {
+                    thiz.getObj("mTask")?.getObj("key")?.call("getComponent")
+                        ?.let { comp ->
+                            val pkg = (comp as ComponentName).packageName
+                            // ensure start activity in `normal` stack
+                            TaskStackBuilder.create(v.context)
+                                .addNextIntentWithParentStack(
+                                    Intent()
+                                        .setComponent(
+                                            ComponentName(
+                                                "com.android.settings",
+                                                "com.android.settings.SubSettings"
+                                            )
+                                        )
+                                        .setData(Uri.parse("package:$pkg"))
+                                        .putExtra(
+                                            ":settings:show_fragment",
+                                            "com.android.settings.applications.appinfo.AppInfoDashboardFragment"
+                                        )
+                                ).startActivities()
+                        }
+                }.onFailure {
+                    logE("launch aosp settings", it)
+                }
+                true
+            }
+        }
+    }.onFailure {
+        logE("hookOpenAOSPSettings", it)
     }
 }
