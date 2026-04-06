@@ -60,6 +60,16 @@
             android:key="overrideStatusBarRules"
             android:summary="一行一个规则，形如&lt;package&gt;[/activity]:&lt;light/dark&gt;，表示包 package 的 activity （如空则为所有 activity）总是使用 light/dark 状态栏"
             android:title="修改状态栏属性规则" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="noSwipeToKillLockedProcess"
+            android:summary="划卡不杀最近任务中上锁应用（仅小米）"
+            android:title="划卡不杀上锁" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="noSwipeToKillNoRestrictProcess"
+            android:summary="划卡不杀电量管控无限制应用（仅小米）"
+            android:title="划卡不杀无限制" />
         <Preference
             android:key="commit"
             android:persistent="false"

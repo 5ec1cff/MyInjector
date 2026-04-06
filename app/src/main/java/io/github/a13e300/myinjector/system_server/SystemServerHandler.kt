@@ -7,11 +7,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.os.IBinder
+import android.os.ServiceManager
 import android.view.View
 import android.view.WindowInsetsController
 import io.github.a13e300.myinjector.SystemServerConfig
+import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.findClass
@@ -27,6 +30,7 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.bridge.HotLoadHook
 import io.github.a13e300.myinjector.bridge.LoadPackageParam
 import io.github.a13e300.myinjector.bridge.Unhook
+import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
 import io.github.a13e300.myinjector.logI
 import io.github.a13e300.myinjector.logW
@@ -37,6 +41,8 @@ import kotlin.Boolean
 import kotlin.Int
 import kotlin.String
 import kotlin.Suppress
+import kotlin.getValue
+import kotlin.lazy
 import kotlin.let
 import kotlin.onFailure
 import kotlin.run
@@ -78,6 +84,7 @@ class SystemServerHandler : HotLoadHook() {
         setXSpace(config.xSpace)
         hookForceNewTask()
         hookStatusBarAppearance()
+        hookNoSwipeToKill()
         broadcastManager = BroadcastManager("MyInjector-SystemServer")
         runConfigListener()
     }
@@ -296,6 +303,58 @@ class SystemServerHandler : HotLoadHook() {
         })
     }.onFailure {
         logE("hookForceNewTask: ", it)
+    }
+
+    // https://github.com/dantmnf/NoSwipeToKill
+    private fun hookNoSwipeToKill() = runCatching {
+        val processRecordClass = findClass("com.android.server.am.ProcessRecord")
+        val processPolicy by lazy {
+            runCatching {
+                val procmgr = ServiceManager.getService("ProcessManager")
+                procmgr.call("getProcessPolicy")
+            }.onFailure {
+                logE("getProcessPolicy", it)
+            }.getOrNull()
+        }
+        val smartPowerPolicyManager by lazy {
+            runCatching {
+                val procmgr = ServiceManager.getService("smartpower")
+                procmgr.getObj("mSmartPowerPolicyManager")
+            }.onFailure {
+                logE("getSmartPowerPolicyManager", it)
+            }.getOrNull()
+        }
+        val cleanerBase = findClass("com.android.server.am.ProcessCleanerBase")
+        var hooked = false
+        cleanerBase.declaredMethods.forEach { m ->
+            if (m.name != "killOnce") return@forEach
+
+            val parameterTypes = m.parameterTypes
+
+            if (parameterTypes.size >= 1 && parameterTypes[0] == processRecordClass) {
+                hooks.add(m.hookBefore { param ->
+                    val processRecord = param.args[0]
+                    val info = processRecord.getObjAsN<ApplicationInfo>("info") ?: return@hookBefore
+                    val packageName = info.packageName
+                    val userId = processRecord.getObjAs<Int>("userId")
+
+                    val isLocked =
+                        processPolicy?.call("isLockedApplication", packageName, userId) == true
+                    val isNoRestrict =
+                        smartPowerPolicyManager?.call("isNoRestrictApp", packageName) == true
+                    logD("NoSwipeToKill: killOnce, package=$packageName userId=$userId isLocked=$isLocked isNoRestrict=$isNoRestrict")
+                    if ((config.noSwipeToKillLockedProcess && isLocked) ||
+                        (config.noSwipeToKillNoRestrictProcess && isNoRestrict)
+                    ) {
+                        param.result = null
+                    }
+                })
+                hooked = true
+            }
+        }
+        logD("hookNoSwipeToKill hooked=$hooked")
+    }.onFailure {
+        logE("hookNoSwipeToKill err", it)
     }
 
     private fun runConfigListener() {

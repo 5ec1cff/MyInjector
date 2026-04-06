@@ -178,6 +178,13 @@ class SettingsActivity : Activity() {
                 .setClipboardWhitelist(sp.getBoolean("clipboardWhitelist", false))
                 .setFixSync(sp.getBoolean("fixSync", false))
                 .setXSpace(sp.getBoolean("xSpace", false))
+                .setNoSwipeToKillLockedProcess(sp.getBoolean("noSwipeToKillLockedProcess", false))
+                .setNoSwipeToKillNoRestrictProcess(
+                    sp.getBoolean(
+                        "noSwipeToKillNoRestrictProcess",
+                        false
+                    )
+                )
                 .addAllClipboardWhitelistPackages(
                     Arrays.stream<String?>(
                         sp.getString("clipboardWhitelistPackages", "")!!.trim { it <= ' ' }

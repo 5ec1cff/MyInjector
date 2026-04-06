@@ -33,4 +33,6 @@ message SystemServerConfig {
   optional bool forceNewTaskDebug = 9;
   optional bool overrideStatusBar = 10;
   repeated OverrideStatusBarRule overrideStatusBarRules = 11;
+  optional bool noSwipeToKillLockedProcess = 12;
+  optional bool noSwipeToKillNoRestrictProcess = 13;
 }
