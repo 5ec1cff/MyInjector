@@ -78,6 +78,7 @@ uz.unnarsx.cherrygram
 xyz.nextalone.nagram
 nu.gpu.nagram
 com.xtaolabs.pagergram
+fork.risin42.nagramx
 ```
 
 注：作者仅适配官方 `org.telegram.messenger` ，因此其他的第三方端，或 web, beta 等都不保证可用

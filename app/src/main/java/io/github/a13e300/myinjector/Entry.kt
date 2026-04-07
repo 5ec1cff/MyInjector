@@ -40,7 +40,8 @@ class Entry : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 "uz.unnarsx.cherrygram",
                 "xyz.nextalone.nagram",
                 "nu.gpu.nagram",
-                "com.xtaolabs.pagergram"
+                "com.xtaolabs.pagergram",
+                "fork.risin42.nagramx",
             ) -> TelegramHandler
             "com.termux" -> TermuxHandler()
             "com.android.systemui" -> SystemUIHandler()

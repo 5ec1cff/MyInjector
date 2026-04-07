@@ -101,6 +101,7 @@ class SettingsActivity : Activity() {
                 "xyz.nextalone.nagram",
                 "nu.gpu.nagram",
                 "com.xtaolabs.pagergram",
+                "fork.risin42.nagramx",
             )
 
             for (l in list) {

@@ -16,6 +16,7 @@
         <package android:name="xyz.nextalone.nagram" />
         <package android:name="nu.gpu.nagram" />
         <package android:name="com.xtaolabs.pagergram" />
+        <package android:name="fork.risin42.nagramx" />
     </queries>
 
     <application
