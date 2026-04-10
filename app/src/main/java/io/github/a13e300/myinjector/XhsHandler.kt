@@ -50,10 +50,12 @@ import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
+import io.github.a13e300.myinjector.bridge.HookParam
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.lang.reflect.Field
 import kotlin.concurrent.thread
 
 fun toHtmlText(title: String?, desc: String?, url: String): String {
@@ -131,17 +133,61 @@ class SaveOriginalImage : DynHook() {
         val savePicClass = findClass(savePicMethodInfo.className)
         val savePicMethod =
             savePicClass.declaredMethods.single { it.name == savePicMethodInfo.memberName }
-        val picCacheClass = savePicMethod.parameters[1].type
-        val picCacheFileField =
-            picCacheClass.declaredFields.single { f -> f.type == File::class.java }
+        var picCacheClass: Class<*>?
+        var picCacheFileField: Field?
+        // 9.24+
+        // 变化：原本两个方法在同一个类，现在在不同的类，且 savePicMethod 只有一个参数，
+        // picCache 放在 this 的某个 field （此前作为参数 1）
+        val newVersion = savePicMethod.parameters.size == 1
+        val picCacheFileResolver = if (newVersion) {
+            var field1: Field? = null
+            var field2: Field? = null
+            for (f in savePicMethod.declaringClass.fields) {
+                for (f2 in f.type.fields) {
+                    if (f2.type == File::class.java) {
+                        field2 = f2
+                        f2.isAccessible = true
+                        break
+                    }
+                }
+                if (field2 != null) {
+                    field1 = f
+                    f.isAccessible = true
+                    break
+                }
+            }
+
+            if (field1 == null || field2 == null) {
+                error("no pic cache fields found")
+            }
+
+            picCacheClass = field1.type
+            picCacheFileField = field2
+
+            val l: (HookParam) -> File = { param ->
+                field2.get(field1.get(param.thisObject)) as File
+            }
+            l
+        } else {
+            picCacheClass = savePicMethod.parameters[1].type
+            picCacheFileField =
+                picCacheClass.declaredFields.single { f -> f.type == File::class.java }
                 .also { it.isAccessible = true }
+
+            val l: (HookParam) -> File = { param ->
+                picCacheFileField.get(param.args[1]) as File
+            }
+            l
+        }
+
+        require(picCacheClass != null && picCacheFileField != null)
 
         val kotlinPair = findClass("kotlin.Pair")
 
         savePicMethod.hookReplace(
             cond = ::isEnabled
         ) { param ->
-            val f = param.args[1].let { picCacheFileField.get(it) as File }
+            val f = picCacheFileResolver(param)
             logD("save original $f")
             param.args.last().apply {
                 call("onNext", kotlinPair.newInst("success", f))
@@ -154,13 +200,21 @@ class SaveOriginalImage : DynHook() {
         val savePicWithUrlInfo = XhsHandler.creator.create("savePicWithUrl") { bridge ->
             bridge.findMethod {
                 matcher {
-                    declaredClass(savePicMethodInfo.className)
+                    if (!newVersion)
+                        declaredClass(savePicMethodInfo.className)
                     usingEqStrings(
                         "save image failed without watermark"
                     )
                 }
-            }.single { it.methodName != savePicMethodInfo.memberName }.toObfsInfo()
+            }.single {
+                if (!newVersion) it.methodName != savePicMethodInfo.memberName
+                else it.className != savePicMethodInfo.className // both of them should be `subscribe`
+            }.toObfsInfo()
         }
+
+        val savePicWithUrlClass =
+            if (newVersion) findClass(savePicWithUrlInfo.className) else savePicClass
+
         val picCacheInterface = picCacheClass.interfaces.single()
         val getCacheMethod = XhsHandler.creator.create("getImageCache") { bridge ->
             bridge.findMethod {
@@ -181,10 +235,12 @@ class SaveOriginalImage : DynHook() {
             val res = param.result
             if (tls.get() == true && picCacheClass.isInstance(res)) {
                 val f = res.let { picCacheFileField.get(it) as File }
+                logD("got cache $f")
                 param.throwable = SaveOriginalImageAbort(f)
             }
         }
-        savePicClass.hookAll(
+
+        savePicWithUrlClass.hookAll(
             savePicWithUrlInfo.memberName, cond = ::isEnabled,
             before = {
                 tls.set(true)
