@@ -52,6 +52,7 @@ class ObfsTableCreator(
         else DexKitBridge.create(classLoader, true)
     }
     val bridge by bridgeDelegate
+    var changed = false
 
     init {
         tableFile.parentFile!!.mkdirs()
@@ -96,10 +97,11 @@ class ObfsTableCreator(
 
     fun create(key: String, callback: (DexKitBridge) -> ObfsInfo) =
         obfsTable.computeIfAbsent(key) {
-            callback(bridge)
+            callback(bridge).also { changed = true }
         }
 
     fun persist() {
+        if (!changed) return
         runCatching {
             val outJsonObj = JSONObject()
             outJsonObj.put(OBFS_KEY_APK, apkPath)
@@ -143,6 +145,7 @@ fun IHook.createObfsTable(
     )
     // failed or no need to load result, create a new one!
     creator.obfsTable.putAll(creator(creator.bridge))
+    creator.changed = true
     creator.persist()
     return creator.obfsTable
 }
