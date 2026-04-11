@@ -7,13 +7,19 @@ import android.app.AndroidAppHelper
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.net.Uri
 import android.preference.Preference
 import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
+import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -25,12 +31,14 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Toast
 import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.DynHookManager
 import io.github.a13e300.myinjector.arch.FindObjectConfiguration
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.dp2px
 import io.github.a13e300.myinjector.arch.extraField
 import io.github.a13e300.myinjector.arch.findBaseActivity
@@ -116,7 +124,13 @@ data class XhsHookConfig(
 
 class SaveOriginalImageAbort(var f: File) : Throwable()
 
-class SaveOriginalImage : DynHook() {
+abstract class MyDynHook(private val name: String) : DynHook() {
+    override fun onHookError(t: Throwable) {
+        XhsHandler.hookErrors[name] = Log.getStackTraceString(t)
+    }
+}
+
+class SaveOriginalImage : MyDynHook("saveOriginalImage") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.saveOriginalImage
 
     override fun onHook() {
@@ -265,7 +279,7 @@ class SaveOriginalImage : DynHook() {
     }
 }
 
-class OpenStickerAsImage : DynHook() {
+class OpenStickerAsImage : MyDynHook("openStickerAsImage") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.openStickerAsImage
 
     override fun onHook() {
@@ -304,7 +318,7 @@ class OpenStickerAsImage : DynHook() {
     }
 }
 
-class ForceSaveImage : DynHook() {
+class ForceSaveImage : MyDynHook("forceSaveImage") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.forceSaveImage
 
     override fun onHook() {
@@ -384,7 +398,7 @@ class ForceSaveImage : DynHook() {
     }
 }
 
-class BetterShare : DynHook() {
+class BetterShare : MyDynHook("betterShare") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.betterShare
 
     override fun onHook() {
@@ -479,7 +493,7 @@ class BetterShare : DynHook() {
     }
 }
 
-class ExtractVideoLink : DynHook() {
+class ExtractVideoLink : MyDynHook("extractVideoLink") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.extractVideoLink
 
     override fun onHook() {
@@ -709,6 +723,17 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                     XhsHandler.settings.extractVideoLink
             }
         }
+
+        if (preference.key in XhsHandler.hookErrors) {
+            val newSummary = SpannableStringBuilder(preference.summary ?: "")
+                .apply { if (isNotEmpty()) append("\n") }
+                .append(
+                    "存在问题",
+                    ForegroundColorSpan(Color.RED),
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            preference.summary = newSummary
+        }
     }
 
     override fun onCreatePref(prefScreen: PreferenceScreen) {
@@ -722,6 +747,66 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 "extractVideoLink",
                 summary = "在视频页面显示悬浮按钮，点击可提取视频链接"
             )
+        }
+    }
+
+    override fun onConfigureDialog(builder: AlertDialog.Builder) {
+        if (XhsHandler.hookErrors.isNotEmpty()) {
+            val errors = XhsHandler.hookErrors.map {
+                "${it.key}:\n${it.value}"
+            }.joinToString("\n")
+            builder.setNeutralButton("查看错误") { _, _ ->
+                AlertDialog.Builder(context)
+                    .setTitle("错误详情")
+                    .setMessage(errors)
+                    .setPositiveButton("分享") { _, _ ->
+                        thread {
+                            runCatching {
+                                val f = File(context.filesDir, "myinjector-error.txt")
+                                f.writeText(errors)
+                                logD("wrote file $f")
+                                // we should use getUriForFile, otherwise it will freeze forever.
+                                val uri = XhsHandler.fileProviderClass.callS(
+                                    "getUriForFile",
+                                    context,
+                                    "com.xingin.xhs.provider",
+                                    f
+                                ) as Uri
+                                logD("uri $uri")
+                                context.startActivity(
+                                    Intent.createChooser(
+                                        Intent(Intent.ACTION_SEND)
+                                            .putExtra(
+                                                Intent.EXTRA_STREAM,
+                                                uri
+                                            )
+                                            .setType("text/plain"),
+                                        ""
+                                    )
+                                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                )
+                            }.onFailure { t ->
+                                logE("share failed: ", t)
+                                runCatching {
+                                    activityCtx.findBaseActivity().runOnUiThread {
+                                        Toast.makeText(
+                                            context,
+                                            "分享失败，请尝试复制",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .setNeutralButton("复制") { _, _ ->
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(
+                                ClipData.newPlainText("", errors)
+                            )
+                    }
+                    .show()
+            }
         }
     }
 
@@ -789,6 +874,8 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
     val creator: ObfsTableCreator
         get() = _creator ?: ObfsTableCreator("", 5, appInfo = loadPackageParam.appInfo)
             .also { _creator = it }
+    val hookErrors = mutableMapOf<String, String>()
+    val fileProviderClass by lazy { findClass("androidx.core.content.FileProvider") }
 
 
     override fun onHook() {

@@ -293,6 +293,10 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
         return contentView
     }
 
+    protected open fun onConfigureDialog(builder: AlertDialog.Builder) {
+
+    }
+
     fun show() {
         try {
             val activity = activityCtx.findBaseActivity()
@@ -306,6 +310,7 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
                 setPositiveButton("重启") { _, _ ->
                     restartApplication(activity)
                 }
+                onConfigureDialog(this)
 
             }.show()
         } catch (e: Resources.NotFoundException) {

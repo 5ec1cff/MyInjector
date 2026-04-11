@@ -15,6 +15,7 @@ abstract class IHook {
             onHook()
         } catch (t: Throwable) {
             logE("hook failed: ${this.javaClass.simpleName}", t)
+            onHookError(t)
         }
     }
 
@@ -27,4 +28,8 @@ abstract class IHook {
     protected fun findClassOrNull(name: String): Class<*>? = classLoader.findClassN(name)
 
     protected abstract fun onHook()
+
+    protected open fun onHookError(t: Throwable) {
+
+    }
 }
