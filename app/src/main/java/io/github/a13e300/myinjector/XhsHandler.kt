@@ -145,62 +145,77 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
             }.single().toObfsInfo()
         }
         val savePicClass = findClass(savePicMethodInfo.className)
+        val picCacheFieldInfo = XhsHandler.creator.create("picCacheClass") { bridge ->
+            bridge.findField {
+                matcher {
+                    type = "java/io/File"
+                    addReadMethod(savePicMethodInfo.descriptor)
+                }
+            }.single().toObfsInfo()
+        }
+        logD("picCache: $picCacheFieldInfo")
+        val picCacheClass = findClass(picCacheFieldInfo.className)
         val savePicMethod =
             savePicClass.declaredMethods.single { it.name == savePicMethodInfo.memberName }
-        var picCacheClass: Class<*>?
-        var picCacheFileField: Field?
+        val picCacheFileField = picCacheClass.getDeclaredField(picCacheFieldInfo.memberName)
+            .also { it.isAccessible = true }
         // 9.24+
         // 变化：原本两个方法在同一个类，现在在不同的类，且 savePicMethod 只有一个参数，
         // picCache 放在 this 的某个 field （此前作为参数 1）
-        val newVersion = savePicMethod.parameters.size == 1
-        val picCacheFileResolver = if (newVersion) {
-            var field1: Field? = null
-            var field2: Field? = null
-            for (f in savePicMethod.declaringClass.fields) {
-                for (f2 in f.type.fields) {
-                    if (f2.type == File::class.java) {
-                        field2 = f2
-                        f2.isAccessible = true
-                        break
+        // 9.26
+        // 变化：两个方法疑似被 r8 合并成一个
+        var version = 0
+        var version2TypeField: Field? = null
+        val picCacheFileResolver = if (savePicMethod.parameters.size == 1) {
+            val picCacheField = savePicMethod.declaringClass.fields.firstOrNull {
+                it.type == picCacheClass
+            }
+
+            if (picCacheField != null) {
+                version = 1
+                val l: (HookParam) -> File = { param ->
+                    picCacheFileField.get(picCacheField.get(param.thisObject)) as File
+                }
+                l
+            } else {
+                version = 2
+
+                version2TypeField = savePicClass.declaredFields.single {
+                    it.type == Integer.TYPE
+                }
+
+                val objFields = savePicClass.fields.filter { it.type == Object::class.java }
+                var picCacheObjField: Field? = null
+
+                val l: (HookParam) -> File = { param ->
+                    if (picCacheObjField == null) {
+                        for (f in objFields) {
+                            f.isAccessible = true
+                            if (f.get(param.thisObject)?.let {
+                                    logD("trying $f: $it")
+                                    picCacheClass.isInstance(it)
+                                } == true) {
+                                picCacheObjField = f
+                                logD("found picCacheObjField $f")
+                                break
+                            }
+                        }
                     }
+                    picCacheFileField.get(picCacheObjField!!.get(param.thisObject)) as File
                 }
-                if (field2 != null) {
-                    field1 = f
-                    f.isAccessible = true
-                    break
-                }
+                l
             }
-
-            if (field1 == null || field2 == null) {
-                error("no pic cache fields found")
-            }
-
-            picCacheClass = field1.type
-            picCacheFileField = field2
-
-            val l: (HookParam) -> File = { param ->
-                field2.get(field1.get(param.thisObject)) as File
-            }
-            l
         } else {
-            picCacheClass = savePicMethod.parameters[1].type
-            picCacheFileField =
-                picCacheClass.declaredFields.single { f -> f.type == File::class.java }
-                .also { it.isAccessible = true }
-
+            version = 0
             val l: (HookParam) -> File = { param ->
                 picCacheFileField.get(param.args[1]) as File
             }
             l
         }
 
-        require(picCacheClass != null && picCacheFileField != null)
-
         val kotlinPair = findClass("kotlin.Pair")
 
-        savePicMethod.hookReplace(
-            cond = ::isEnabled
-        ) { param ->
+        fun handleSaveCachedPic(param: HookParam) {
             val f = picCacheFileResolver(param)
             logD("save original $f")
             param.args.last().apply {
@@ -209,38 +224,49 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
             }
         }
 
-        // 保存多图时可能会见到这个方法
-
-        val savePicWithUrlInfo = XhsHandler.creator.create("savePicWithUrl") { bridge ->
-            bridge.findMethod {
-                matcher {
-                    if (!newVersion)
-                        declaredClass(savePicMethodInfo.className)
-                    usingEqStrings(
-                        "save image failed without watermark"
-                    )
-                }
-            }.single {
-                if (!newVersion) it.methodName != savePicMethodInfo.memberName
-                else it.className != savePicMethodInfo.className // both of them should be `subscribe`
-            }.toObfsInfo()
+        if (version < 2) {
+            savePicMethod.hookReplace(
+                cond = ::isEnabled
+            ) { param ->
+                handleSaveCachedPic(param)
+            }
         }
 
-        val savePicWithUrlClass =
-            if (newVersion) findClass(savePicWithUrlInfo.className) else savePicClass
+        // 保存多图时可能会见到这个方法
+
+        val savePicWithUrlInfo = if (version < 2) {
+            XhsHandler.creator.create("savePicWithUrl") { bridge ->
+                bridge.findMethod {
+                    matcher {
+                        if (version == 0)
+                            declaredClass(savePicMethodInfo.className)
+                        usingEqStrings(
+                            "save image failed without watermark"
+                        )
+                    }
+                }.single {
+                    if (version == 0) it.methodName != savePicMethodInfo.memberName
+                    else it.className != savePicMethodInfo.className // both of them should be `subscribe`
+                }.toObfsInfo()
+            }
+        } else {
+            XhsHandler.creator.obfsTable.remove("savePicWithUrl")
+            null
+        }
 
         val picCacheInterface = picCacheClass.interfaces.single()
         val getCacheMethod = XhsHandler.creator.create("getImageCache") { bridge ->
             bridge.findMethod {
                 matcher {
                     addCaller {
-                        declaredClass(savePicWithUrlInfo.className)
-                        name(savePicWithUrlInfo.memberName)
+                        declaredClass(savePicWithUrlInfo?.className ?: savePicMethodInfo.className)
+                        name(savePicWithUrlInfo?.memberName ?: savePicMethodInfo.memberName)
                     }
                     returnType(picCacheInterface.name)
                 }
             }.single().toObfsInfo()
         }
+
         val tls = ThreadLocal<Boolean>()
         findClass(getCacheMethod.className).hookAllAfter(
             getCacheMethod.memberName,
@@ -254,28 +280,62 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
             }
         }
 
-        savePicWithUrlClass.hookAll(
-            savePicWithUrlInfo.memberName, cond = ::isEnabled,
-            before = {
-                tls.set(true)
-            },
-            after = { param ->
-                runCatching {
-                    (param.throwable as? SaveOriginalImageAbort)?.let {
-                        param.throwable = null
-                        param.result = null
-                        val f = it.f
-                        logD("save original with url $f")
-                        param.args.last().apply {
-                            call("onNext", kotlinPair.newInst("success", f))
-                            call("onComplete")
-                        }
+        fun handleSavePicWithUrlBefore() {
+            tls.set(true)
+        }
+
+        fun handleSavePicWithUrlAfter(param: HookParam) {
+            runCatching {
+                (param.throwable as? SaveOriginalImageAbort)?.let {
+                    param.throwable = null
+                    param.result = null
+                    val f = it.f
+                    logD("save original with url $f")
+                    param.args.last().apply {
+                        call("onNext", kotlinPair.newInst("success", f))
+                        call("onComplete")
                     }
                 }
-
-                tls.set(false)
             }
-        )
+
+            tls.set(false)
+        }
+
+        if (version < 2) {
+            val savePicWithUrlClass =
+                if (version == 1) findClass(savePicWithUrlInfo!!.className) else savePicClass
+
+            savePicWithUrlClass.hookAll(
+                savePicWithUrlInfo!!.memberName, cond = ::isEnabled,
+                before = {
+                    handleSavePicWithUrlBefore()
+                },
+                after = { param ->
+                    handleSavePicWithUrlAfter(param)
+                }
+            )
+        } else {
+            savePicClass.hookAll(
+                savePicMethodInfo.memberName, cond = ::isEnabled,
+                before = { param ->
+                    val type = version2TypeField!!.getInt(param.thisObject)
+                    logD("savePic before type $type")
+                    if (type == 0) {
+                        handleSaveCachedPic(param)
+                        param.result = null
+                    } else {
+                        handleSavePicWithUrlBefore()
+                    }
+                },
+                after = { param ->
+                    val type = version2TypeField!!.getInt(param.thisObject)
+                    logD("savePic after type $type")
+                    if (type != 0) {
+                        handleSavePicWithUrlAfter(param)
+                    }
+                }
+            )
+        }
     }
 }
 

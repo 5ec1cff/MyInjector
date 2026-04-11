@@ -19,19 +19,24 @@ typealias MutableObfsTable = MutableMap<String, ObfsInfo>
 data class ObfsInfo(
     val className: String,
     val memberName: String,
+    val descriptor: String = "",
 )
 
-fun ClassData.toObfsInfo() = ObfsInfo(className = name, memberName = "")
-fun MethodData.toObfsInfo() = ObfsInfo(className = className, memberName = methodName)
-fun FieldData.toObfsInfo() = ObfsInfo(className = className, memberName = fieldName)
+fun ClassData.toObfsInfo() = ObfsInfo(className = name, memberName = "", descriptor = "")
+fun MethodData.toObfsInfo() =
+    ObfsInfo(className = className, memberName = methodName, descriptor = descriptor)
+
+fun FieldData.toObfsInfo() =
+    ObfsInfo(className = className, memberName = fieldName, descriptor = descriptor)
 
 const val OBFS_KEY_APK = "apkPath"
 const val OBFS_KEY_TABLE_VERSION = "tableVersion"
 const val OBFS_KEY_FRAMEWORK_VERSION = "frameworkVersion"
 const val OBFS_KEY_PREFIX_METHOD = "method_"
 const val OBFS_KEY_MethodInfo_methodName = "methodName"
+const val OBFS_KEY_MethodInfo_descriptor = "descriptor"
 const val OBFS_KEY_MethodInfo_className = "className"
-const val OBFS_FRAMEWORK_VERSION = 1
+const val OBFS_FRAMEWORK_VERSION = 2
 
 class ObfsTableCreator(
     val name: String,
@@ -85,6 +90,7 @@ class ObfsTableCreator(
                         val methodInfo = ObfsInfo(
                             className = rv.getString(OBFS_KEY_MethodInfo_className),
                             memberName = rv.getString(OBFS_KEY_MethodInfo_methodName),
+                            descriptor = rv.getString(OBFS_KEY_MethodInfo_descriptor)
                         )
                         obfsTable[rk] = methodInfo
                     }
@@ -111,6 +117,7 @@ class ObfsTableCreator(
                 outJsonObj.put(OBFS_KEY_PREFIX_METHOD + k, JSONObject().apply {
                     put(OBFS_KEY_MethodInfo_className, v.className)
                     put(OBFS_KEY_MethodInfo_methodName, v.memberName)
+                    put(OBFS_KEY_MethodInfo_descriptor, v.descriptor)
                 })
             }
             tableFile.delete()
