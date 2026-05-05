@@ -179,6 +179,12 @@ class SettingsActivity : Activity() {
                 .setClipboardWhitelist(sp.getBoolean("clipboardWhitelist", false))
                 .setFixSync(sp.getBoolean("fixSync", false))
                 .setXSpace(sp.getBoolean("xSpace", false))
+                .setBypassShellDexOptRestriction(
+                    sp.getBoolean(
+                        "bypassShellDexOptRestriction",
+                        false
+                    )
+                )
                 .setNoSwipeToKillLockedProcess(sp.getBoolean("noSwipeToKillLockedProcess", false))
                 .setNoSwipeToKillNoRestrictProcess(
                     sp.getBoolean(

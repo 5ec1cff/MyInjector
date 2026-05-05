@@ -34,6 +34,7 @@ android
 - 允许关闭 miui wakepath 功能（即跨 app 打开启动可能弹出的询问）
 - 允许移除某些 miui 锁定的 intent
 - <a id="noswipetokill"></a>（小米）划卡不杀最近任务中上锁应用或电量管控无限制应用
+- 绕过 MIUI 低版本对 pm compile 命令的限制，允许通过命令主动触发 AOT 编译
 - 其他功能详见设置
 
 ### 百度输入法

@@ -24,6 +24,7 @@ import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
@@ -41,6 +42,7 @@ import kotlin.Boolean
 import kotlin.Int
 import kotlin.String
 import kotlin.Suppress
+import kotlin.also
 import kotlin.getValue
 import kotlin.lazy
 import kotlin.let
@@ -77,6 +79,7 @@ class SystemServerHandler : HotLoadHook() {
         logI("hook system")
         config = readConfig()
         logI("config for system server: $config")
+        hookMiui12DexOptRestriction()
         hookNoWakePath()
         hookNoMiuiIntent()
         hookClipboardWhitelist()
@@ -95,6 +98,7 @@ class SystemServerHandler : HotLoadHook() {
         setXSpace(false)
         hooks.forEach { it.unhook() }
         hooks.clear()
+        dexOptRestrictionHook = null
     }
 
     private fun findOrCreateConfigFile(): File {
@@ -370,6 +374,7 @@ class SystemServerHandler : HotLoadHook() {
             runCatching {
                 if (!isCallerTrusted(intent)) return
                 val oldXSpace = config.xSpace
+                val oldBypassShellDexopt = config.bypassShellDexOptRestriction
                 intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
                     config = SystemServerConfig.parseFrom(it)
                     findOrCreateConfigFile().writeBytes(it)
@@ -377,6 +382,9 @@ class SystemServerHandler : HotLoadHook() {
                 }
                 if (oldXSpace != config.xSpace) {
                     setXSpace(config.xSpace)
+                }
+                if (oldBypassShellDexopt != config.bypassShellDexOptRestriction) {
+                    hookMiui12DexOptRestriction()
                 }
             }.onFailure {
                 logE("onReceive: ", it)
@@ -415,5 +423,26 @@ class SystemServerHandler : HotLoadHook() {
             })
     }.onFailure {
         logE("hookStatusBarAppearance", it)
+    }
+
+    private var dexOptRestrictionHook: Set<Unhook>? = null
+
+    private fun hookMiui12DexOptRestriction() = runCatching {
+        if (config.bypassShellDexOptRestriction) {
+            if (dexOptRestrictionHook != null) return@runCatching
+            hooks.addAll(findClass("com.android.server.pm.dex.DexoptOptions").hookAllCAfter {
+                if (config.bypassShellDexOptRestriction && it.thisObject.getObj("mCompilationReason") == 12) {
+                    logD("set DexoptOptions 12 to 1")
+                    it.thisObject.setObj("mCompilationReason", 1)
+                }
+            }.also { dexOptRestrictionHook = it })
+        } else {
+            dexOptRestrictionHook?.let { unhooks ->
+                hooks.removeAll(unhooks)
+            }
+            dexOptRestrictionHook = null
+        }
+    }.onFailure {
+        logE("hookMiui12DexOptRestriction", it)
     }
 }

@@ -70,6 +70,11 @@
             android:key="noSwipeToKillNoRestrictProcess"
             android:summary="划卡不杀电量管控无限制应用（仅小米）"
             android:title="划卡不杀无限制" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="bypassShellDexOptRestriction"
+            android:summary="绕过小米低版本的 pm compile 命令限制（允许强制编译）"
+            android:title="绕过 pm compile 限制" />
         <Preference
             android:key="commit"
             android:persistent="false"
