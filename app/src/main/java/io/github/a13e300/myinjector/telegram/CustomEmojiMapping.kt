@@ -1,13 +1,13 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.app.Activity
-import android.app.AndroidAppHelper
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.DynHook
+import io.github.a13e300.myinjector.arch.currentApplication
 import io.github.a13e300.myinjector.arch.findBaseActivity
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.logE
@@ -137,7 +137,7 @@ object CustomEmojiMapping : DynHook() {
                 synchronized(this) {
                     val m2 = _emotionMap
                     if (m2 == null) {
-                        val f = AndroidAppHelper.currentApplication().getEmotionMapFile()
+                        val f = currentApplication().getEmotionMapFile()
                         val mp = runCatching {
                             if (f.isFile)
                                 loadEmotionMap(f.readText())

@@ -2,17 +2,19 @@
 dexkit = "2.0.7"
 kotlin = "2.3.10"
 agp = "8.10.1"
-xposed = "82"
 annotation = "1.9.1"
 protobuf = "4.31.1"
+xposed-api = "101.0.1"
+xposed-service = "101.0.0"
 
 [libraries]
 dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
-xposed-api = { module = "de.robv.android.xposed:api", version.ref = "xposed" }
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
 protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin-lite", version.ref = "protobuf" }
 protobuf-java = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
+libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "xposed-api" }
+libxposed-service = { group = "io.github.libxposed", name = "service", version.ref = "xposed-service" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

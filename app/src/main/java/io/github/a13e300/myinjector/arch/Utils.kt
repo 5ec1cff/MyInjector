@@ -1,6 +1,8 @@
 package io.github.a13e300.myinjector.arch
 
 import android.app.Activity
+import android.app.ActivityThread
+import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -94,4 +96,14 @@ fun ViewGroup.containsClass(clazz: Class<*>): Boolean {
         }
     }
     return false
+}
+
+fun currentApplication(): Application =
+    ActivityThread.currentActivityThread().application
+
+@Suppress("DEPRECATION")
+fun newModuleResource(path: String): Resources {
+    val assetManager = hidden.android.content.res.AssetManager()
+    assetManager.addAssetPath(path)
+    return Resources(assetManager as AssetManager, null, null)
 }

@@ -1,12 +1,12 @@
 package io.github.a13e300.myinjector.telegram
 
-import android.app.AndroidAppHelper
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
+import io.github.a13e300.myinjector.arch.currentApplication
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -63,11 +63,11 @@ class EmojiStickerMenu : DynHook() {
                     }
                 }
                 val userLink = "tg://openmessage?user_id=$userId"
-                AndroidAppHelper.currentApplication().getSystemService(
+                currentApplication().getSystemService(
                     ClipboardManager::class.java
                 ).setPrimaryClip(ClipData.newPlainText("", userLink))
                 Toast.makeText(
-                    AndroidAppHelper.currentApplication(), "User: $userId",
+                    currentApplication(), "User: $userId",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -103,7 +103,7 @@ class EmojiStickerMenu : DynHook() {
                     str.append("\n$i=$id:$altUnicode")
                 }
 
-                AndroidAppHelper.currentApplication().getSystemService(
+                currentApplication().getSystemService(
                     ClipboardManager::class.java
                 ).setPrimaryClip(ClipData.newPlainText("", str.toString()))
             }
@@ -139,11 +139,11 @@ class EmojiStickerMenu : DynHook() {
                     }
                 }
                 val userLink = "tg://openmessage?user_id=$userId"
-                AndroidAppHelper.currentApplication().getSystemService(
+                currentApplication().getSystemService(
                     ClipboardManager::class.java
                 ).setPrimaryClip(ClipData.newPlainText("", userLink))
                 Toast.makeText(
-                    AndroidAppHelper.currentApplication(), "User: $userId",
+                    currentApplication(), "User: $userId",
                     Toast.LENGTH_SHORT
                 ).show()
             }

@@ -2,52 +2,58 @@ package io.github.a13e300.myinjector.bridge;
 
 import java.lang.reflect.Member;
 
-import de.robv.android.xposed.XC_MethodHook;
-
 public class HookParam {
-    final XC_MethodHook.MethodHookParam methodHookParam;
+    Object[] args;
+    Object thisObject;
+    Member member;
+    Object result;
+    Throwable throwable;
+    boolean invoked = false;
 
-    public HookParam(XC_MethodHook.MethodHookParam param) {
-        methodHookParam = param;
+    public HookParam() {
     }
 
     public Member getMethod() {
-        return methodHookParam.method;
+        return member;
     }
 
     public void setMethod(Member m) {
-        methodHookParam.method = m;
+        member = m;
     }
 
     public Object getThisObject() {
-        return methodHookParam.thisObject;
+        return thisObject;
     }
 
     public void setThisObject(Object t) {
-        methodHookParam.thisObject = t;
+        thisObject = t;
     }
 
     public Object[] getArgs() {
-        return methodHookParam.args;
+        return args;
     }
 
     public void setArgs(Object[] a) {
-        methodHookParam.args = a;
+        args = a;
     }
 
     public Object getResult() {
-        return methodHookParam.getResult();
+        return result;
     }
 
     public void setResult(Object r) {
-        methodHookParam.setResult(r);
+        result = r;
+        throwable = null;
+        invoked = true;
     }
 
     public Throwable getThrowable() {
-        return methodHookParam.getThrowable();
+        return throwable;
     }
 
     public void setThrowable(Throwable t) {
-        methodHookParam.setThrowable(t);
+        throwable = t;
+        result = null;
+        invoked = true;
     }
 }

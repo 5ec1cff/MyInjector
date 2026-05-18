@@ -3,7 +3,6 @@ package io.github.a13e300.myinjector
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.AndroidAppHelper
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -39,6 +38,7 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
+import io.github.a13e300.myinjector.arch.currentApplication
 import io.github.a13e300.myinjector.arch.dp2px
 import io.github.a13e300.myinjector.arch.extraField
 import io.github.a13e300.myinjector.arch.findBaseActivity
@@ -528,7 +528,7 @@ class BetterShare : MyDynHook("betterShare") {
                     else text += "\n" + newUri
                     // logD("html=$html")
 
-                    AndroidAppHelper.currentApplication()
+                    currentApplication()
                         .getSystemService(ClipboardManager::class.java)
                         .setPrimaryClip(ClipData.newHtmlText("", text, html))
 
