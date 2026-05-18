@@ -1,9 +1,15 @@
 package io.github.a13e300.myinjector
 
 import android.app.IActivityManager
+import android.app.ActivityThread
+import android.app.PendingIntent
 import android.app.TaskStackBuilder
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -15,20 +21,51 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.arch.hookAllConstant
+import io.github.a13e300.myinjector.arch.hookAllConstantIf
+import java.io.File
+import kotlin.concurrent.thread
 
 class MiuiHomeHandler : IHook() {
+    private lateinit var config: MiuiHomeConfig
+    private lateinit var configPath: File
+
     override fun onHook() {
+        configPath =
+            File(loadPackageParam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
+        loadConfig()
         hookDragKill()
         hookPreLaunch()
         hookOpenAOSPSettings()
+        registerBroadcast()
+    }
+
+    private fun defaultConfig(): MiuiHomeConfig =
+        MiuiHomeConfig.newBuilder()
+            .setOpenAospSettings(true)
+            .setDragKill(true)
+            .setDisablePreLaunch(true)
+            .build()
+
+    private fun loadConfig() = runCatching {
+        config = if (configPath.isFile) {
+            configPath.inputStream().use { MiuiHomeConfig.parseFrom(it) }
+        } else {
+            defaultConfig()
+        }
+        logI("loaded config $config")
+    }.onFailure {
+        config = defaultConfig()
+        logE("failed to load config from $configPath", it)
     }
 
     private fun hookPreLaunch() = runCatching {
         val clazz = findClassOrNull("com.miui.home.isolate.Utils.PreLaunchAppUtil")
             ?: findClass("com.miui.home.launcher.util.PreLaunchAppUtil")
-        clazz.hookAllConstant("preLaunchProcess", false)
+        clazz.hookAllConstantIf("preLaunchProcess", false) {
+            config.disablePreLaunch
+        }
     }.onFailure {
         logE("hookPreLaunch", it)
     }
@@ -38,19 +75,19 @@ class MiuiHomeHandler : IHook() {
             "com.miui.home.recents.views.TaskStackViewTouchHandler"
         )
 
-        recentTouchHandlerClass.hookAllAfter("onBeginDrag") { param ->
+        recentTouchHandlerClass.hookAllAfter("onBeginDrag", cond = { config.dragKill }) { param ->
             onBeginDrag(param.args[0] as View)
         }
 
-        recentTouchHandlerClass.hookAllAfter("onDragEnd") { param ->
+        recentTouchHandlerClass.hookAllAfter("onDragEnd", cond = { config.dragKill }) { param ->
             onDragEnd(param.args[0] as View)
         }
 
-        recentTouchHandlerClass.hookAllAfter("onChildDismissedEnd") { param ->
+        recentTouchHandlerClass.hookAllAfter("onChildDismissedEnd", cond = { config.dragKill }) { param ->
             onChildDismissedEnd(param.args[0] as View)
         }
 
-        recentTouchHandlerClass.hookAllAfter("onDragCancelled") { param ->
+        recentTouchHandlerClass.hookAllAfter("onDragCancelled", cond = { config.dragKill }) { param ->
             onDragCancelled(param.args[0] as View)
         }
     }.onFailure {
@@ -124,6 +161,7 @@ class MiuiHomeHandler : IHook() {
             val v = param.thisObject.getObjAs<View>("mMenuItemInfo")
             val thiz = param.thisObject
             v.setOnLongClickListener {
+                if (!config.openAospSettings) return@setOnLongClickListener false
                 // see RecentsContainer.onMessageEvent(ShowApplicationInfoEvent)
                 // and RecentMenuView.onClick
                 runCatching {
@@ -155,5 +193,50 @@ class MiuiHomeHandler : IHook() {
         }
     }.onFailure {
         logE("hookOpenAOSPSettings", it)
+    }
+
+    private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            intent ?: return
+            runCatching {
+                val pendingIntent =
+                    intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
+                if (pendingIntent?.creatorPackage != BuildConfig.APPLICATION_ID) {
+                    logE("onReceive: invalid caller ${pendingIntent?.creatorPackage}")
+                    return
+                }
+                intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
+                    config = MiuiHomeConfig.parseFrom(it)
+                    configPath.writeBytes(it)
+                    logI("onReceive: update config $config")
+                }
+            }.onFailure {
+                logE("onReceive: ", it)
+            }
+        }
+    }
+
+    private fun registerBroadcast() {
+        thread {
+            try {
+                while (true) {
+                    Thread.sleep(1000)
+                    val ctx = ActivityThread.currentActivityThread().application ?: continue
+                    val flags =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
+                    ctx.registerReceiver(
+                        receiver,
+                        IntentFilter("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG"),
+                        null,
+                        null,
+                        flags
+                    )
+                    logI("registerBroadcast: registered")
+                    break
+                }
+            } catch (t: Throwable) {
+                logE("registerBroadcast: ", t)
+            }
+        }
     }
 }
