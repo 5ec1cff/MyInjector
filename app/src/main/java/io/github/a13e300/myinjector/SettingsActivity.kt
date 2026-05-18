@@ -164,6 +164,8 @@ class SettingsActivity : Activity() {
                 commitSystem()
             } else if ("systemui" == pr.key) {
                 commitSystemUI()
+            } else if ("miuihome" == pr.key) {
+                commitMiuiHome()
             }
         }
 
@@ -309,6 +311,22 @@ class SettingsActivity : Activity() {
                 .setNoDndNotification(sp.getBoolean("noDndNotification", false))
                 .setShowNotificationDetail(sp.getBoolean("showNotificationDetail", false))
                 .setFixWhiteSplash(sp.getBoolean("fixWhiteSplash", false))
+                .build()
+            intent.putExtra("EXTRA_CREDENTIAL", pendingIntent)
+            intent.putExtra("EXTRA_CONFIG", config.toByteArray())
+            context.sendBroadcast(intent)
+        }
+
+        private fun commitMiuiHome() {
+            val context = getContext()
+            val intent = Intent("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG")
+            val pendingIntent =
+                PendingIntent.getBroadcast(context, 1, intent, PendingIntent.FLAG_IMMUTABLE)
+            val sp = preferenceManager.sharedPreferences
+            val config = MiuiHomeConfig.newBuilder()
+                .setOpenAospSettings(sp.getBoolean("miuiHomeOpenAospSettings", true))
+                .setDragKill(sp.getBoolean("miuiHomeDragKill", true))
+                .setDisablePreLaunch(sp.getBoolean("miuiHomeDisablePreLaunch", true))
                 .build()
             intent.putExtra("EXTRA_CREDENTIAL", pendingIntent)
             intent.putExtra("EXTRA_CONFIG", config.toByteArray())
