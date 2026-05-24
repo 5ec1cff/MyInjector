@@ -9,11 +9,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.Resources
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.preference.ListPreference
 import android.preference.MultiSelectListPreference
 import android.preference.Preference
+import android.preference.PreferenceCategory
 import android.preference.PreferenceGroup
 import android.preference.PreferenceScreen
 import android.text.Editable
@@ -25,15 +28,15 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.ContextThemeWrapper
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.BaseAdapter
-import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListAdapter
 import android.widget.ListView
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.ModernPreferenceStyleRegistry
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.findBaseActivity
@@ -41,11 +44,17 @@ import io.github.a13e300.myinjector.arch.forceSetSelection
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.arch.inflateLayout
 import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.arch.restartApplication
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.sp2px
+import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
+import io.github.a13e300.myinjector.ui.ModernInjectedSearchBar
+import io.github.a13e300.myinjector.ui.ModernSettingsPalette
+import io.github.a13e300.myinjector.ui.dp
+import io.github.a13e300.myinjector.ui.modernInjectedMessageView
+import io.github.a13e300.myinjector.ui.showModernInjectedDialog
+import kotlin.math.min
 
 abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreferenceChangeListener,
     Preference.OnPreferenceClickListener {
@@ -100,14 +109,35 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
 
     fun search(text: String) {
         val preferences = if (text.isEmpty()) {
+            applyCardGrouping(prefScreen)
             searchItems.map { it.restore(); it.preference }
         } else {
             searchItems.sortedByDescending { it.calcScoreAndApplyHintBy(text) }
                 .filterNot { it.cacheScore == 0 }.map { it.preference }
+                .also { ModernPreferenceStyleRegistry.markCardRows(it) }
         }
         adapter.preferenceList = preferences
         adapter.notifyDataSetChanged()
         listView.forceSetSelection(0)
+        updateListViewHeight()
+    }
+
+    private fun applyCardGrouping(group: PreferenceGroup) {
+        if (group === prefScreen) {
+            ModernPreferenceStyleRegistry.clear()
+        }
+        val topLevelRows = mutableListOf<Preference>()
+        for (i in 0 until group.preferenceCount) {
+            val preference = group.getPreference(i)
+            if (preference is PreferenceGroup) {
+                ModernPreferenceStyleRegistry.markCardRows(topLevelRows)
+                topLevelRows.clear()
+                applyCardGrouping(preference)
+            } else {
+                topLevelRows.add(preference)
+            }
+        }
+        ModernPreferenceStyleRegistry.markCardRows(topLevelRows)
     }
 
     private fun retrieve(group: PreferenceGroup): List<SearchItem> = buildList {
@@ -214,7 +244,7 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
             val endIdx = startIdx + hint.hint.length
             if (endIdx > length) return this
             val flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-            val hintColor = preference.context.getColor(R.color.text_search_hint)
+            val hintColor = ModernSettingsPalette.from(preference.context).accent
             val colorSpan = ForegroundColorSpan(hintColor)
             val boldSpan = StyleSpan(Typeface.BOLD)
             return SpannableStringBuilder(this).apply {
@@ -249,35 +279,62 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
 
     private fun getContentView(): View {
         prefScreen = PreferenceScreen::class.java.newInstAs(context, null)
-        listView = ListView(context)
+        val palette = ModernSettingsPalette.from(context)
+        listView = ListView(context).apply {
+            divider = null
+            setSelector(ColorDrawable(Color.TRANSPARENT))
+            isDrawSelectorOnTop = false
+            cacheColorHint = Color.TRANSPARENT
+            setBackgroundColor(palette.background)
+            clipToPadding = false
+            setPadding(0, context.dp(6), 0, context.dp(6))
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength(context.dp(21))
+        }
 
         prefScreen.run {
             onCreatePref(this)
         }
+        applyCardGrouping(prefScreen)
         prefScreen.bind(listView)
         searchItems = retrieve(prefScreen)
         adapter = listView.adapter as BaseAdapter
         val contentView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
         }
-        val searchBar = context.inflateLayout(R.layout.search_bar)
-        val editView = searchBar.findViewById<EditText>(R.id.search)
-        val clearView = searchBar.findViewById<View>(R.id.clear)
+        val searchBar = ModernInjectedSearchBar(context, palette)
+        val editView = searchBar.editText
+        fun clearSearchFocus() {
+            if (!editView.hasFocus()) return
+            editView.clearFocus()
+            context.getSystemService(InputMethodManager::class.java)
+                ?.hideSoftInputFromWindow(editView.windowToken, 0)
+        }
+        contentView.setOnClickListener {
+            clearSearchFocus()
+        }
+        listView.setOnTouchListener { _, _ ->
+            clearSearchFocus()
+            false
+        }
         searchBar.setOnClickListener {
             editView.requestFocus()
             context.getSystemService(InputMethodManager::class.java)
-                .showSoftInput(editView, 0)
+                ?.showSoftInput(editView, 0)
         }
         editView.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {}
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(
                 s: CharSequence?, start: Int, before: Int, count: Int
-            ) = search(s?.toString()?.trim().orEmpty())
+            ) {
+                val query = s?.toString()?.trim().orEmpty()
+                search(query)
+            }
         })
         editView.setOnEditorActionListener { v, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -285,12 +342,73 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
                 true
             } else false
         }
-        clearView.setOnClickListener {
-            editView.setText("")
-        }
-        contentView.addView(searchBar)
-        contentView.addView(listView)
+        contentView.addView(
+            searchBar,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+        contentView.addView(
+            listView,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                listHeightForCurrentItems(),
+            ),
+        )
         return contentView
+    }
+
+    private fun updateListViewHeight() {
+        val params = listView.layoutParams ?: return
+        val height = listHeightForCurrentItems()
+        if (params.height == height) return
+        params.height = height
+        listView.layoutParams = params
+    }
+
+    private fun listHeightForCurrentItems(): Int {
+        val maxHeight = maxListHeight()
+        val contentHeight = estimatedListContentHeight()
+        val needsScroll = contentHeight > maxHeight
+        listView.isVerticalFadingEdgeEnabled = needsScroll
+        return min(contentHeight, maxHeight)
+    }
+
+    private fun maxListHeight(): Int =
+        min(
+            context.resources.displayMetrics.heightPixels * 58 / 100,
+            520.sp2px(context.resources).toInt(),
+        )
+
+    private fun estimatedListContentHeight(): Int {
+        var height = listView.paddingTop + listView.paddingBottom
+        val preferences = adapter.preferenceList
+        for (preference in preferences) {
+            height += if (preference is PreferenceCategory) {
+                context.dp(46)
+            } else {
+                estimatedPreferenceRowHeight(preference)
+            }
+            if (height > maxListHeight()) return height
+        }
+        return height.coerceAtLeast(context.dp(1))
+    }
+
+    private fun estimatedPreferenceRowHeight(preference: Preference): Int {
+        val summary = preference.summary?.toString().orEmpty()
+        if (summary.isBlank()) return context.dp(58)
+
+        val contentWidth = context.resources.displayMetrics.widthPixels - context.dp(48 + 48 + 52)
+        val charsPerLine = (contentWidth / context.dp(7.2f)).coerceAtLeast(12)
+        val summaryLines = summary.lineSequence().sumOf { line ->
+            (line.length / charsPerLine + 1).coerceAtLeast(1)
+        }
+        return context.dp(58 + (summaryLines - 1).coerceAtLeast(0) * 18)
+    }
+
+    protected open fun onConfigureActions(actions: MutableList<ModernInjectedDialogAction>) {
+
     }
 
     protected open fun onConfigureDialog(builder: AlertDialog.Builder) {
@@ -301,26 +419,31 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
         try {
             val activity = activityCtx.findBaseActivity()
             // activity.addModuleAssets(Entry.modulePath)
-
-            AlertDialog.Builder(context).apply {
-
-                setView(getContentView())
-                setTitle("MyInjector")
-                setNegativeButton("返回", null)
-                setPositiveButton("重启") { _, _ ->
+            val actions = mutableListOf(
+                ModernInjectedDialogAction("返回"),
+                ModernInjectedDialogAction("重启") {
                     restartApplication(activity)
-                }
-                onConfigureDialog(this)
-
-            }.show()
+                },
+            )
+            onConfigureActions(actions)
+            showModernInjectedDialog(context, "MyInjector", getContentView(), actions)
+            return
         } catch (e: Resources.NotFoundException) {
             logE("res:", e)
-            AlertDialog.Builder(context)
-                .setTitle("需要重启")
-                .setMessage("由于加载资源失败，需要重启应用以显示设置界面。")
-                .setPositiveButton("重启") { _, _ ->
-                    restartApplication(activityCtx.findBaseActivity())
-                }.show()
+            showModernInjectedDialog(
+                context,
+                "需要重启",
+                modernInjectedMessageView(
+                    context,
+                    "由于加载资源失败，需要重启应用以显示设置界面。",
+                ),
+                listOf(
+                    ModernInjectedDialogAction("重启") {
+                        restartApplication(activityCtx.findBaseActivity())
+                    },
+                ),
+            )
+            return
         }
     }
 }

@@ -43,9 +43,9 @@ class MiuiHomeHandler : IHook() {
 
     private fun defaultConfig(): MiuiHomeConfig =
         MiuiHomeConfig.newBuilder()
-            .setOpenAospSettings(true)
-            .setDragKill(true)
-            .setDisablePreLaunch(true)
+            .setOpenAospSettings(false)
+            .setDragKill(false)
+            .setDisablePreLaunch(false)
             .build()
 
     private fun loadConfig() = runCatching {

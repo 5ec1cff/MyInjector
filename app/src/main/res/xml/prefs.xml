@@ -115,17 +115,17 @@
         android:key="miuihome"
         android:title="MIUI 桌面">
         <SwitchPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="miuiHomeOpenAospSettings"
             android:summary="最近任务长按应用菜单里的设置按钮时打开原生应用信息页"
             android:title="打开原生应用信息" />
         <SwitchPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="miuiHomeDragKill"
             android:summary="最近任务卡片拖动悬停 700ms 后继续划动时强制停止应用进程"
             android:title="划卡强杀进程" />
         <SwitchPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="miuiHomeDisablePreLaunch"
             android:summary="禁用 MIUI 桌面的应用预启动逻辑"
             android:title="禁用应用预启动" />

@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import android.app.AlertDialog
 import android.content.Context
 import android.location.Location
 import android.widget.EditText
@@ -11,6 +10,7 @@ import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
+import io.github.a13e300.myinjector.ui.showModernInjectedTextInputDialog
 
 // 允许通过经纬度设置地图位置（长按定位按钮）
 class CustomMapPosition : DynHook() {
@@ -25,28 +25,23 @@ class CustomMapPosition : DynHook() {
                 setOnLongClickListener {
                     val ctx = it.context
                     val et = EditText(ctx)
-                    AlertDialog.Builder(ctx)
-                        .setTitle("latitude,longitude")
-                        .setView(et)
-                        .setPositiveButton(android.R.string.ok) { _, _ ->
-                            val l = et.text.toString().split(",", limit = 2)
-                            if (l.size == 2) {
-                                val la = l[0].trim().toDoubleOrNull()
-                                val lo = l[1].trim().toDoubleOrNull()
-                                if (la != null && lo != null) {
-                                    self.call("resetMapPosition", la, lo)
-                                    return@setPositiveButton
-                                }
+                    showModernInjectedTextInputDialog(ctx, "latitude,longitude") { text ->
+                        val l = text.split(",", limit = 2)
+                        if (l.size == 2) {
+                            val la = l[0].trim().toDoubleOrNull()
+                            val lo = l[1].trim().toDoubleOrNull()
+                            if (la != null && lo != null) {
+                                self.call("resetMapPosition", la, lo)
+                                return@showModernInjectedTextInputDialog
                             }
-                            Toast.makeText(
-                                ctx,
-                                "wrong position",
-                                Toast.LENGTH_SHORT
-                            ).show()
                         }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
-                    true
+                        Toast.makeText(
+                            ctx,
+                            "wrong position",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return@setOnLongClickListener true
                 }
             }
         }
@@ -59,33 +54,28 @@ class CustomMapPosition : DynHook() {
                 setOnLongClickListener {
                     val ctx = it.context
                     val et = EditText(ctx)
-                    AlertDialog.Builder(ctx)
-                        .setTitle("latitude,longitude")
-                        .setView(et)
-                        .setPositiveButton(android.R.string.ok) { _, _ ->
-                            val l = et.text.toString().split(",", limit = 2)
-                            if (l.size == 2) {
-                                val la = l[0].trim().toDoubleOrNull()
-                                val lo = l[1].trim().toDoubleOrNull()
-                                if (la != null && lo != null) {
-                                    self.call(
-                                        "positionMarker",
-                                        Location(null).apply {
-                                            latitude = la
-                                            longitude = lo
-                                        })
-                                    return@setPositiveButton
-                                }
+                    showModernInjectedTextInputDialog(ctx, "latitude,longitude") { text ->
+                        val l = text.split(",", limit = 2)
+                        if (l.size == 2) {
+                            val la = l[0].trim().toDoubleOrNull()
+                            val lo = l[1].trim().toDoubleOrNull()
+                            if (la != null && lo != null) {
+                                self.call(
+                                    "positionMarker",
+                                    Location(null).apply {
+                                        latitude = la
+                                        longitude = lo
+                                    })
+                                return@showModernInjectedTextInputDialog
                             }
-                            Toast.makeText(
-                                ctx,
-                                "wrong position",
-                                Toast.LENGTH_SHORT
-                            ).show()
                         }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
-                    true
+                        Toast.makeText(
+                            ctx,
+                            "wrong position",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return@setOnLongClickListener true
                 }
             }
         }

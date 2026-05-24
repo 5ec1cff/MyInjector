@@ -26,10 +26,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.DynHookManager
@@ -59,6 +57,13 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.bridge.HookParam
+import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
+import io.github.a13e300.myinjector.ui.ModernSettingsPalette
+import io.github.a13e300.myinjector.ui.dp
+import io.github.a13e300.myinjector.ui.modernInjectedButton
+import io.github.a13e300.myinjector.ui.modernInjectedMessageView
+import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
+import io.github.a13e300.myinjector.ui.showModernInjectedDialog
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
@@ -617,28 +622,40 @@ class ExtractVideoLink : MyDynHook("extractVideoLink") {
                                 return super.getSystemService(name)
                             }
                         }
-                        AlertDialog.Builder(dialogCtx)
-                            .setTitle("视频链接")
-                            .setView(ScrollView(dialogCtx).also { sv ->
-                                sv.addView(LinearLayout(dialogCtx).also { lv ->
-                                    lv.orientation = LinearLayout.VERTICAL
-                                    urlInfoList.forEach { info ->
-                                        runCatching {
-                                            val url = info.getObjAs<String>("url")
-                                            val desc = info.getObjAs<String>("desc")
-                                            val btn = Button(dialogCtx)
-                                            btn.text = desc
-                                            btn.setOnClickListener {
-                                                dialogCtx.getSystemService(ClipboardManager::class.java)
-                                                    .setPrimaryClip(ClipData.newPlainText("", url))
-                                            }
-                                            lv.addView(btn)
-                                        }.onFailure { t ->
-                                            logE("add url btn $info", t)
+                        val palette = ModernSettingsPalette.from(dialogCtx)
+                        val links = LinearLayout(dialogCtx).apply {
+                            orientation = LinearLayout.VERTICAL
+                            urlInfoList.forEach { info ->
+                                runCatching {
+                                    val url = info.getObjAs<String>("url")
+                                    val desc = info.getObjAs<String>("desc")
+                                    val button = modernInjectedButton(dialogCtx, palette, desc).apply {
+                                        setOnClickListener {
+                                            dialogCtx.getSystemService(ClipboardManager::class.java)
+                                                .setPrimaryClip(ClipData.newPlainText("", url))
                                         }
                                     }
-                                })
-                            }).show()
+                                    addView(
+                                        button,
+                                        LinearLayout.LayoutParams(
+                                            LayoutParams.MATCH_PARENT,
+                                            dialogCtx.dp(46),
+                                        ).apply {
+                                            bottomMargin = dialogCtx.dp(8)
+                                        },
+                                    )
+                                }.onFailure { t ->
+                                    logE("add url btn $info", t)
+                                }
+                            }
+                        }
+                        showModernInjectedDialog(
+                            dialogCtx,
+                            "视频链接",
+                            modernInjectedScrollContent(dialogCtx, links, 0.45f),
+                            listOf(ModernInjectedDialogAction("关闭")),
+                        )
+                        return@runCatching
                     }.onFailure { t ->
                         logE("show url dialog", t)
                     }
@@ -808,6 +825,70 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 summary = "在视频页面显示悬浮按钮，点击可提取视频链接"
             )
         }
+    }
+
+    override fun onConfigureActions(actions: MutableList<ModernInjectedDialogAction>) {
+        if (XhsHandler.hookErrors.isEmpty()) return
+        val errors = XhsHandler.hookErrors.map {
+            "${it.key}:\n${it.value}"
+        }.joinToString("\n")
+        actions.add(
+            0,
+            ModernInjectedDialogAction("查看错误", dismissAfterClick = false) {
+                showModernInjectedDialog(
+                    context,
+                    "错误详情",
+                    modernInjectedScrollContent(
+                        context,
+                        modernInjectedMessageView(context, errors),
+                        0.45f,
+                    ),
+                    listOf(
+                        ModernInjectedDialogAction("分享") {
+                            thread {
+                                runCatching {
+                                    val f = File(context.filesDir, "myinjector-error.txt")
+                                    f.writeText(errors)
+                                    logD("wrote file $f")
+                                    val uri = XhsHandler.fileProviderClass.callS(
+                                        "getUriForFile",
+                                        context,
+                                        "com.xingin.xhs.provider",
+                                        f
+                                    ) as Uri
+                                    logD("uri $uri")
+                                    context.startActivity(
+                                        Intent.createChooser(
+                                            Intent(Intent.ACTION_SEND)
+                                                .putExtra(Intent.EXTRA_STREAM, uri)
+                                                .setType("text/plain"),
+                                            ""
+                                        )
+                                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    )
+                                }.onFailure { t ->
+                                    logE("share failed: ", t)
+                                    runCatching {
+                                        activityCtx.findBaseActivity().runOnUiThread {
+                                            Toast.makeText(
+                                                context,
+                                                "分享失败，请尝试复制",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        ModernInjectedDialogAction("复制") {
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("", errors))
+                        },
+                        ModernInjectedDialogAction("关闭"),
+                    ),
+                )
+            },
+        )
     }
 
     override fun onConfigureDialog(builder: AlertDialog.Builder) {
