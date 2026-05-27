@@ -26,6 +26,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import io.github.a13e300.myinjector.system_server.ResultReceiver
 import io.github.a13e300.myinjector.ui.ModernActionButton
 import io.github.a13e300.myinjector.ui.ModernChevronView
@@ -317,23 +318,131 @@ class SettingsActivity : Activity() {
     }
 
     private fun showTextEditor(item: SettingsItemSpec.Text) {
-        val editText = EditText(this).apply {
-            setText(prefs.getString(item.key, ""))
-            minLines = 4
-            maxLines = 12
-            gravity = Gravity.TOP or Gravity.START
-            inputType = InputType.TYPE_CLASS_TEXT or
-                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            setSelectAllOnFocus(false)
+        val entries = prefs.getString(item.key, "").orEmpty()
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .toMutableList()
+        val entriesContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        lateinit var entriesScroll: ScrollView
+
+        fun entryListHeight(): Int = dp(190)
+
+        fun updateEntryListHeight() {
+            val params = entriesScroll.layoutParams as? LinearLayout.LayoutParams ?: return
+            val height = entryListHeight()
+            if (params.height == height) return
+            params.height = height
+            entriesScroll.layoutParams = params
+        }
+
+        fun refreshEntries() {
+            entriesContainer.removeAllViews()
+            if (entries.isEmpty()) {
+                entriesContainer.addView(
+                    TextView(this).apply {
+                        text = "暂无条目"
+                        setTextColor(palette.summary)
+                        setTextSizeDp(13.2f)
+                        includeFontPadding = true
+                        gravity = Gravity.CENTER
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        entryListHeight(),
+                    ),
+                )
+                updateEntryListHeight()
+                return
+            }
+
+            entries.forEachIndexed { index, value ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = dp(45)
+                    setPadding(0, dp(4), 0, dp(4))
+                }
+                row.addView(
+                    TextView(this).apply {
+                        text = value
+                        setTextColor(palette.title)
+                        setTextSizeDp(14.0f)
+                        includeFontPadding = true
+                    },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                )
+                row.addView(
+                    TextView(this).apply {
+                        text = "×"
+                        setTextColor(palette.summary)
+                        setTextSizeDp(24f)
+                        gravity = Gravity.CENTER
+                        includeFontPadding = false
+                        isClickable = true
+                        isFocusable = true
+                        setOnClickListener {
+                            entries.removeAt(index)
+                            refreshEntries()
+                        }
+                    },
+                    LinearLayout.LayoutParams(dp(42), dp(42)),
+                )
+                entriesContainer.addView(row, matchWidthLayoutParams())
+
+                if (index < entries.lastIndex) {
+                    entriesContainer.addView(
+                        View(this).apply { setBackgroundColor(palette.divider) },
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            dp(0.6f),
+                        ),
+                    )
+                }
+            }
+            updateEntryListHeight()
+        }
+
+        val input = EditText(this).apply {
+            hint = "请输入条目"
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             setTextColor(palette.title)
             setHintTextColor(palette.summary)
             setTextSizeDp(13.2f)
             background = roundedBackground(
                 if (palette.isLight) Color.rgb(244, 247, 251) else palette.button,
-                18,
+                22,
             )
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(dp(16), 0, dp(16), 0)
+        }
+
+        fun addInputEntries() {
+            val newEntries = input.text.toString()
+                .lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .toList()
+            if (newEntries.isEmpty()) return
+            var changed = false
+            var duplicateFound = false
+            for (entry in newEntries) {
+                if (!entries.contains(entry)) {
+                    entries.add(entry)
+                    changed = true
+                } else {
+                    duplicateFound = true
+                }
+            }
+            if (duplicateFound) {
+                Toast.makeText(this, "条目已存在", Toast.LENGTH_SHORT).show()
+            }
+            if (!changed) return
+            input.text.clear()
+            refreshEntries()
         }
 
         val container = LinearLayout(this).apply {
@@ -341,16 +450,65 @@ class SettingsActivity : Activity() {
             item.helpText?.takeUnless { it.isBlank() }?.let { helpText ->
                 addView(textEditorHelpCard(helpText), matchWidthLayoutParams(bottom = 12))
             }
-            addView(editText, matchWidthLayoutParams())
+            addView(
+                TextView(this@SettingsActivity).apply {
+                    text = "已添加的条目："
+                    setTextColor(palette.title)
+                    setTextSizeDp(14.0f)
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    includeFontPadding = true
+                },
+                matchWidthLayoutParams(bottom = 8),
+            )
+            entriesScroll = ScrollView(this@SettingsActivity).apply {
+                isFillViewport = false
+                overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                addView(
+                    entriesContainer,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+            addView(
+                entriesScroll,
+                matchWidthLayoutParams(bottom = 14).apply {
+                    height = entryListHeight()
+                },
+            )
+            addView(
+                LinearLayout(this@SettingsActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(
+                        input,
+                        LinearLayout.LayoutParams(0, dp(46), 1f),
+                    )
+                    addView(
+                        modernDialogButton("+") { addInputEntries() }.apply {
+                            contentDescription = "添加"
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                            setTextSizeDp(27f)
+                            includeFontPadding = false
+                        },
+                        LinearLayout.LayoutParams(dp(46), dp(46)).apply {
+                            marginStart = dp(10)
+                        },
+                    )
+                },
+                matchWidthLayoutParams(),
+            )
         }
+        refreshEntries()
 
         showModernDialog(
             title = item.title,
             content = container,
             actions = listOf(
                 ModernDialogAction("取消"),
-                ModernDialogAction("保存") {
-                    prefs.edit().putString(item.key, editText.text.toString()).apply()
+                ModernDialogAction("保存", emphasized = true) {
+                    prefs.edit().putString(item.key, entries.joinToString("\n")).apply()
                     commitForSection(item.sectionKey)
                 },
             ),
@@ -700,11 +858,12 @@ class SettingsActivity : Activity() {
             setTextColor(palette.summary)
             setTextSizeDp(13.2f)
             includeFontPadding = true
+            gravity = Gravity.CENTER
             background = roundedBackground(
                 if (palette.isLight) Color.rgb(244, 247, 251) else palette.button,
-                18,
+                16,
             )
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(dp(14), dp(6), dp(14), dp(6))
         }
 
         fun command(name: String, args: Bundle.() -> Unit = {}, cb: (Int, Bundle?) -> Unit) {
@@ -746,7 +905,19 @@ class SettingsActivity : Activity() {
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(statusText, matchWidthLayoutParams(bottom = 12))
+            addView(
+                LinearLayout(this@SettingsActivity).apply {
+                    gravity = Gravity.CENTER
+                    addView(
+                        statusText,
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ),
+                    )
+                },
+                matchWidthLayoutParams(bottom = 14),
+            )
             addView(modernDialogButton("检查更新") { check() }, matchWidthLayoutParams(bottom = 8))
             addView(
                 modernDialogButton("主动 GC") {
@@ -778,7 +949,7 @@ class SettingsActivity : Activity() {
         showModernDialog(
             title = "热更新",
             content = content,
-            actions = listOf(ModernDialogAction("关闭")),
+            actions = listOf(ModernDialogAction("关闭", emphasized = true)),
         )
     }
 
@@ -826,7 +997,7 @@ class SettingsActivity : Activity() {
             orientation = if (actions.size <= 2) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
         }
         actions.forEachIndexed { index, action ->
-            val button = modernDialogButton(action.title) {
+            val button = modernDialogButton(action.title, action.emphasized) {
                 action.onClick?.invoke()
                 dialog.dismiss()
             }
@@ -875,9 +1046,10 @@ class SettingsActivity : Activity() {
 
     private fun modernDialogButton(
         title: CharSequence,
+        emphasized: Boolean = false,
         onClick: () -> Unit,
     ): ModernActionButton =
-        ModernActionButton(this, palette, title).apply {
+        ModernActionButton(this, palette, title, emphasized).apply {
             setOnClickListener { onClick() }
         }
 
@@ -898,6 +1070,7 @@ class SettingsActivity : Activity() {
 
     private data class ModernDialogAction(
         val title: CharSequence,
+        val emphasized: Boolean = false,
         val onClick: (() -> Unit)? = null,
     )
 

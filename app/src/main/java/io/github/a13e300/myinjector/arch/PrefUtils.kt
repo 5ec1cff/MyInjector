@@ -138,7 +138,7 @@ private class PreferenceRowBackground(
 ) : Drawable() {
     private val radius = context.dp(28).toFloat()
     private val dividerInset = context.dp(22).toFloat()
-    private val dividerHeight = context.dp(1f).toFloat()
+    private val dividerHeight = context.dp(0.6f).toFloat()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.surface
         style = Paint.Style.FILL

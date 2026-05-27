@@ -6,6 +6,7 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -19,6 +20,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewConfiguration
+import android.view.ViewOutlineProvider
 import android.view.animation.DecelerateInterpolator
 import android.widget.Checkable
 import android.widget.FrameLayout
@@ -203,7 +205,7 @@ internal class ModernSettingsRow(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = context.dp(if (summary.isNullOrBlank()) 52 else 66)
-            setPadding(context.dp(22), context.dp(6), context.dp(20), context.dp(6))
+            setPadding(context.dp(22), context.dp(10), context.dp(20), context.dp(10))
         }
 
         val textColumn = LinearLayout(context).apply {
@@ -271,7 +273,7 @@ internal class ModernSettingsRow(
                 View(context).apply { setBackgroundColor(palette.divider) },
                 LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    context.dp(1f),
+                    context.dp(0.6f),
                 ).apply {
                     marginStart = context.dp(22)
                     marginEnd = context.dp(22)
@@ -285,14 +287,19 @@ internal class ModernActionButton(
     context: Context,
     palette: ModernSettingsPalette,
     title: CharSequence,
+    emphasized: Boolean = false,
 ) : TextView(context) {
     init {
         text = title
         gravity = Gravity.CENTER
         setTextSizeDp(14.0f)
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        setTextColor(palette.title)
-        background = palette.buttonBackground(context)
+        setTextColor(if (emphasized) Color.WHITE else palette.title)
+        background = if (emphasized) {
+            ripple(rounded(palette.accent, context.dp(22)), palette.ripple)
+        } else {
+            palette.buttonBackground(context)
+        }
         minHeight = context.dp(46)
         isClickable = true
         isFocusable = true
@@ -305,7 +312,7 @@ internal class ModernChevronView(
 ) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.summary
-        strokeWidth = context.dp(2f).toFloat()
+        strokeWidth = context.resources.displayMetrics.density * 1.55f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
@@ -330,14 +337,22 @@ internal class ModernCloseButton(
 ) : View(context) {
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.title
-        strokeWidth = context.dp(2f).toFloat()
+        strokeWidth = context.dp(1.8f).toFloat()
         strokeCap = Paint.Cap.ROUND
     }
 
     init {
         val backgroundColor = if (palette.isLight) palette.surface else palette.button
         background = ripple(rounded(backgroundColor, context.dp(21)), palette.ripple)
-        elevation = context.dp(3).toFloat()
+        elevation = context.dp(4.5f).toFloat()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, view.width / 2f)
+                    outline.alpha = 0.24f
+                }
+            }
+        }
         isClickable = true
         isFocusable = true
     }
@@ -346,7 +361,7 @@ internal class ModernCloseButton(
         super.onDraw(canvas)
         val centerX = width / 2f
         val centerY = height / 2f
-        val half = context.dp(6.2f).toFloat()
+        val half = context.dp(5.6f).toFloat()
         canvas.drawLine(centerX - half, centerY - half, centerX + half, centerY + half, iconPaint)
         canvas.drawLine(centerX + half, centerY - half, centerX - half, centerY + half, iconPaint)
     }
