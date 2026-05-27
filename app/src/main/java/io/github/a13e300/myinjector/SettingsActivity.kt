@@ -6,30 +6,45 @@ import android.app.Dialog
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.XmlResourceParser
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.TypedValue
 import android.text.InputType
+import android.text.Editable
+import android.text.TextUtils
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.widget.BaseAdapter
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import io.github.a13e300.myinjector.system_server.ResultReceiver
 import io.github.a13e300.myinjector.ui.ModernActionButton
 import io.github.a13e300.myinjector.ui.ModernChevronView
+import io.github.a13e300.myinjector.ui.ModernInjectedSearchBar
 import io.github.a13e300.myinjector.ui.ModernSettingsCard
 import io.github.a13e300.myinjector.ui.ModernSettingsHeader
 import io.github.a13e300.myinjector.ui.ModernSettingsPalette
@@ -267,7 +282,13 @@ class SettingsActivity : Activity() {
             ModernChevronView(this, palette),
             showDivider,
         ).apply {
-            setOnClickListener { showTextEditor(item) }
+            setOnClickListener {
+                if (item.key == "clipboardWhitelistPackages") {
+                    showClipboardWhitelistDialog(item)
+                } else {
+                    showTextEditor(item)
+                }
+            }
         }
         card.addView(row)
     }
@@ -513,6 +534,269 @@ class SettingsActivity : Activity() {
                 },
             ),
         )
+    }
+
+    private fun showClipboardWhitelistDialog(item: SettingsItemSpec.Text) {
+        val selectedPackages = prefs.getString(item.key, "").orEmpty()
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toMutableSet()
+        val initiallySelectedPackages = selectedPackages.toSet()
+        var entries = emptyList<ClipboardAppEntry>()
+        val countText = TextView(this).apply {
+            setTextColor(palette.summary)
+            setTextSizeDp(13.2f)
+            gravity = Gravity.CENTER
+            includeFontPadding = true
+            background = roundedBackground(
+                if (palette.isLight) Color.rgb(244, 247, 251) else palette.button,
+                16,
+            )
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+        }
+
+        fun updateCount() {
+            countText.text = "已选择 ${selectedPackages.size} 个应用"
+        }
+
+        lateinit var emptyView: TextView
+        lateinit var loadingView: LinearLayout
+        val adapter = ClipboardAppAdapter(
+            selectedPackages,
+            initiallySelectedPackages,
+            ::updateCount,
+        ) { isEmpty ->
+            emptyView.visibility = if (isEmpty && loadingView.visibility != View.VISIBLE) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+        }
+        val listView = ListView(this).apply {
+            divider = ColorDrawable(Color.TRANSPARENT)
+            dividerHeight = 0
+            selector = ColorDrawable(Color.TRANSPARENT)
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            cacheColorHint = Color.TRANSPARENT
+            background = null
+            this.adapter = adapter
+        }
+        loadingView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(
+                ProgressBar(this@SettingsActivity).apply {
+                    isIndeterminate = true
+                },
+                LinearLayout.LayoutParams(dp(42), dp(42)),
+            )
+            addView(
+                TextView(this@SettingsActivity).apply {
+                    text = "正在读取应用列表..."
+                    setTextColor(palette.summary)
+                    setTextSizeDp(13.2f)
+                    gravity = Gravity.CENTER
+                    includeFontPadding = true
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(10)
+                },
+            )
+        }
+        emptyView = TextView(this).apply {
+            text = "找不到呢..."
+            setTextColor(palette.summary)
+            setTextSizeDp(13.2f)
+            gravity = Gravity.CENTER
+            includeFontPadding = true
+            visibility = View.GONE
+        }
+        val listFrame = FrameLayout(this).apply {
+            background = roundedBackground(
+                if (palette.isLight) Color.rgb(244, 247, 251) else palette.button,
+                22,
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                clipToOutline = true
+            }
+        }
+        val searchBar = ModernInjectedSearchBar(this, palette)
+        val searchInput = searchBar.editText
+        fun clearSearchFocus() {
+            if (!searchInput.hasFocus()) return
+            searchInput.clearFocus()
+            getSystemService(InputMethodManager::class.java)
+                ?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+        }
+        fun applySearch() {
+            adapter.query = searchInput.text.toString().trim()
+        }
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {}
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                applySearch()
+            }
+        })
+        searchBar.setOnClickListener {
+            searchInput.requestFocus()
+            getSystemService(InputMethodManager::class.java)?.showSoftInput(searchInput, 0)
+        }
+        listView.setOnTouchListener { _, _ ->
+            clearSearchFocus()
+            false
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                LinearLayout(this@SettingsActivity).apply {
+                    gravity = Gravity.CENTER
+                    addView(
+                        countText,
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ),
+                    )
+                },
+                matchWidthLayoutParams(bottom = 12),
+            )
+            addView(
+                searchBar,
+                matchWidthLayoutParams(bottom = 6),
+            )
+            addView(
+                listFrame.apply {
+                    addView(
+                        listView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    addView(
+                        emptyView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    addView(
+                        loadingView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    min(dp(500), (resources.displayMetrics.heightPixels * 0.50f).toInt()),
+                ),
+            )
+        }
+        updateCount()
+
+        if (clipboardAppEntryCache == null) {
+            listView.visibility = View.INVISIBLE
+            loadingView.visibility = View.VISIBLE
+            Thread {
+                val loadedEntries = clipboardAppEntries(selectedPackages)
+                Handler(Looper.getMainLooper()).post {
+                    entries = loadedEntries
+                    adapter.setEntries(loadedEntries)
+                    applySearch()
+                    loadingView.visibility = View.GONE
+                    listView.visibility = View.VISIBLE
+                    adapter.refreshEmptyState()
+                }
+            }.start()
+        } else {
+            entries = clipboardAppEntries(selectedPackages)
+            adapter.setEntries(entries)
+            loadingView.visibility = View.GONE
+            listView.visibility = View.VISIBLE
+            adapter.refreshEmptyState()
+        }
+
+        showModernDialog(
+            title = item.title,
+            content = content,
+            actions = listOf(
+                ModernDialogAction("取消"),
+                ModernDialogAction("保存", emphasized = true) {
+                    prefs.edit()
+                        .putString(item.key, sortedClipboardPackages(entries, selectedPackages))
+                        .apply()
+                    commitForSection(item.sectionKey)
+                },
+            ),
+        )
+    }
+
+    private fun clipboardAppEntries(selectedPackages: Set<String>): List<ClipboardAppEntry> {
+        val cached = clipboardAppEntryCache ?: loadClipboardAppEntries().also {
+            clipboardAppEntryCache = it
+        }
+        val knownPackages = cached.asSequence().map { it.packageName }.toSet()
+        val missingSelected = selectedPackages.asSequence()
+            .filterNot { it in knownPackages }
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+            .map {
+                ClipboardAppEntry(
+                    label = it,
+                    packageName = it,
+                    icon = packageManager.defaultActivityIcon,
+                )
+            }
+            .toList()
+        return cached + missingSelected
+    }
+
+    @Suppress("DEPRECATION")
+    private fun loadClipboardAppEntries(): List<ClipboardAppEntry> {
+        val pm = packageManager
+        val applications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))
+        } else {
+            pm.getInstalledApplications(0)
+        }
+        return applications.asSequence()
+            .filter { it.flags and ApplicationInfo.FLAG_INSTALLED != 0 }
+            .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 }
+            .filter { it.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0 }
+            .mapNotNull { appInfo ->
+                runCatching {
+                    val label = appInfo.loadLabel(pm).toString().ifBlank { appInfo.packageName }
+                    ClipboardAppEntry(
+                        label = label,
+                        packageName = appInfo.packageName,
+                        icon = appInfo.loadIcon(pm) ?: pm.defaultActivityIcon,
+                    )
+                }.getOrNull()
+            }
+            .distinctBy { it.packageName }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label.toString() })
+            .toList()
+    }
+
+    private fun sortedClipboardPackages(
+        entries: List<ClipboardAppEntry>,
+        selectedPackages: Set<String>,
+    ): String {
+        val labels = entries.associate { it.packageName to it.label.toString() }
+        return selectedPackages
+            .sortedWith(
+                compareBy<String> { labels[it] == null }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { labels[it] ?: it }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it },
+            )
+            .joinToString("\n")
     }
 
     private fun textEditorHelpCard(helpText: CharSequence): TextView =
@@ -1068,6 +1352,185 @@ class SettingsActivity : Activity() {
             setColor(color)
         }
 
+    private fun selectableItemBackground(): Drawable? {
+        val outValue = TypedValue()
+        theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getDrawable(outValue.resourceId)
+        } else {
+            @Suppress("DEPRECATION")
+            resources.getDrawable(outValue.resourceId)
+        }
+    }
+
+    private fun clipboardListDividerColor(): Int =
+        if (palette.isLight) palette.divider else Color.rgb(78, 78, 78)
+
+    private inner class ClipboardAppAdapter(
+        private val selectedPackages: MutableSet<String>,
+        private val pinnedPackages: Set<String>,
+        private val onSelectionChanged: () -> Unit,
+        private val onEmptyStateChanged: (Boolean) -> Unit,
+    ) : BaseAdapter() {
+        private var allEntries = emptyList<ClipboardAppEntry>()
+        private var visibleEntries = emptyList<ClipboardAppEntry>()
+        var query: String = ""
+            set(value) {
+                field = value
+                visibleEntries = sortedEntries()
+                notifyDataSetChanged()
+                refreshEmptyState()
+            }
+
+        fun setEntries(entries: List<ClipboardAppEntry>) {
+            allEntries = entries
+            visibleEntries = sortedEntries()
+            notifyDataSetChanged()
+            refreshEmptyState()
+        }
+
+        fun refreshEmptyState() {
+            onEmptyStateChanged(visibleEntries.isEmpty())
+        }
+
+        override fun getCount(): Int = visibleEntries.size
+
+        override fun getItem(position: Int): ClipboardAppEntry = visibleEntries[position]
+
+        override fun getItemId(position: Int): Long = getItem(position).packageName.hashCode().toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val row = (convertView as? LinearLayout) ?: createClipboardAppRow()
+            val holder = row.tag as ClipboardAppRowHolder
+            val entry = getItem(position)
+            holder.icon.setImageDrawable(entry.newIconDrawable())
+            holder.title.text = entry.label
+            holder.summary.text = entry.packageName
+            holder.checkbox.isChecked = entry.packageName in selectedPackages
+            row.setOnClickListener {
+                if (!selectedPackages.remove(entry.packageName)) {
+                    selectedPackages.add(entry.packageName)
+                }
+                notifyDataSetChanged()
+                onSelectionChanged()
+            }
+            return row
+        }
+
+        private fun sortedEntries(): List<ClipboardAppEntry> {
+            val normalizedQuery = query.trim()
+            val source = if (normalizedQuery.isEmpty()) {
+                allEntries
+            } else {
+                allEntries.filter {
+                    it.label.contains(normalizedQuery, ignoreCase = true) ||
+                        it.packageName.contains(normalizedQuery, ignoreCase = true)
+                }
+            }
+            return source.sortedWith(
+                compareByDescending<ClipboardAppEntry> { it.packageName in pinnedPackages }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label.toString() }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.packageName },
+            )
+        }
+    }
+
+    private fun createClipboardAppRow(): LinearLayout {
+        val icon = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+        }
+        val title = TextView(this).apply {
+            setTextColor(palette.title)
+            setTextSizeDp(14.0f)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            includeFontPadding = true
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSelected = true
+        }
+        val summary = TextView(this).apply {
+            setTextColor(palette.summary)
+            setTextSizeDp(11.8f)
+            includeFontPadding = true
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSelected = true
+        }
+        val checkbox = CheckBox(this).apply {
+            isClickable = false
+            isFocusable = false
+            background = null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                foreground = null
+            }
+            buttonTintList = android.content.res.ColorStateList(
+                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(palette.accent, palette.switchOff),
+            )
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(7), dp(8), dp(7))
+            addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)))
+            addView(
+                LinearLayout(this@SettingsActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(title, matchWidthLayoutParams())
+                    addView(summary, matchWidthLayoutParams())
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = dp(12)
+                    marginEnd = dp(8)
+                },
+            )
+            addView(checkbox, LinearLayout.LayoutParams(dp(42), dp(42)))
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            minimumHeight = dp(65)
+            background = selectableItemBackground()
+            isClickable = true
+            isFocusable = true
+            addView(
+                content,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(64),
+                ),
+            )
+            addView(
+                View(this@SettingsActivity).apply { setBackgroundColor(clipboardListDividerColor()) },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(0.6f),
+                ).apply {
+                    marginStart = dp(22)
+                    marginEnd = dp(22)
+                },
+            )
+            tag = ClipboardAppRowHolder(icon, title, summary, checkbox)
+        }
+    }
+
+    private data class ClipboardAppEntry(
+        val label: CharSequence,
+        val packageName: String,
+        val icon: Drawable,
+    ) {
+        fun newIconDrawable(): Drawable =
+            icon.constantState?.newDrawable()?.mutate() ?: icon
+    }
+
+    private data class ClipboardAppRowHolder(
+        val icon: ImageView,
+        val title: TextView,
+        val summary: TextView,
+        val checkbox: CheckBox,
+    )
+
     private data class ModernDialogAction(
         val title: CharSequence,
         val emphasized: Boolean = false,
@@ -1138,6 +1601,8 @@ class SettingsActivity : Activity() {
             "forceNewTaskRules",
             "overrideStatusBarRules",
         )
+
+        private var clipboardAppEntryCache: List<ClipboardAppEntry>? = null
 
         private val APP_PACKAGES = listOf(
             "com.xingin.xhs",
