@@ -30,6 +30,7 @@ import android.view.Window
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.CheckBox
 import android.widget.EditText
@@ -582,6 +583,22 @@ class SettingsActivity : Activity() {
             background = null
             this.adapter = adapter
         }
+        fun loadVisibleIcons() {
+            if (listView.visibility != View.VISIBLE || listView.childCount == 0) return
+            val firstPosition = listView.firstVisiblePosition
+            val lastPosition = listView.lastVisiblePosition
+            for (position in firstPosition..lastPosition) {
+                val entry = adapter.visibleEntryAt(position) ?: continue
+                ensureClipboardIcon(entry) { icon ->
+                    val childIndex = position - listView.firstVisiblePosition
+                    val row = listView.getChildAt(childIndex) as? LinearLayout ?: return@ensureClipboardIcon
+                    val holder = row.tag as? ClipboardAppRowHolder ?: return@ensureClipboardIcon
+                    if (holder.packageName == entry.packageName) {
+                        holder.icon.setImageDrawable(icon.constantState?.newDrawable()?.mutate() ?: icon)
+                    }
+                }
+            }
+        }
         loadingView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -634,6 +651,7 @@ class SettingsActivity : Activity() {
         }
         fun applySearch() {
             adapter.query = searchInput.text.toString().trim()
+            listView.post { loadVisibleIcons() }
         }
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {}
@@ -650,6 +668,20 @@ class SettingsActivity : Activity() {
             clearSearchFocus()
             false
         }
+        listView.setOnScrollListener(object : AbsListView.OnScrollListener {
+            override fun onScrollStateChanged(view: AbsListView?, scrollState: Int) {
+                if (scrollState == AbsListView.OnScrollListener.SCROLL_STATE_IDLE) {
+                    loadVisibleIcons()
+                }
+            }
+
+            override fun onScroll(
+                view: AbsListView?,
+                firstVisibleItem: Int,
+                visibleItemCount: Int,
+                totalItemCount: Int,
+            ) = Unit
+        })
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -714,6 +746,7 @@ class SettingsActivity : Activity() {
                     loadingView.visibility = View.GONE
                     listView.visibility = View.VISIBLE
                     adapter.refreshEmptyState()
+                    listView.post { loadVisibleIcons() }
                 }
             }.start()
         } else {
@@ -722,6 +755,7 @@ class SettingsActivity : Activity() {
             loadingView.visibility = View.GONE
             listView.visibility = View.VISIBLE
             adapter.refreshEmptyState()
+            listView.post { loadVisibleIcons() }
         }
 
         showModernDialog(
@@ -751,7 +785,7 @@ class SettingsActivity : Activity() {
                 ClipboardAppEntry(
                     label = it,
                     packageName = it,
-                    icon = packageManager.defaultActivityIcon,
+                    canLoadIcon = false,
                 )
             }
             .toList()
@@ -776,7 +810,7 @@ class SettingsActivity : Activity() {
                     ClipboardAppEntry(
                         label = label,
                         packageName = appInfo.packageName,
-                        icon = appInfo.loadIcon(pm) ?: pm.defaultActivityIcon,
+                        canLoadIcon = true,
                     )
                 }.getOrNull()
             }
@@ -1366,6 +1400,36 @@ class SettingsActivity : Activity() {
     private fun clipboardListDividerColor(): Int =
         if (palette.isLight) palette.divider else Color.rgb(78, 78, 78)
 
+    private fun cachedClipboardIcon(entry: ClipboardAppEntry): Drawable {
+        val icon = if (entry.canLoadIcon) {
+            clipboardIconCache[entry.packageName] ?: packageManager.defaultActivityIcon
+        } else {
+            packageManager.defaultActivityIcon
+        }
+        return icon.constantState?.newDrawable()?.mutate() ?: icon
+    }
+
+    private fun ensureClipboardIcon(entry: ClipboardAppEntry, onLoaded: (Drawable) -> Unit) {
+        if (!entry.canLoadIcon) return
+        clipboardIconCache[entry.packageName]?.let {
+            onLoaded(it)
+            return
+        }
+        if (!loadingClipboardIcons.add(entry.packageName)) return
+        Thread {
+            val icon = runCatching {
+                packageManager.getApplicationInfo(entry.packageName, 0).loadIcon(packageManager)
+            }.getOrElse {
+                packageManager.defaultActivityIcon
+            }
+            clipboardIconCache[entry.packageName] = icon
+            loadingClipboardIcons.remove(entry.packageName)
+            Handler(Looper.getMainLooper()).post {
+                onLoaded(icon)
+            }
+        }.start()
+    }
+
     private inner class ClipboardAppAdapter(
         private val selectedPackages: MutableSet<String>,
         private val pinnedPackages: Set<String>,
@@ -1393,6 +1457,8 @@ class SettingsActivity : Activity() {
             onEmptyStateChanged(visibleEntries.isEmpty())
         }
 
+        fun visibleEntryAt(position: Int): ClipboardAppEntry? = visibleEntries.getOrNull(position)
+
         override fun getCount(): Int = visibleEntries.size
 
         override fun getItem(position: Int): ClipboardAppEntry = visibleEntries[position]
@@ -1403,7 +1469,8 @@ class SettingsActivity : Activity() {
             val row = (convertView as? LinearLayout) ?: createClipboardAppRow()
             val holder = row.tag as ClipboardAppRowHolder
             val entry = getItem(position)
-            holder.icon.setImageDrawable(entry.newIconDrawable())
+            holder.packageName = entry.packageName
+            holder.icon.setImageDrawable(cachedClipboardIcon(entry))
             holder.title.text = entry.label
             holder.summary.text = entry.packageName
             holder.checkbox.isChecked = entry.packageName in selectedPackages
@@ -1518,17 +1585,15 @@ class SettingsActivity : Activity() {
     private data class ClipboardAppEntry(
         val label: CharSequence,
         val packageName: String,
-        val icon: Drawable,
-    ) {
-        fun newIconDrawable(): Drawable =
-            icon.constantState?.newDrawable()?.mutate() ?: icon
-    }
+        val canLoadIcon: Boolean,
+    )
 
     private data class ClipboardAppRowHolder(
         val icon: ImageView,
         val title: TextView,
         val summary: TextView,
         val checkbox: CheckBox,
+        var packageName: String? = null,
     )
 
     private data class ModernDialogAction(
@@ -1603,6 +1668,8 @@ class SettingsActivity : Activity() {
         )
 
         private var clipboardAppEntryCache: List<ClipboardAppEntry>? = null
+        private val clipboardIconCache = java.util.concurrent.ConcurrentHashMap<String, Drawable>()
+        private val loadingClipboardIcons = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
         private val APP_PACKAGES = listOf(
             "com.xingin.xhs",
