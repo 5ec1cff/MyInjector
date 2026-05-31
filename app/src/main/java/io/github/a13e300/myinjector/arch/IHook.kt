@@ -32,4 +32,6 @@ abstract class IHook {
     protected open fun onHookError(t: Throwable) {
 
     }
+
+    open fun onUnhook(): Boolean = true
 }

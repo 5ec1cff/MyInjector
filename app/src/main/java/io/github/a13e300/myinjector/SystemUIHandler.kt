@@ -99,6 +99,9 @@ class SystemUIHandler : IHook() {
         hookSplashScreen()
     }
 
+    // TODO: support unhook in System UI
+    override fun onUnhook(): Boolean = false
+
     @SuppressLint("DiscouragedPrivateApi", "NewApi", "SetTextI18n")
     private fun hookNotificationInfo() {
         val nm by lazy {
@@ -113,33 +116,33 @@ class SystemUIHandler : IHook() {
             val findRoot =
                 parent.findView { it.javaClass == MyFrameLayout::class.java } as? MyFrameLayout
             if (findRoot == null) {
-                    if (!config.showNotificationDetail) {
-                        return@hookAllAfter
-                    }
-                    parent.addView(
-                        MyFrameLayout(context).apply {
-                            setBackgroundColor(0x99ffffff.toInt())
-                            addView(
-                                TextView(context),
-                                ViewGroup.MarginLayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.WRAP_CONTENT
-                                ).apply {
-                                    val px = 8.dp2px(context.resources).toInt()
-                                    setMargins(px, px, px, px)
-                                }
-                            )
-                        },
-                        ViewGroup.MarginLayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT
-                        ).apply {
-                            val px = 8.dp2px(context.resources).toInt()
-                            val topOffset = 20.dp2px(context.resources).toInt()
-                            setMargins(px, px + topOffset, px, px)
-                        }
-                    )
+                if (!config.showNotificationDetail) {
+                    return@hookAllAfter
                 }
+                parent.addView(
+                    MyFrameLayout(context).apply {
+                        setBackgroundColor(0x99ffffff.toInt())
+                        addView(
+                            TextView(context),
+                            ViewGroup.MarginLayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT
+                            ).apply {
+                                val px = 8.dp2px(context.resources).toInt()
+                                setMargins(px, px, px, px)
+                            }
+                        )
+                    },
+                    ViewGroup.MarginLayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        val px = 8.dp2px(context.resources).toInt()
+                        val topOffset = 20.dp2px(context.resources).toInt()
+                        setMargins(px, px + topOffset, px, px)
+                    }
+                )
+            }
 
             val root = findRoot
                 ?: parent.findView { it.javaClass == MyFrameLayout::class.java } as MyFrameLayout

@@ -14,6 +14,7 @@ import android.os.ServiceManager
 import android.view.View
 import android.view.WindowInsetsController
 import io.github.a13e300.myinjector.SystemServerConfig
+import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.deoptimize
@@ -28,8 +29,6 @@ import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
-import io.github.a13e300.myinjector.bridge.HotLoadHook
-import io.github.a13e300.myinjector.bridge.LoadPackageParam
 import io.github.a13e300.myinjector.bridge.Unhook
 import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
@@ -58,7 +57,7 @@ fun matchSimple(p: String, s: String?): Boolean {
     return p == s
 }
 
-class SystemServerHandler : HotLoadHook() {
+class SystemServerHandler : IHook() {
     companion object {
         private const val CONFIG_PATH = "/data/misc"
         private const val CONFIG_PREFIX = "my_injector_system_"
@@ -68,14 +67,8 @@ class SystemServerHandler : HotLoadHook() {
     private lateinit var config: SystemServerConfig
     private lateinit var broadcastManager: BroadcastManager
 
-    private lateinit var loadPackageParam: LoadPackageParam
-    private val hooks = mutableListOf<Unhook>()
 
-    fun findClass(name: String) = loadPackageParam.classLoader.findClass(name)
-    fun findClassN(name: String) = loadPackageParam.classLoader.findClassN(name)
-
-    override fun onLoad(param: LoadPackageParam) {
-        loadPackageParam = param
+    override fun onHook() {
         logI("hook system")
         config = readConfig()
         logI("config for system server: $config")
@@ -92,13 +85,11 @@ class SystemServerHandler : HotLoadHook() {
         runConfigListener()
     }
 
-    override fun onUnload() {
+    override fun onUnhook(): Boolean {
         broadcastManager.unregister(receiver)
         broadcastManager.stop()
         setXSpace(false)
-        hooks.forEach { it.unhook() }
-        hooks.clear()
-        dexOptRestrictionHook = null
+        return true
     }
 
     private fun findOrCreateConfigFile(): File {
@@ -143,46 +134,46 @@ class SystemServerHandler : HotLoadHook() {
     }
 
     private fun hookNoWakePath() = runCatching {
-        findClassN("miui.app.ActivitySecurityHelper")?.let { clz ->
-            hooks.addAll(clz.hookAllNopIf("getCheckStartActivityIntent") {
+        findClassOrNull("miui.app.ActivitySecurityHelper")?.let { clz ->
+            clz.hookAllNopIf("getCheckStartActivityIntent") {
                 config.noWakePath
-            })
+            }
             clz.deoptimize("getCheckIntent")
         }
-        findClassN("miui.security.SecurityManager")?.let { clz ->
-            hooks.addAll(clz.hookAllNopIf("getCheckStartActivityIntent") {
+        findClassOrNull("miui.security.SecurityManager")?.let { clz ->
+            clz.hookAllNopIf("getCheckStartActivityIntent") {
                 config.noWakePath
-            })
+            }
         }
     }.onFailure {
         logE("hookNoWakePath: ", it)
     }
 
     private fun hookNoMiuiIntent() = runCatching {
-        hooks.add(
-            findClass("com.android.server.pm.PackageManagerServiceImpl").hookBefore(
-            "hookChooseBestActivity",
-            Intent::class.java,
-            String::class.java,
+        findClassOrNull("com.android.server.pm.PackageManagerServiceImpl")?.let { clz ->
+            clz.hookBefore(
+                "hookChooseBestActivity",
+                Intent::class.java,
+                String::class.java,
                 Long.TYPE,
-            List::class.java,
-            Integer.TYPE,
-            ResolveInfo::class.java
-        ) { param ->
-            param.result = param.args[5] // defaultValue
-            })
+                List::class.java,
+                Integer.TYPE,
+                ResolveInfo::class.java
+            ) { param ->
+                param.result = param.args[5] // defaultValue
+            }
+        }
     }.onFailure {
         logE("hookNoMiuiIntent: ", it)
     }
 
     private fun hookClipboardWhitelist() = runCatching {
-        hooks.addAll(
-            findClass("com.android.server.clipboard.ClipboardService")
+        findClass("com.android.server.clipboard.ClipboardService")
             .hookAllBefore("clipboardAccessAllowed") { param ->
                 if (!config.clipboardWhitelist) return@hookAllBefore
                 val pkg = param.args[1]?.toString() ?: return@hookAllBefore
                 if (config.clipboardWhitelistPackagesList.contains(pkg)) param.result = true
-            })
+            }
     }.onFailure {
         logE("hookClipboardWhitelist: ", it)
     }
@@ -190,19 +181,18 @@ class SystemServerHandler : HotLoadHook() {
     private fun hookFixSync() = runCatching {
         // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/services/core/java/com/android/server/wm/WindowState.java;l=5756;drc=4eb30271c338af7ee6abcbd2b7a9a0721db0595b
         // some gone accessibility windows does not get synced
-        hooks.addAll(
-            findClass("com.android.server.wm.WindowState")
-            .hookAllBefore("isSyncFinished") { param ->
-                if (!config.fixSync) return@hookAllBefore
-                if (param.thisObject.getObj(
-                        "mViewVisibility"
-                    ) != View.VISIBLE
-                    && param.thisObject.getObj("mActivityRecord") == null
-                ) {
-                    // XposedBridge.log("no wait on " + param.thisObject);
-                    param.result = true
-                }
-            })
+        findClass("com.android.server.wm.WindowState")
+        .hookAllBefore("isSyncFinished") { param ->
+            if (!config.fixSync) return@hookAllBefore
+            if (param.thisObject.getObj(
+                    "mViewVisibility"
+                ) != View.VISIBLE
+                && param.thisObject.getObj("mActivityRecord") == null
+            ) {
+                // XposedBridge.log("no wait on " + param.thisObject);
+                param.result = true
+            }
+        }
     }.onFailure {
         logE("hookFixSync: ", it)
     }
@@ -210,9 +200,9 @@ class SystemServerHandler : HotLoadHook() {
     @Suppress("UNCHECKED_CAST")
     private fun setXSpace(enabled: Boolean) {
         runCatching {
-            val classXSpaceManager = findClass(
+            val classXSpaceManager = findClassOrNull(
                 "com.miui.server.xspace.XSpaceManagerServiceImpl"
-            )
+            ) ?: return
             classXSpaceManager.getObjSAs<MutableList<String>?>(
                 "sCrossUserCallingPackagesWhiteList"
             )?.run {
@@ -243,7 +233,7 @@ class SystemServerHandler : HotLoadHook() {
         val activityStarter =
             findClass("com.android.server.wm.ActivityStarter")
         val activityRecordClass = findClass("com.android.server.wm.ActivityRecord")
-        hooks.addAll(activityStarter.hookAllBefore("executeRequest") { param ->
+        activityStarter.hookAllBefore("executeRequest") { param ->
             if (!config.forceNewTask && !config.forceNewTaskDebug) return@hookAllBefore
             val request = param.args[0]
             var requestCode = request.getObjAs<Int>("requestCode")
@@ -304,13 +294,14 @@ class SystemServerHandler : HotLoadHook() {
                     return@hookAllBefore
                 }
             }
-        })
+        }
     }.onFailure {
         logE("hookForceNewTask: ", it)
     }
 
     // https://github.com/dantmnf/NoSwipeToKill
     private fun hookNoSwipeToKill() = runCatching {
+        val cleanerBase = findClassOrNull("com.android.server.am.ProcessCleanerBase") ?: return@runCatching
         val processRecordClass = findClass("com.android.server.am.ProcessRecord")
         val processPolicy by lazy {
             runCatching {
@@ -328,7 +319,6 @@ class SystemServerHandler : HotLoadHook() {
                 logE("getSmartPowerPolicyManager", it)
             }.getOrNull()
         }
-        val cleanerBase = findClass("com.android.server.am.ProcessCleanerBase")
         var hooked = false
         cleanerBase.declaredMethods.forEach { m ->
             if (m.name != "killOnce") return@forEach
@@ -336,7 +326,7 @@ class SystemServerHandler : HotLoadHook() {
             val parameterTypes = m.parameterTypes
 
             if (parameterTypes.size >= 1 && parameterTypes[0] == processRecordClass) {
-                hooks.add(m.hookBefore { param ->
+                m.hookBefore { param ->
                     val processRecord = param.args[0]
                     val info = processRecord.getObjAsN<ApplicationInfo>("info") ?: return@hookBefore
                     val packageName = info.packageName
@@ -352,7 +342,7 @@ class SystemServerHandler : HotLoadHook() {
                     ) {
                         param.result = null
                     }
-                })
+                }
                 hooked = true
             }
         }
@@ -396,8 +386,7 @@ class SystemServerHandler : HotLoadHook() {
     @SuppressLint("InlinedApi")
     private fun hookStatusBarAppearance() = runCatching {
         val displayPolicy = findClass("com.android.server.wm.DisplayPolicy")
-        hooks.addAll(
-            displayPolicy.hookAllBefore(
+        displayPolicy.hookAllBefore(
             "updateSystemBarAttributes",
             cond = { config.overrideStatusBar }) { param ->
             val windowState = param.thisObject.getObj("mFocusedWindow") ?: return@hookAllBefore
@@ -420,7 +409,7 @@ class SystemServerHandler : HotLoadHook() {
                     return@hookAllBefore
                 }
             }
-            })
+        }
     }.onFailure {
         logE("hookStatusBarAppearance", it)
     }
@@ -430,15 +419,15 @@ class SystemServerHandler : HotLoadHook() {
     private fun hookMiui12DexOptRestriction() = runCatching {
         if (config.bypassShellDexOptRestriction) {
             if (dexOptRestrictionHook != null) return@runCatching
-            hooks.addAll(findClass("com.android.server.pm.dex.DexoptOptions").hookAllCAfter {
+            findClass("com.android.server.pm.dex.DexoptOptions").hookAllCAfter {
                 if (config.bypassShellDexOptRestriction && it.thisObject.getObj("mCompilationReason") == 12) {
                     logD("set DexoptOptions 12 to 1")
                     it.thisObject.setObj("mCompilationReason", 1)
                 }
-            }.also { dexOptRestrictionHook = it })
+            }.also { dexOptRestrictionHook = it }
         } else {
-            dexOptRestrictionHook?.let { unhooks ->
-                hooks.removeAll(unhooks)
+            dexOptRestrictionHook?.forEach {
+                it.unhook()
             }
             dexOptRestrictionHook = null
         }

@@ -53,10 +53,15 @@ import io.github.a13e300.myinjector.ui.ModernSettingsRow
 import io.github.a13e300.myinjector.ui.ModernSwitchView
 import io.github.a13e300.myinjector.ui.dp
 import io.github.a13e300.myinjector.ui.setTextSizeDp
+import io.github.libxposed.service.HookedTarget
+import io.github.libxposed.service.HotReloadResult
+import io.github.libxposed.service.XposedService
 import org.xmlpull.v1.XmlPullParser
 import java.util.Arrays
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import java.util.stream.Collectors
+import kotlin.concurrent.thread
 import kotlin.math.min
 
 class SettingsActivity : Activity() {
@@ -67,6 +72,7 @@ class SettingsActivity : Activity() {
     private lateinit var header: ModernSettingsHeader
     private lateinit var headerScrim: View
     private lateinit var palette: ModernSettingsPalette
+    private var xposedServiceListener: App.ServiceStateListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,7 +84,18 @@ class SettingsActivity : Activity() {
 
         root = findViewById(R.id.settings_root)
         root.setBackgroundColor(palette.background)
+        xposedServiceListener = { svc ->
+            logD("service connected: $svc")
+        }
+        App.addServiceStateListener(listener = xposedServiceListener!!)
         buildContent()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        xposedServiceListener?.let {
+            App.removeServiceStateListener(it)
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -1169,7 +1186,7 @@ class SettingsActivity : Activity() {
         sendBroadcast(intent)
     }
 
-    @SuppressLint("SetTextI18n")
+    @SuppressLint("SetTextI18n", "XposedNewApi")
     private fun showHotUpdateDialog() {
         val statusText = TextView(this).apply {
             text = "准备检查"
@@ -1184,39 +1201,47 @@ class SettingsActivity : Activity() {
             setPadding(dp(14), dp(6), dp(14), dp(6))
         }
 
-        fun command(name: String, args: Bundle.() -> Unit = {}, cb: (Int, Bundle?) -> Unit) {
-            val intent = Intent("io.github.a13e300.myinjector.SYSTEM_SERVER_ENTRY")
-            intent.`package` = "android"
-            val pendingIntent =
-                PendingIntent.getBroadcast(this, 1, intent, PendingIntent.FLAG_IMMUTABLE)
-            val receiver = object : ResultReceiver() {
-                override fun onReceive(code: Int, data: Bundle?) {
-                    cb(code, data)
-                }
-            }
-            val b = Bundle().apply {
-                putParcelable("EXTRA_CREDENTIAL", pendingIntent)
-                putString("EXTRA_ACTION", name)
-                putBinder("EXTRA_RECEIVER", receiver)
-                args()
-            }
-            intent.putExtras(b)
-            sendBroadcast(intent)
-        }
-
         fun check() {
             statusText.text = "检查中……"
-            command("needUpdate") { code, _ ->
-                statusText.post {
-                    statusText.text = if (code == 1) "可更新" else "无需更新"
+            thread {
+                val svc = App.mService
+                val targets = svc?.runningTargets
+                runOnUiThread {
+                    if (svc == null) {
+                        statusText.text = "no svc"
+                    } else if (targets.isNullOrEmpty()) {
+                        statusText.text = "no targets"
+                    } else {
+                        statusText.text =
+                            targets.joinToString("\n") { "proc=${it.processName} pid=${it.pid} uid=${it.uid} state=${it.state}" }
+                    }
                 }
             }
         }
 
-        fun update(force: Boolean) {
-            command("reload", { putBoolean("force", force) }) { code, _ ->
-                statusText.post {
-                    statusText.text = if (code == 1) "重新加载成功" else "重新加载失败"
+        fun update() {
+            statusText.text = "updating ...\n"
+            thread {
+                val targets = App.mService?.runningTargets
+                if (targets == null) {
+                    runOnUiThread {
+                        statusText.append("no targets\n")
+                    }
+                } else {
+                    for (t in targets) {
+                        val countDownLatch = CountDownLatch(1)
+                        val callback = XposedService.HotReloadCallback { target, result ->
+                            countDownLatch.countDown()
+                            runOnUiThread {
+                                statusText.append("updated pid=${target.pid} status=${result.status} message=${result.message}\n")
+                            }
+                        }
+                        runOnUiThread {
+                            statusText.append("updating proc=${t.processName} pid=${t.pid} uid=${t.uid} state=${t.state}\n")
+                        }
+                        App.mService?.hotReloadModule(t, null, callback)
+                        countDownLatch.await()
+                    }
                 }
             }
         }
@@ -1237,29 +1262,7 @@ class SettingsActivity : Activity() {
                 matchWidthLayoutParams(bottom = 14),
             )
             addView(modernDialogButton("检查更新") { check() }, matchWidthLayoutParams(bottom = 8))
-            addView(
-                modernDialogButton("主动 GC") {
-                    command("gc") { code, _ ->
-                        statusText.post {
-                            statusText.text = if (code == 0) "GC 成功" else "GC 失败"
-                        }
-                    }
-                },
-                matchWidthLayoutParams(bottom = 8),
-            )
-            addView(
-                modernDialogButton("查询旧模块") {
-                    command("reportOldHook") { _, data ->
-                        val hooks = data?.getString("hooks").orEmpty()
-                        statusText.post {
-                            statusText.text = "旧模块：" + hooks.ifEmpty { "无" }
-                        }
-                    }
-                },
-                matchWidthLayoutParams(bottom = 8),
-            )
-            addView(modernDialogButton("重新加载") { update(false) }, matchWidthLayoutParams(bottom = 8))
-            addView(modernDialogButton("强制重新加载") { update(true) }, matchWidthLayoutParams())
+            addView(modernDialogButton("更新") { update() }, matchWidthLayoutParams(bottom = 8))
         }
 
         check()

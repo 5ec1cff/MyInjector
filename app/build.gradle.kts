@@ -41,7 +41,7 @@ val gitCommitCount = "git rev-list HEAD --count".execute().toInt()
 val gitCommitHash = "git rev-parse --verify --short HEAD".execute()
 
 android {
-    compileSdk = 36
+    compileSdk = 37
     signingConfigs {
         if (keystoreProperties != null) {
             create("release") {
@@ -56,7 +56,7 @@ android {
     defaultConfig {
         applicationId = "io.github.a13e300.myinjector"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "$gitCommitCount-$gitCommitHash"
 
@@ -170,5 +170,5 @@ dependencies {
     implementation(libs.protobuf.java)
     compileOnly(libs.protobuf.protoc)
     compileOnly(libs.libxposed.api)
-    // implementation(libs.libxposed.service)
+    implementation(libs.libxposed.service)
 }
