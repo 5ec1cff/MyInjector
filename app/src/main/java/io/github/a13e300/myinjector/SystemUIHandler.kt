@@ -5,6 +5,7 @@ import android.app.ActivityThread
 import android.app.INotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -21,7 +22,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
-import dalvik.system.PathClassLoader
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.dp2px
@@ -31,34 +31,29 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjS
+import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNopIf
-import io.github.a13e300.myinjector.arch.hookCAfter
 import io.github.a13e300.myinjector.arch.setObj
+import io.github.a13e300.myinjector.bridge.Unhook
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
 class MyFrameLayout(context: Context) : FrameLayout(context)
 
 class SystemUIHandler : IHook() {
     private lateinit var config: SystemUIConfig
-    private fun hookPlugin() = runCatching {
-        val parentCLClass = findClass(
-            "com.android.systemui.shared.plugins.PluginManagerImpl\$ClassLoaderFilter"
-        )
-        PathClassLoader::class.java.hookCAfter(
-            String::class.java,
-            String::class.java,
-            ClassLoader::class.java
-        ) { param ->
-            if (param.args[2].javaClass != parentCLClass) return@hookCAfter
-            val cl = param.thisObject as ClassLoader
+    private val pluginInitializeLock = Any()
+    private var pluginHooked = false
+    private val pluginInitializeHooks = mutableSetOf<Unhook>()
 
-            // logD("in sysui plugin", Throwable())
+    private fun doHookDndToast(cl: ClassLoader) {
+        synchronized(pluginInitializeLock) {
             runCatching {
                 // hook to not show status bar notification when silence mode changed
                 // to debug: cmd notification set_dnd on/off
@@ -71,6 +66,32 @@ class SystemUIHandler : IHook() {
             }.onFailure {
                 logE("hook showToast", it)
             }
+            pluginHooked = true
+            logD("hooked dnd toast")
+            runCatching {
+                pluginInitializeHooks.forEach {
+                    it.unhook()
+                }
+            }.onFailure {
+                logE("unhook plugin initialize hooks", it)
+            }
+            pluginInitializeHooks.clear()
+        }
+    }
+
+    private fun hookPlugin() = runCatching {
+        val pluginInstanceClass = findClass("com.android.systemui.shared.plugins.PluginInstance")
+        pluginInitializeHooks.addAll(pluginInstanceClass.hookAllAfter("loadPlugin") { param ->
+            val ctx = param.thisObject.getObjAs<Context>("mPluginContext")
+            val name = param.thisObject.getObjAs<ComponentName>("mComponentName")
+            logD("hookPlugin: ctx=$ctx name=$name ctx.pkg=${ctx.packageName} ctx.cl=${ctx.classLoader}")
+            if (name.packageName == "miui.systemui.plugin") {
+                doHookDndToast(ctx.classLoader)
+            }
+        })
+        val classLoaders = pluginInstanceClass.getObjSAs<Map<String, ClassLoader>>("sClassLoaders")
+        classLoaders.get("miui.systemui.plugin")?.let {
+            doHookDndToast(it)
         }
     }.onFailure { logE("hookCreatePkgContext: ", it) }
 
@@ -99,8 +120,38 @@ class SystemUIHandler : IHook() {
         hookSplashScreen()
     }
 
-    // TODO: support unhook in System UI
-    override fun onUnhook(): Boolean = false
+    override fun onUnhook(): Boolean {
+        runCatching {
+            ActivityThread.currentActivityThread().application.unregisterReceiver(receiver)
+        }.onFailure {
+            logE("unregister receiver", it)
+        }
+        removeMyView()
+        return true
+    }
+
+    private var injectedRoot: ViewGroup? = null
+
+    private fun removeMyView() {
+        injectedRoot?.let { vg ->
+            val latch = CountDownLatch(1)
+            vg.post {
+                runCatching {
+                    val injected =
+                        vg.findView { it.javaClass == MyFrameLayout::class.java } as? MyFrameLayout
+                    if (injected != null) {
+                        logD("removed injected $injected from $vg")
+                        vg.removeView(injected)
+                    }
+                    injectedRoot = null
+                }.onFailure {
+                    logE("removeMyView", it)
+                }
+                latch.countDown()
+            }
+            latch.await()
+        }
+    }
 
     @SuppressLint("DiscouragedPrivateApi", "NewApi", "SetTextI18n")
     private fun hookNotificationInfo() {
@@ -142,6 +193,8 @@ class SystemUIHandler : IHook() {
                         setMargins(px, px + topOffset, px, px)
                     }
                 )
+                injectedRoot = parent
+                logD("injectedRoot = $parent")
             }
 
             val root = findRoot
