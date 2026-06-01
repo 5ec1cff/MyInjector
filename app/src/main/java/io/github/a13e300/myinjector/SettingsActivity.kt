@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Dialog
 import android.app.PendingIntent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
@@ -18,11 +20,15 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.TypedValue
-import android.text.InputType
 import android.text.Editable
+import android.text.InputType
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
 import android.text.TextUtils
 import android.text.TextWatcher
+import android.text.style.ForegroundColorSpan
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -42,7 +48,6 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import io.github.a13e300.myinjector.system_server.ResultReceiver
 import io.github.a13e300.myinjector.ui.ModernActionButton
 import io.github.a13e300.myinjector.ui.ModernChevronView
 import io.github.a13e300.myinjector.ui.ModernInjectedSearchBar
@@ -447,7 +452,7 @@ class SettingsActivity : Activity() {
 
         val input = EditText(this).apply {
             hint = "请输入条目"
-            setSingleLine(true)
+            isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             setTextColor(palette.title)
             setHintTextColor(palette.summary)
@@ -1188,89 +1193,281 @@ class SettingsActivity : Activity() {
 
     @SuppressLint("SetTextI18n", "XposedNewApi")
     private fun showHotUpdateDialog() {
-        val statusText = TextView(this).apply {
-            text = "准备检查"
+        val selectedPids = mutableSetOf<Int>()
+
+        lateinit var emptyView: TextView
+        lateinit var loadingView: LinearLayout
+        val adapter = HotReloadAdapter(
+            selectedPids,
+            {
+                // TODO
+            },
+        ) { isEmpty ->
+            emptyView.visibility = if (isEmpty && loadingView.visibility != View.VISIBLE) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+        }
+        val listView = ListView(this).apply {
+            divider = ColorDrawable(Color.TRANSPARENT)
+            dividerHeight = 0
+            selector = ColorDrawable(Color.TRANSPARENT)
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            cacheColorHint = Color.TRANSPARENT
+            background = null
+            this.adapter = adapter
+        }
+        loadingView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(
+                ProgressBar(this@SettingsActivity).apply {
+                    isIndeterminate = true
+                },
+                LinearLayout.LayoutParams(dp(42), dp(42)),
+            )
+            addView(
+                TextView(this@SettingsActivity).apply {
+                    text = "正在获取可更新列表..."
+                    setTextColor(palette.summary)
+                    setTextSizeDp(13.2f)
+                    gravity = Gravity.CENTER
+                    includeFontPadding = true
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(10)
+                },
+            )
+        }
+        emptyView = TextView(this).apply {
+            text = "无"
             setTextColor(palette.summary)
             setTextSizeDp(13.2f)
-            includeFontPadding = true
             gravity = Gravity.CENTER
+            includeFontPadding = true
+            visibility = View.GONE
+        }
+        val listFrame = FrameLayout(this).apply {
             background = roundedBackground(
                 if (palette.isLight) Color.rgb(244, 247, 251) else palette.button,
-                16,
+                22,
             )
-            setPadding(dp(14), dp(6), dp(14), dp(6))
-        }
-
-        fun check() {
-            statusText.text = "检查中……"
-            thread {
-                val svc = App.mService
-                val targets = svc?.runningTargets
-                runOnUiThread {
-                    if (svc == null) {
-                        statusText.text = "no svc"
-                    } else if (targets.isNullOrEmpty()) {
-                        statusText.text = "no targets"
-                    } else {
-                        statusText.text =
-                            targets.joinToString("\n") { "proc=${it.processName} pid=${it.pid} uid=${it.uid} state=${it.state}" }
-                    }
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                clipToOutline = true
             }
         }
+        val searchBar = ModernInjectedSearchBar(this, palette)
+        val searchInput = searchBar.editText
+        fun clearSearchFocus() {
+            if (!searchInput.hasFocus()) return
+            searchInput.clearFocus()
+            getSystemService(InputMethodManager::class.java)
+                ?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+        }
 
-        fun update() {
-            statusText.text = "updating ...\n"
-            thread {
-                val targets = App.mService?.runningTargets
-                if (targets == null) {
-                    runOnUiThread {
-                        statusText.append("no targets\n")
-                    }
-                } else {
-                    for (t in targets) {
-                        val countDownLatch = CountDownLatch(1)
-                        val callback = XposedService.HotReloadCallback { target, result ->
-                            countDownLatch.countDown()
-                            runOnUiThread {
-                                statusText.append("updated pid=${target.pid} status=${result.status} message=${result.message}\n")
-                            }
-                        }
-                        runOnUiThread {
-                            statusText.append("updating proc=${t.processName} pid=${t.pid} uid=${t.uid} state=${t.state}\n")
-                        }
-                        App.mService?.hotReloadModule(t, null, callback)
-                        countDownLatch.await()
-                    }
-                }
+        fun applySearch() {
+            adapter.query = searchInput.text.toString().trim()
+        }
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {}
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                applySearch()
             }
+        })
+        searchBar.setOnClickListener {
+            searchInput.requestFocus()
+            getSystemService(InputMethodManager::class.java)?.showSoftInput(searchInput, 0)
+        }
+        listView.setOnTouchListener { _, _ ->
+            clearSearchFocus()
+            false
         }
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(
-                LinearLayout(this@SettingsActivity).apply {
-                    gravity = Gravity.CENTER
+                searchBar,
+                matchWidthLayoutParams(bottom = 6),
+            )
+            addView(
+                listFrame.apply {
                     addView(
-                        statusText,
-                        LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        listView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    addView(
+                        emptyView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    addView(
+                        loadingView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
                         ),
                     )
                 },
-                matchWidthLayoutParams(bottom = 14),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    min(dp(500), (resources.displayMetrics.heightPixels * 0.50f).toInt()),
+                ),
             )
-            addView(modernDialogButton("检查更新") { check() }, matchWidthLayoutParams(bottom = 8))
-            addView(modernDialogButton("更新") { update() }, matchWidthLayoutParams(bottom = 8))
         }
 
-        check()
+        var entries: MutableList<HotReloadEntry>? = null
+
+        fun updateList() {
+            listView.visibility = View.INVISIBLE
+            loadingView.visibility = View.VISIBLE
+            thread {
+                val svc = App.mService
+                val targets = svc?.runningTargets
+                runOnUiThread {
+                    if (targets != null) {
+                        val entryList = targets.map { HotReloadEntry(it) }.toMutableList()
+                        entries = entryList
+                        adapter.setEntries(entryList)
+                        applySearch()
+                        loadingView.visibility = View.GONE
+                        listView.visibility = View.VISIBLE
+                        adapter.refreshEmptyState()
+                    }
+                }
+            }
+        }
+
+        updateList()
+
+        fun doUpdate(updateAll: Boolean): Boolean {
+            val updateTargets = if (updateAll) entries else entries?.filter {
+                it.target.pid in selectedPids
+            }
+
+            if (updateTargets.isNullOrEmpty()) return updateAll
+
+            val statusText = TextView(this).apply {
+                text = ""
+                setTextColor(palette.summary)
+                setTextSizeDp(13.2f)
+                includeFontPadding = true
+                gravity = Gravity.CENTER
+                background = roundedBackground(
+                    if (palette.isLight) Color.rgb(244, 247, 251) else palette.button,
+                    16,
+                )
+                setPadding(dp(14), dp(6), dp(14), dp(6))
+            }
+
+            fun update() {
+                thread {
+                    var i = 1
+                    var success = 0
+                    val size = updateTargets.size
+                    for (ut in updateTargets) {
+                        val t = ut.target
+                        val countDownLatch = CountDownLatch(1)
+                        val callback = XposedService.HotReloadCallback { target, result ->
+                            countDownLatch.countDown()
+                            if (result.status == HotReloadResult.Status.SUCCESS) success += 1
+                            runOnUiThread {
+                                statusText.append(
+                                    SpannableString("更新结果 status=${result.status} message=${result.message}\n").apply {
+                                        setSpan(
+                                            ForegroundColorSpan(
+                                                if (result.status == HotReloadResult.Status.SUCCESS)
+                                                    0xff067d17.toInt() else Color.RED
+                                            ), 0, this.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        runOnUiThread {
+                            statusText.append("正在更新 [$i/$size] proc=${t.processName} pid=${t.pid} uid=${t.uid}\n")
+                        }
+                        try {
+                            App.mService?.hotReloadModule(t, null, callback)
+                            countDownLatch.await()
+                        } catch (e: Throwable) {
+                            logE("update pid=${t.pid} proc=${t.processName}", e)
+                            runOnUiThread {
+                                statusText.append(SpannableString("更新失败 ${e.message}\n").apply {
+                                    setSpan(
+                                        ForegroundColorSpan(Color.RED),
+                                        0,
+                                        this.length,
+                                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                                    )
+                                })
+                            }
+                        }
+                        i += 1
+                    }
+                    runOnUiThread {
+                        statusText.append("更新完成 成功 $success 失败 ${size - success}\n")
+                    }
+                }
+            }
+
+            val content = LinearLayout(this).apply {
+                addView(
+                    ScrollView(this@SettingsActivity).apply {
+                        gravity = Gravity.CENTER
+                        addView(
+                            statusText,
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ),
+                        )
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        min(dp(500), (resources.displayMetrics.heightPixels * 0.50f).toInt()),
+                    ),
+                )
+            }
+
+            update()
+
+            showModernDialog(
+                title = "更新进度",
+                content = content,
+                actions = listOf(ModernDialogAction("复制", emphasized = true) {
+                    val text = statusText.text
+                    getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(
+                            ClipData.newPlainText("", text)
+                        )
+                }),
+            )
+
+            return true
+        }
 
         showModernDialog(
             title = "热更新",
             content = content,
-            actions = listOf(ModernDialogAction("关闭", emphasized = true)),
+            actions = listOf(
+                ModernDialogAction("取消"),
+                ModernDialogAction("更新", emphasized = true, onClickWithRes = {
+                    doUpdate(false)
+                }),
+                ModernDialogAction("全部更新", emphasized = true, onClickWithRes = {
+                    doUpdate(true)
+                })
+            ),
         )
     }
 
@@ -1319,8 +1516,14 @@ class SettingsActivity : Activity() {
         }
         actions.forEachIndexed { index, action ->
             val button = modernDialogButton(action.title, action.emphasized) {
-                action.onClick?.invoke()
-                dialog.dismiss()
+                if (action.onClickWithRes != null) {
+                    if (action.onClickWithRes.invoke()) {
+                        dialog.dismiss()
+                    }
+                } else {
+                    action.onClick?.invoke()
+                    dialog.dismiss()
+                }
             }
             val lp = if (actions.size <= 2) {
                 LinearLayout.LayoutParams(0, dp(46), 1f).apply {
@@ -1602,6 +1805,7 @@ class SettingsActivity : Activity() {
     private data class ModernDialogAction(
         val title: CharSequence,
         val emphasized: Boolean = false,
+        val onClickWithRes: (() -> Boolean)? = null,
         val onClick: (() -> Unit)? = null,
     )
 
@@ -1661,6 +1865,177 @@ class SettingsActivity : Activity() {
         val bottom: Int,
     )
 
+    data class HotReloadEntry(
+        val target: HookedTarget
+    )
+
+    private inner class HotReloadAdapter(
+        private val selectedUids: MutableSet<Int>,
+        private val onSelectionChanged: () -> Unit,
+        private val onEmptyStateChanged: (Boolean) -> Unit,
+    ) : BaseAdapter() {
+        private var allEntries = emptyList<HotReloadEntry>()
+        private var visibleEntries = emptyList<HotReloadEntry>()
+        var query: String = ""
+            set(value) {
+                field = value
+                visibleEntries = sortedEntries()
+                notifyDataSetChanged()
+                refreshEmptyState()
+            }
+
+        fun setEntries(entries: List<HotReloadEntry>) {
+            allEntries = entries
+            visibleEntries = sortedEntries()
+            notifyDataSetChanged()
+            refreshEmptyState()
+        }
+
+        fun refreshEmptyState() {
+            onEmptyStateChanged(visibleEntries.isEmpty())
+        }
+
+        fun visibleEntryAt(position: Int): HotReloadEntry? = visibleEntries.getOrNull(position)
+
+        override fun getCount(): Int = visibleEntries.size
+
+        override fun getItem(position: Int): HotReloadEntry = visibleEntries[position]
+
+        override fun getItemId(position: Int): Long = getItem(position).target.pid.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val row = (convertView as? LinearLayout) ?: createHotReloadAppRow()
+            val holder = row.tag as HotReloadRowHolder
+            val entry = getItem(position)
+            holder.packageName = entry.target.processName.split(":").first()
+            holder.title.text = entry.target.processName
+            holder.summary.text = SpannableStringBuilder()
+                .append(
+                    entry.target.state.describe(), when (entry.target.state) {
+                        HookedTarget.State.STALE -> ForegroundColorSpan(0xff067d17.toInt())
+                        HookedTarget.State.FAILED -> ForegroundColorSpan(Color.RED)
+                        else -> null
+                    }, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                .append("\npid=${entry.target.pid} uid=${entry.target.uid} loaded=${entry.target.loadedVersionCode}")
+            holder.checkbox.isChecked = entry.target.pid in selectedUids
+            row.setOnClickListener {
+                if (!selectedUids.remove(entry.target.pid)) {
+                    selectedUids.add(entry.target.pid)
+                }
+                notifyDataSetChanged()
+                onSelectionChanged()
+            }
+            return row
+        }
+
+        private fun sortedEntries(): List<HotReloadEntry> {
+            val normalizedQuery = query.trim()
+            val source = if (normalizedQuery.isEmpty()) {
+                allEntries
+            } else {
+                allEntries.filter {
+                    it.target.processName.contains(normalizedQuery, ignoreCase = true)
+                }
+            }
+            return source.sortedWith { a, b ->
+                return@sortedWith if (a.target.state == HookedTarget.State.STALE && b.target.state != HookedTarget.State.STALE) {
+                    -1
+                } else if (a.target.state != HookedTarget.State.STALE && b.target.state == HookedTarget.State.STALE) {
+                    1
+                } else {
+                    if (a.target.processName == "system" && b.target.processName != "system") {
+                        -1
+                    } else if (a.target.processName != "system" && b.target.processName == "system") {
+                        1
+                    } else {
+                        a.target.processName.compareTo(b.target.processName)
+                    }
+                }
+            } // stale goes first
+        }
+    }
+
+    private data class HotReloadRowHolder(
+        val title: TextView,
+        val summary: TextView,
+        val checkbox: CheckBox,
+        var packageName: String? = null,
+    )
+
+    private fun createHotReloadAppRow(): LinearLayout {
+        val title = TextView(this).apply {
+            setTextColor(palette.title)
+            setTextSizeDp(14.0f)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            includeFontPadding = true
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSelected = true
+        }
+        val summary = TextView(this).apply {
+            setTextColor(palette.summary)
+            setTextSizeDp(11.8f)
+            includeFontPadding = true
+            isSelected = true
+        }
+        val checkbox = CheckBox(this).apply {
+            isClickable = false
+            isFocusable = false
+            background = null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                foreground = null
+            }
+            buttonTintList = android.content.res.ColorStateList(
+                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(palette.accent, palette.switchOff),
+            )
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(7), dp(8), dp(7))
+            addView(
+                LinearLayout(this@SettingsActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(title, matchWidthLayoutParams())
+                    addView(summary, matchWidthLayoutParams())
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = dp(12)
+                    marginEnd = dp(8)
+                },
+            )
+            addView(checkbox, LinearLayout.LayoutParams(dp(42), dp(42)))
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            minimumHeight = dp(65)
+            background = selectableItemBackground()
+            isClickable = true
+            isFocusable = true
+            addView(
+                content,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(64),
+                ),
+            )
+            addView(
+                View(this@SettingsActivity).apply { setBackgroundColor(clipboardListDividerColor()) },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(0.6f),
+                ).apply {
+                    marginStart = dp(22)
+                    marginEnd = dp(22)
+                },
+            )
+            tag = HotReloadRowHolder(title, summary, checkbox)
+        }
+    }
+
     companion object {
         private const val PREFS_NAME = "system_server"
         private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
@@ -1691,4 +2066,11 @@ class SettingsActivity : Activity() {
             "fork.risin42.nagramx",
         )
     }
+}
+
+fun HookedTarget.State.describe() = when (this) {
+    HookedTarget.State.UP_TO_DATE -> "已是最新"
+    HookedTarget.State.FAILED -> "更新失败"
+    HookedTarget.State.STALE -> "需要更新"
+    HookedTarget.State.RELOADING -> "正在更新"
 }
