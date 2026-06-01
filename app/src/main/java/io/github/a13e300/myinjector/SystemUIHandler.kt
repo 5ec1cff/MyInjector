@@ -31,7 +31,6 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjS
-import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
@@ -39,6 +38,7 @@ import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.bridge.Unhook
 import java.io.File
+import java.lang.reflect.Modifier
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.concurrent.CountDownLatch
@@ -80,7 +80,9 @@ class SystemUIHandler : IHook() {
     }
 
     private fun hookPlugin() = runCatching {
-        val pluginInstanceClass = findClass("com.android.systemui.shared.plugins.PluginInstance")
+        val pluginInstanceClass =
+            findClassOrNull("com.android.systemui.shared.plugins.PluginInstance")
+                ?: return@runCatching
         pluginInitializeHooks.addAll(pluginInstanceClass.hookAllAfter("loadPlugin") { param ->
             val ctx = param.thisObject.getObjAs<Context>("mPluginContext")
             val name = param.thisObject.getObjAs<ComponentName>("mComponentName")
@@ -89,7 +91,15 @@ class SystemUIHandler : IHook() {
                 doHookDndToast(ctx.classLoader)
             }
         })
-        val classLoaders = pluginInstanceClass.getObjSAs<Map<String, ClassLoader>>("sClassLoaders")
+        var field =
+            pluginInstanceClass.fields.firstOrNull { Modifier.isStatic(it.modifiers) && it.name == "sClassLoaders" }
+        if (field == null) {
+            val injector = findClass("com.miui.systemui.plugin.PluginInstanceInjector")
+            field =
+                injector.fields.first { Modifier.isStatic(it.modifiers) && it.name == "sClassLoaders" }
+        }
+        field.isAccessible = true
+        val classLoaders = field.get(null) as Map<String, ClassLoader>
         classLoaders.get("miui.systemui.plugin")?.let {
             doHookDndToast(it)
         }
