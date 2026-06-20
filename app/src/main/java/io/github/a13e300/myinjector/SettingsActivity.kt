@@ -1379,13 +1379,13 @@ class SettingsActivity : Activity() {
                         val countDownLatch = CountDownLatch(1)
                         val callback = XposedService.HotReloadCallback { target, result ->
                             countDownLatch.countDown()
-                            if (result.status == HotReloadResult.Status.SUCCESS) success += 1
+                            if (result.status == HotReloadResult.Status.SUCCEEDED) success += 1
                             runOnUiThread {
                                 statusText.append(
                                     SpannableString("更新结果 status=${result.status} message=${result.message}\n").apply {
                                         setSpan(
                                             ForegroundColorSpan(
-                                                if (result.status == HotReloadResult.Status.SUCCESS)
+                                                if (result.status == HotReloadResult.Status.SUCCEEDED)
                                                     0xff067d17.toInt() else Color.RED
                                             ), 0, this.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                                         )
