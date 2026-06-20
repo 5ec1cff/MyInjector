@@ -69,6 +69,7 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.lang.reflect.Field
+import java.lang.reflect.Modifier
 import kotlin.concurrent.thread
 
 fun toHtmlText(title: String?, desc: String?, url: String): String {
@@ -261,7 +262,7 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
 
         val picCacheInterface = picCacheClass.interfaces.single()
         val getCacheMethod = XhsHandler.creator.create("getImageCache") { bridge ->
-            bridge.findMethod {
+            val imageCache = bridge.findMethod {
                 matcher {
                     addCaller {
                         declaredClass(savePicWithUrlInfo?.className ?: savePicMethodInfo.className)
@@ -269,7 +270,21 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
                     }
                     returnType(picCacheInterface.name)
                 }
-            }.single().toObfsInfo()
+            }.single()
+            val info = imageCache.toObfsInfo()
+            // 9.34.4
+            if (Modifier.isInterface(imageCache.declaredClass!!.modifiers)) {
+                val implementorClass = bridge.findClass {
+                    matcher {
+                        interfaces {
+                            add(imageCache.declaredClassName)
+                        }
+                    }
+                }.single()
+                info.copy(className = implementorClass.name)
+            } else {
+                info
+            }
         }
 
         val tls = ThreadLocal<Boolean>()
@@ -1013,7 +1028,7 @@ class SettingsHook : IHook() {
 object XhsHandler : DynHookManager<XhsHookConfig>() {
     private var _creator: ObfsTableCreator? = null
     val creator: ObfsTableCreator
-        get() = _creator ?: ObfsTableCreator("", 5, appInfo = loadPackageParam.appInfo)
+        get() = _creator ?: ObfsTableCreator("", 6, appInfo = loadPackageParam.appInfo)
             .also { _creator = it }
     val hookErrors = mutableMapOf<String, String>()
     val fileProviderClass by lazy { findClass("androidx.core.content.FileProvider") }
