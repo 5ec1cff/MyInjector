@@ -42,14 +42,15 @@ class BiliHandler : IHook() {
     }
 
     private fun locateAd(bridge: DexKitBridge, obfsTable: MutableObfsTable) = runCatching {
-        val method =
-            bridge.findMethod {
-                matcher {
-                    usingEqStrings("DetailAdService", "-", "onCreateViews")
-                }
-            }.single().toObfsInfo()
-
-        obfsTable["DetailAdService-onCreateViews"] = method
+        obfsTable["DetailAdService-onCreateViews"] = bridge.findMethod {
+            matcher {
+                usingEqStrings("DetailAdService-onCreateViews")
+            }
+        }.singleOrNull()?.toObfsInfo() ?: bridge.findMethod {
+            matcher {
+                usingEqStrings("DetailAdService", "-", "onCreateViews")
+            }
+        }.single().toObfsInfo()
     }.onFailure {
         logE("locateAd", it)
     }
