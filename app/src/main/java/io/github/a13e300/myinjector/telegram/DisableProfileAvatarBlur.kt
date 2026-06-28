@@ -15,6 +15,7 @@ import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
+import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.setObj
 import java.util.WeakHashMap
 
@@ -26,9 +27,44 @@ class DisableProfileAvatarBlur : DynHook() {
         get() = TelegramHandler.settings.disableProfileAvatarBlurExtendAvatar
 
     /**
-     * Telegram 原本的 actionsView 样式。
+     * Exteragram 包名。
      *
-     * 注意：
+     * 方案二只给 Exteragram 使用。
+     * 其他官方 / 第三方 Telegram 继续使用原方案一。
+     */
+    private val isExteragram: Boolean by lazy {
+        getCurrentPackageName() == "com.exteragram.messenger"
+    }
+
+    private fun getCurrentPackageName(): String? {
+        return runCatching {
+            val activityThreadClass = Class.forName("android.app.ActivityThread")
+            activityThreadClass
+                .getMethod("currentPackageName")
+                .invoke(null) as? String
+        }.getOrNull()
+            ?: runCatching {
+                val activityThreadClass = Class.forName("android.app.ActivityThread")
+                val currentApplication = activityThreadClass
+                    .getMethod("currentApplication")
+                    .invoke(null)
+
+                currentApplication
+                    ?.javaClass
+                    ?.getMethod("getPackageName")
+                    ?.invoke(currentApplication) as? String
+            }.getOrNull()
+    }
+
+    /**
+     * =========================
+     * Exteragram 方案二相关状态
+     * =========================
+     */
+
+    /**
+     * Telegram / Exteragram 原本的 actionsView 样式。
+     *
      * 不同主题、不同 accent、大会员背景、个人主页背景下，
      * actionsView 的背景和图标颜色都可能不同。
      *
@@ -46,7 +82,7 @@ class DisableProfileAvatarBlur : DynHook() {
     private val actionsPulledState = WeakHashMap<View, Boolean>()
 
     /**
-     * 缓存 Telegram 原本的 actionsView 样式。
+     * 缓存 Exteragram 原本的 actionsView 样式。
      */
     private val originalActionsStyleMap = WeakHashMap<View, ActionsOriginalStyle>()
 
@@ -81,11 +117,10 @@ class DisableProfileAvatarBlur : DynHook() {
     }
 
     /**
-     * 缓存当前 Telegram 原本样式。
+     * Exteragram：缓存当前 actionsView 原本样式。
      *
-     * 关键：
-     * - 如果当前样式已经是我们强制设置的黑色半透明，就不能缓存；
-     * - 否则会把错误状态缓存进去，恢复时还是错的。
+     * 如果当前样式已经是我们强制设置的黑色半透明，就不能缓存；
+     * 否则会把错误状态缓存进去。
      */
     private fun cacheOriginalActionsStyle(
         actionsViewObj: Any?,
@@ -112,15 +147,7 @@ class DisableProfileAvatarBlur : DynHook() {
     }
 
     /**
-     * 恢复 Telegram 原本样式。
-     *
-     * 这里不再写死白色背景。
-     *
-     * 对普通用户：
-     *   如果原本是白色按钮，就恢复白色按钮。
-     *
-     * 对大会员/顶部背景用户：
-     *   如果原本是深色半透明按钮，就恢复深色半透明按钮。
+     * Exteragram：恢复原本 actionsView 样式。
      */
     private fun restoreActionsOriginalStyle(actionsViewObj: Any?, invalidate: Boolean = true) {
         val actionsView = actionsViewObj as? View ?: return
@@ -156,9 +183,7 @@ class DisableProfileAvatarBlur : DynHook() {
     }
 
     /**
-     * 下拉/头像展开状态：强制按钮在头像图上可读。
-     *
-     * 在强制修改之前，会先缓存 Telegram 原本样式。
+     * Exteragram：下拉/头像展开状态，强制按钮在头像图上可读。
      */
     private fun forceActionsReadableOnAvatar(actionsViewObj: Any?, invalidate: Boolean = true) {
         val actionsView = actionsViewObj as? View ?: return
@@ -192,14 +217,7 @@ class DisableProfileAvatarBlur : DynHook() {
     }
 
     /**
-     * 根据状态应用样式。
-     *
-     * pulled:
-     *   强制黑色半透明 + 白色图标。
-     *
-     * not pulled:
-     *   如果之前被我们强制过，则恢复 Telegram 原样；
-     *   如果没被我们改过，则不乱动，避免破坏大会员背景样式。
+     * Exteragram：根据状态应用样式。
      */
     private fun applyActionsStyleByState(actionsViewObj: Any?, invalidate: Boolean = true) {
         if (isActionsPulled(actionsViewObj)) {
@@ -222,88 +240,34 @@ class DisableProfileAvatarBlur : DynHook() {
     }
 
     override fun onHook() {
-        /*
-         * 禁用 ProfileGalleryBlurView 的头像模糊绘制。
-         *
-         * 注意：
-         * 普通未下拉状态不主动改 actionsView，
-         * 避免把大会员/背景主页的按钮改成白盒子。
-         */
-        findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
-            .hookAllBefore("draw", cond = ::isEnabled) { param ->
-                val blurView = param.thisObject
-
-                val actionsView = runCatching {
-                    blurView.getObj("actionsView")
-                }.getOrNull()
-
-                val musicView = runCatching {
-                    blurView.getObj("musicView")
-                }.getOrNull()
-
-                val suggestionView = runCatching {
-                    blurView.getObj("suggestionView")
-                }.getOrNull()
-
-                applyActionsStyleByState(actionsView)
-
-                disableNonActionBlurView(musicView)
-                disableNonActionBlurView(suggestionView)
-
-                param.result = null
-            }
+        val profileActivity = findClass("org.telegram.ui.ProfileActivity")
+        val topViewClass = findClass("org.telegram.ui.ProfileActivity\$TopView")
+        val androidUtilities = findClass("org.telegram.messenger.AndroidUtilities")
 
         /*
-         * 只 hook setActionsColor：
-         * - 缓存 Telegram 动态主题色；
-         * - 下拉状态时保持可读。
+         * =========================
+         * 头像模糊禁用逻辑
+         * =========================
          *
-         * 不 hook onDraw。
-         * 不 hook drawingBlur。
+         * 方案一：非 Exteragram
+         *   直接 NOP draw，保持原版逻辑。
+         *
+         * 方案二：Exteragram
+         *   不能直接 NOP 后不管，否则 actionsView 样式会异常；
+         *   需要先处理 actionsView / musicView / suggestionView，再阻止 draw。
          */
-        val profileActionsViewClass = findClass("org.telegram.ui.Components.ProfileActionsView")
-
-        profileActionsViewClass.hookAllBefore(
-            "setActionsColor",
-            cond = ::isEnabled
-        ) { param ->
-            if (changingActionsColor) {
-                return@hookAllBefore
-            }
-
-            val actionsViewObj = param.thisObject
-            val color = param.args.getOrNull(0) as? Int ?: return@hookAllBefore
-
-            /*
-             * 只有在不是我们强制状态时，才缓存 Telegram 原本颜色。
-             */
-            if (!isForcedByUs(actionsViewObj)) {
-                cacheOriginalActionsStyle(actionsViewObj, color)
-            }
-        }
-
-        profileActionsViewClass.hookAllAfter(
-            "setActionsColor",
-            cond = ::isEnabled
-        ) { param ->
-            if (changingActionsColor) {
-                return@hookAllAfter
-            }
-
-            val actionsViewObj = param.thisObject
-
-            /*
-             * 只有下拉状态才强制浮层样式。
-             */
-            if (isActionsPulled(actionsViewObj)) {
-                forceActionsReadableOnAvatar(actionsViewObj)
-            }
+        if (isExteragram) {
+            hookExteragramBlurDraw()
+            hookExteragramProfileActionsView()
+        } else {
+            findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
+                .hookAllNopIf("draw", ::isEnabled)
         }
 
         /*
          * move shadow up
          */
-        findClass("org.telegram.ui.ProfileActivity").hookAllAfter(
+        profileActivity.hookAllAfter(
             "updateExtraViews",
             cond = ::isEnabled
         ) { param ->
@@ -316,11 +280,13 @@ class DisableProfileAvatarBlur : DynHook() {
             val actionsView = pa.getObjAsN<View>("actionsView") ?: return@hookAllAfter
             val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
 
-            if (!isForcedByUs(actionsView)) {
-                cacheOriginalActionsStyle(actionsView)
-            }
+            if (isExteragram) {
+                if (!isForcedByUs(actionsView)) {
+                    cacheOriginalActionsStyle(actionsView)
+                }
 
-            markActionsPulled(actionsView, isPulledDown)
+                markActionsPulled(actionsView, isPulledDown)
+            }
 
             if (isPulledDown) {
                 val overlaysLp = overlaysView.layoutParams
@@ -328,13 +294,14 @@ class DisableProfileAvatarBlur : DynHook() {
                 overlaysView.requestLayout()
             }
 
-            applyActionsStyleByState(actionsView)
+            if (isExteragram) {
+                applyActionsStyleByState(actionsView)
+            }
         }
 
         /*
          * fix background turn black
          */
-        val topViewClass = findClass("org.telegram.ui.ProfileActivity\$TopView")
         topViewClass.hookAllBefore("setBackgroundColor", cond = ::isEnabled) { param ->
             if (extendAvatar) {
                 return@hookAllBefore
@@ -385,8 +352,6 @@ class DisableProfileAvatarBlur : DynHook() {
         }
 
         findClass("org.telegram.ui.ActionBar.ActionBar")
-        val androidUtilities = findClass("org.telegram.messenger.AndroidUtilities")
-        val profileActivity = findClass("org.telegram.ui.ProfileActivity")
 
         fun lerp(a: Float, b: Float, f: Float): Float {
             return a + f * (b - a)
@@ -421,20 +386,22 @@ class DisableProfileAvatarBlur : DynHook() {
             pa.call("fixAvatarImageInCenter")
             avatarContainer.requestLayout()
 
-            val actionsView = runCatching {
-                pa.getObj("actionsView")
-            }.getOrNull()
+            if (isExteragram) {
+                val actionsView = runCatching {
+                    pa.getObj("actionsView")
+                }.getOrNull()
 
-            val isPulledDown = runCatching {
-                pa.getObjAs<Boolean>("isPulledDown")
-            }.getOrDefault(false)
+                val isPulledDown = runCatching {
+                    pa.getObjAs<Boolean>("isPulledDown")
+                }.getOrDefault(false)
 
-            if (!isForcedByUs(actionsView)) {
-                cacheOriginalActionsStyle(actionsView)
+                if (!isForcedByUs(actionsView)) {
+                    cacheOriginalActionsStyle(actionsView)
+                }
+
+                markActionsPulled(actionsView, isPulledDown)
+                applyActionsStyleByState(actionsView)
             }
-
-            markActionsPulled(actionsView, isPulledDown)
-            applyActionsStyleByState(actionsView)
         }
 
         profileActivity.hookAllAfter("needLayout", cond = ::isEnabled) { param ->
@@ -447,19 +414,29 @@ class DisableProfileAvatarBlur : DynHook() {
                 pa.getObjAs<Boolean>("openAnimationInProgress")
             val playProfileAnimation = pa.getObjAs<Int>("playProfileAnimation")
 
-            val actionsView = runCatching {
-                pa.getObj("actionsView")
-            }.getOrNull()
-
-            val isPulledDown = runCatching {
-                pa.getObjAs<Boolean>("isPulledDown")
-            }.getOrDefault(false)
-
-            if (!isForcedByUs(actionsView)) {
-                cacheOriginalActionsStyle(actionsView)
+            val actionsView = if (isExteragram) {
+                runCatching {
+                    pa.getObj("actionsView")
+                }.getOrNull()
+            } else {
+                null
             }
 
-            markActionsPulled(actionsView, isPulledDown)
+            val isPulledDown = if (isExteragram) {
+                runCatching {
+                    pa.getObjAs<Boolean>("isPulledDown")
+                }.getOrDefault(false)
+            } else {
+                false
+            }
+
+            if (isExteragram) {
+                if (!isForcedByUs(actionsView)) {
+                    cacheOriginalActionsStyle(actionsView)
+                }
+
+                markActionsPulled(actionsView, isPulledDown)
+            }
 
             if (openAnimationInProgress && playProfileAnimation == 2) {
                 val avatarsViewPager = pa.getObjAs<View>("avatarsViewPager")
@@ -483,17 +460,23 @@ class DisableProfileAvatarBlur : DynHook() {
                 avatarContainer.requestLayout()
             }
 
-            applyActionsStyleByState(actionsView)
+            if (isExteragram) {
+                applyActionsStyleByState(actionsView)
+            }
         }
 
         /*
-         * updateBackgroundPaint 是 actionsView 样式经常刷新的位置。
+         * updateBackgroundPaint
          *
-         * 这里不能在未下拉时强制白色。
-         * 只能：
-         * - 缓存 Telegram 原样；
-         * - 下拉时强制可读；
-         * - 从强制状态回来时恢复原样。
+         * 方案一：非 Exteragram
+         *   保持原逻辑：
+         *   extendAvatar 时，下拉后把 actions 颜色设为黑色，paint alpha = 40。
+         *
+         * 方案二：Exteragram
+         *   缓存原样；
+         *   下拉时强制可读；
+         *   回来时恢复原样；
+         *   不写死普通状态背景，避免大会员按钮变白盒。
          */
         topViewClass.hookAllAfter(
             "updateBackgroundPaint",
@@ -503,12 +486,99 @@ class DisableProfileAvatarBlur : DynHook() {
             val actionsView = pa.getObj("actionsView") ?: return@hookAllAfter
             val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
 
-            if (!isForcedByUs(actionsView)) {
-                cacheOriginalActionsStyle(actionsView)
+            if (isExteragram) {
+                if (!isForcedByUs(actionsView)) {
+                    cacheOriginalActionsStyle(actionsView)
+                }
+
+                markActionsPulled(actionsView, isPulledDown)
+                applyActionsStyleByState(actionsView)
+            } else {
+                if (!extendAvatar) {
+                    return@hookAllAfter
+                }
+
+                if (isPulledDown) {
+                    actionsView.setObj("radialGradient", null)
+                    actionsView.call("setActionsColor", Color.BLACK, false)
+                    actionsView.getObjAs<Paint>("paint").alpha = 40
+                }
+            }
+        }
+    }
+
+    /**
+     * 方案二：Exteragram 专用 draw hook。
+     */
+    private fun hookExteragramBlurDraw() {
+        findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
+            .hookAllBefore("draw", cond = ::isEnabled) { param ->
+                val blurView = param.thisObject
+
+                val actionsView = runCatching {
+                    blurView.getObj("actionsView")
+                }.getOrNull()
+
+                val musicView = runCatching {
+                    blurView.getObj("musicView")
+                }.getOrNull()
+
+                val suggestionView = runCatching {
+                    blurView.getObj("suggestionView")
+                }.getOrNull()
+
+                applyActionsStyleByState(actionsView)
+
+                disableNonActionBlurView(musicView)
+                disableNonActionBlurView(suggestionView)
+
+                param.result = null
+            }
+    }
+
+    /**
+     * 方案二：Exteragram 专用 ProfileActionsView hook。
+     *
+     * 只 hook setActionsColor：
+     * - 缓存 Exteragram 原本动态主题色；
+     * - 下拉状态时保持可读。
+     *
+     * 不 hook onDraw。
+     * 不 hook drawingBlur。
+     */
+    private fun hookExteragramProfileActionsView() {
+        val profileActionsViewClass =
+            findClass("org.telegram.ui.Components.ProfileActionsView")
+
+        profileActionsViewClass.hookAllBefore(
+            "setActionsColor",
+            cond = ::isEnabled
+        ) { param ->
+            if (changingActionsColor) {
+                return@hookAllBefore
             }
 
-            markActionsPulled(actionsView, isPulledDown)
-            applyActionsStyleByState(actionsView)
+            val actionsViewObj = param.thisObject
+            val color = param.args.getOrNull(0) as? Int ?: return@hookAllBefore
+
+            if (!isForcedByUs(actionsViewObj)) {
+                cacheOriginalActionsStyle(actionsViewObj, color)
+            }
+        }
+
+        profileActionsViewClass.hookAllAfter(
+            "setActionsColor",
+            cond = ::isEnabled
+        ) { param ->
+            if (changingActionsColor) {
+                return@hookAllAfter
+            }
+
+            val actionsViewObj = param.thisObject
+
+            if (isActionsPulled(actionsViewObj)) {
+                forceActionsReadableOnAvatar(actionsViewObj)
+            }
         }
     }
 }
