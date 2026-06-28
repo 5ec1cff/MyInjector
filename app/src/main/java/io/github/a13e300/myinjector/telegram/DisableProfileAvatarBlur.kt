@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
@@ -25,52 +24,51 @@ class DisableProfileAvatarBlur : DynHook() {
     private val extendAvatar: Boolean
         get() = TelegramHandler.settings.disableProfileAvatarBlurExtendAvatar
 
-    private fun isNightMode(view: View): Boolean {
-        val uiMode = view.context.resources.configuration.uiMode
-        return (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-    }
-
-    private fun getActionColor(view: View): Int {
-        return if (isNightMode(view)) {
-            Color.WHITE
-        } else {
-            Color.BLACK
-        }
-    }
-
-    private fun fixActionsViewAfterBlurDisabled(actionsViewObj: Any?) {
+    /**
+     * 修复头像区域四个按钮不可见的问题。
+     *
+     * 核心思路：
+     * - 不再依赖 Telegram 原来的 blur 状态。
+     * - 强制四个按钮使用「深色半透明背景 + 白色文字/图标」。
+     * - 这个区域在头像上方，所以不按日夜间主题切换颜色。
+     */
+    private fun forceActionsReadable(actionsViewObj: Any?, invalidate: Boolean = true) {
         val actionsView = actionsViewObj as? View ?: return
 
-        val actionColor = getActionColor(actionsView)
-
-        // 关闭 ProfileActionsView 自己的 blur 状态
-        runCatching {
-            actionsViewObj.call("drawingBlur", false)
-        }
-
-        // 清理可能残留的径向渐变，避免浅色主题下白底白字
+        // 清掉可能残留的径向渐变 / blur shader
         runCatching {
             actionsViewObj.setObj("radialGradient", null)
         }
 
-        // 强制按日夜间模式设置四个按钮图标/文字颜色
+        /*
+         * 强制按钮图标/文字为白色。
+         *
+         * 注意：
+         * 这里不要用日夜间判断。
+         * 四个按钮显示在头像上方，应该始终按浮层按钮处理。
+         */
         runCatching {
-            actionsViewObj.call("setActionsColor", actionColor, false)
+            actionsViewObj.call("setActionsColor", Color.WHITE, false)
         }
 
-        // 不强制改 paint alpha，避免破坏原本按钮背景观感。
-        // 如果你仍然觉得按钮背景太白或太透明，可以取消下面注释微调。
         /*
+         * 强制按钮背景为深色半透明。
+         *
+         * 之前白天浅色主题下出问题，本质就是按钮背景/内容颜色都太浅。
+         * 这里直接把 ProfileActionsView 的 paint 改成黑色半透明。
+         */
         runCatching {
             val paint = actionsViewObj.getObjAs<Paint>("paint")
-            paint.alpha = if (isNightMode(actionsView)) 70 else 45
+            paint.color = Color.BLACK
+            paint.alpha = 88
         }
-        */
 
-        actionsView.invalidate()
+        if (invalidate) {
+            actionsView.invalidate()
+        }
     }
 
-    private fun disableExtraBlurView(viewObj: Any?) {
+    private fun disableNonActionBlurView(viewObj: Any?) {
         runCatching {
             viewObj?.call("drawingBlur", false)
         }
@@ -82,18 +80,15 @@ class DisableProfileAvatarBlur : DynHook() {
 
     override fun onHook() {
         /*
-         * disable blur
+         * 禁用 ProfileGalleryBlurView 的头像模糊绘制。
          *
-         * 原来是直接 hookAllNopIf("draw")。
-         * 但 ProfileGalleryBlurView.draw() 里除了绘制头像模糊外，
-         * 还会顺带更新 actionsView 的 blur / color 状态。
+         * 但是不能像原来一样简单 NOP 掉 draw 后就不管。
+         * 因为 draw 原本会影响 actionsView 的状态。
          *
-         * 如果直接整个 NOP，白天浅色主题 + 浅色头像时，
-         * 四个按钮容易出现白底白字/图标不可见。
-         *
-         * 所以这里改成：
-         * 1. 先手动修复 actionsView / musicView / suggestionView 的状态；
-         * 2. 再阻止原始 draw 执行，从而禁用头像模糊。
+         * 这里做法：
+         * - draw 执行前，强制修复 actionsView 的按钮颜色和背景；
+         * - musicView / suggestionView 仍然可以关闭 blur；
+         * - 最后阻止原 draw 执行。
          */
         findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
             .hookAllBefore("draw", cond = ::isEnabled) { param ->
@@ -111,13 +106,64 @@ class DisableProfileAvatarBlur : DynHook() {
                     blurView.getObj("suggestionView")
                 }.getOrNull()
 
-                fixActionsViewAfterBlurDisabled(actionsView)
-                disableExtraBlurView(musicView)
-                disableExtraBlurView(suggestionView)
+                forceActionsReadable(actionsView)
+                disableNonActionBlurView(musicView)
+                disableNonActionBlurView(suggestionView)
 
                 // 阻止 ProfileGalleryBlurView.draw() 原逻辑执行
                 param.result = null
             }
+
+        /*
+         * 关键补丁：
+         *
+         * 有些情况下，ProfileActionsView 自己会在 drawingBlur / onDraw / setActionsColor
+         * 之后重新把颜色改回 Telegram 的浅色主题状态。
+         *
+         * 所以这里直接 hook ProfileActionsView 本身，
+         * 每次它准备绘制或更新颜色时，都再次强制成深色半透明按钮。
+         */
+        val profileActionsViewClass = findClass("org.telegram.ui.Components.ProfileActionsView")
+
+        profileActionsViewClass.hookAllAfter(
+            "drawingBlur",
+            cond = ::isEnabled
+        ) { param ->
+            forceActionsReadable(param.thisObject)
+        }
+
+        profileActionsViewClass.hookAllBefore(
+            "onDraw",
+            cond = ::isEnabled
+        ) { param ->
+            // onDraw 里不要 invalidate，避免无意义重复刷新
+            forceActionsReadable(param.thisObject, invalidate = false)
+        }
+
+        profileActionsViewClass.hookAllAfter(
+            "setActionsColor",
+            cond = ::isEnabled
+        ) { param ->
+            /*
+             * 防止 Telegram 后续又把按钮改成浅色主题颜色。
+             * 这里不再调用 setActionsColor，避免递归。
+             * 只修 paint 背景。
+             */
+            val actionsViewObj = param.thisObject
+            val actionsView = actionsViewObj as? View ?: return@hookAllAfter
+
+            runCatching {
+                actionsViewObj.setObj("radialGradient", null)
+            }
+
+            runCatching {
+                val paint = actionsViewObj.getObjAs<Paint>("paint")
+                paint.color = Color.BLACK
+                paint.alpha = 88
+            }
+
+            actionsView.invalidate()
+        }
 
         // move shadow up
         findClass("org.telegram.ui.ProfileActivity").hookAllAfter(
@@ -136,8 +182,7 @@ class DisableProfileAvatarBlur : DynHook() {
                 overlaysView.requestLayout()
             }
 
-            // 保险：每次 updateExtraViews 后也修一次按钮颜色
-            fixActionsViewAfterBlurDisabled(actionsView)
+            forceActionsReadable(actionsView)
         }
 
         // fix background turn black
@@ -203,11 +248,10 @@ class DisableProfileAvatarBlur : DynHook() {
             param.thisObject.call("fixAvatarImageInCenter")
             avatarContainer.requestLayout()
 
-            // 保险：动画过程中也修一次按钮颜色
             val actionsView = runCatching {
                 param.thisObject.getObj("actionsView")
             }.getOrNull()
-            fixActionsViewAfterBlurDisabled(actionsView)
+            forceActionsReadable(actionsView)
         }
 
         profileActivity.hookAllAfter("needLayout", cond = ::isEnabled) { param ->
@@ -235,37 +279,24 @@ class DisableProfileAvatarBlur : DynHook() {
                 param.thisObject.call("fixAvatarImageInCenter")
                 avatarContainer.requestLayout()
 
-                // 保险：布局过程中也修一次按钮颜色
                 val actionsView = runCatching {
                     param.thisObject.getObj("actionsView")
                 }.getOrNull()
-                fixActionsViewAfterBlurDisabled(actionsView)
+                forceActionsReadable(actionsView)
             }
         }
 
-        // set color when pulled down
+        // set color to readable when pulled down
         topViewClass.hookAllAfter(
             "updateBackgroundPaint",
             cond = ::isEnabled
         ) { param ->
-            if (!extendAvatar) return@hookAllAfter
             val pa = param.thisObject.getObj("this\$0")
-            val actionsViewObj = pa.getObj("actionsView") ?: return@hookAllAfter
-            val actionsView = actionsViewObj as? View ?: return@hookAllAfter
+            val actionsView = pa.getObj("actionsView") ?: return@hookAllAfter
             val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
 
-            if (isPulledDown) {
-                actionsViewObj.setObj("radialGradient", null)
-
-                // 原代码固定 Color.BLACK。
-                // 这里改成日夜间动态色，避免深色主题下出现黑色图标/文字不可见。
-                actionsViewObj.call("setActionsColor", getActionColor(actionsView), false)
-
-                runCatching {
-                    actionsViewObj.getObjAs<Paint>("paint").alpha = 40
-                }
-
-                actionsView.invalidate()
+            if (isPulledDown || extendAvatar) {
+                forceActionsReadable(actionsView)
             }
         }
     }
