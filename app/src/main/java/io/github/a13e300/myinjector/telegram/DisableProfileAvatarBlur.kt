@@ -16,6 +16,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.setObj
+import java.util.WeakHashMap
 
 class DisableProfileAvatarBlur : DynHook() {
 
@@ -25,46 +26,171 @@ class DisableProfileAvatarBlur : DynHook() {
         get() = TelegramHandler.settings.disableProfileAvatarBlurExtendAvatar
 
     /**
-     * 修复头像区域四个按钮不可见的问题。
+     * 未下拉状态下 Telegram 原本的 actions 样式。
      *
-     * 核心思路：
-     * - 不再依赖 Telegram 原来的 blur 状态。
-     * - 强制四个按钮使用「深色半透明背景 + 白色文字/图标」。
-     * - 这个区域在头像上方，所以不按日夜间主题切换颜色。
+     * actionsColor：
+     *   Telegram 根据当前主题 / accent color 传给 setActionsColor(...) 的动态颜色。
+     *
+     * paintColor / paintAlpha：
+     *   actionsView 背景 Paint 原本颜色和透明度。
      */
-    private fun forceActionsReadable(actionsViewObj: Any?, invalidate: Boolean = true) {
+    private data class NormalActionsStyle(
+        val actionsColor: Int?,
+        val paintColor: Int,
+        val paintAlpha: Int
+    )
+
+    /**
+     * 记录每个 actionsView 当前是否处于下拉/头像展开状态。
+     *
+     * true：
+     *   按钮浮在头像大图上，需要深色半透明背景 + 白色图标文字。
+     *
+     * false：
+     *   普通未下拉状态，需要恢复 Telegram 原本样式。
+     */
+    private val actionsPulledState = WeakHashMap<View, Boolean>()
+
+    /**
+     * 缓存每个 actionsView 未下拉状态下的原始主题样式。
+     */
+    private val normalActionsStyleMap = WeakHashMap<View, NormalActionsStyle>()
+
+    /**
+     * 防止我们自己调用 setActionsColor 后，被 hook 再次处理导致递归/误缓存。
+     */
+    private var changingActionsColor = false
+
+    private fun markActionsPulled(actionsViewObj: Any?, pulled: Boolean) {
+        val actionsView = actionsViewObj as? View ?: return
+        actionsPulledState[actionsView] = pulled
+    }
+
+    private fun isActionsPulled(actionsViewObj: Any?): Boolean {
+        val actionsView = actionsViewObj as? View ?: return false
+        return actionsPulledState[actionsView] == true
+    }
+
+    /**
+     * 缓存 Telegram 未下拉状态下的正常样式。
+     *
+     * 注意：
+     * - 只在未下拉状态缓存；
+     * - 避免把下拉状态下的白色图标/黑色半透明背景缓存进去。
+     */
+    private fun cacheNormalActionsStyle(
+        actionsViewObj: Any?,
+        colorFromSetActionsColor: Int? = null
+    ) {
         val actionsView = actionsViewObj as? View ?: return
 
-        // 清掉可能残留的径向渐变 / blur shader
+        if (isActionsPulled(actionsViewObj)) {
+            return
+        }
+
+        val paintStyle = runCatching {
+            val paint = actionsViewObj.getObjAs<Paint>("paint")
+            paint.color to paint.alpha
+        }.getOrElse {
+            Color.WHITE to 255
+        }
+
+        val oldStyle = normalActionsStyleMap[actionsView]
+
+        normalActionsStyleMap[actionsView] = NormalActionsStyle(
+            actionsColor = colorFromSetActionsColor ?: oldStyle?.actionsColor,
+            paintColor = paintStyle.first,
+            paintAlpha = paintStyle.second
+        )
+    }
+
+    /**
+     * 未下拉状态：恢复 Telegram 原本样式。
+     *
+     * 这里不写死蓝绿色，而是使用缓存到的 Telegram 主题色。
+     */
+    private fun restoreActionsNormal(actionsViewObj: Any?, invalidate: Boolean = true) {
+        val actionsView = actionsViewObj as? View ?: return
+        val normalStyle = normalActionsStyleMap[actionsView]
+
         runCatching {
             actionsViewObj.setObj("radialGradient", null)
         }
 
-        /*
-         * 强制按钮图标/文字为白色。
-         *
-         * 注意：
-         * 这里不要用日夜间判断。
-         * 四个按钮显示在头像上方，应该始终按浮层按钮处理。
-         */
         runCatching {
-            actionsViewObj.call("setActionsColor", Color.WHITE, false)
+            val paint = actionsViewObj.getObjAs<Paint>("paint")
+            if (normalStyle != null) {
+                paint.color = normalStyle.paintColor
+                paint.alpha = normalStyle.paintAlpha
+            } else {
+                /**
+                 * 兜底：
+                 * 如果还没缓存到正常样式，至少保证未下拉按钮背景是白色。
+                 */
+                paint.color = Color.WHITE
+                paint.alpha = 255
+            }
         }
 
-        /*
-         * 强制按钮背景为深色半透明。
+        /**
+         * 恢复 Telegram 原本动态主题色。
          *
-         * 之前白天浅色主题下出问题，本质就是按钮背景/内容颜色都太浅。
-         * 这里直接把 ProfileActionsView 的 paint 改成黑色半透明。
+         * 如果还没缓存到 actionsColor，就不强行改图标/文字颜色，
+         * 让 Telegram 自己当前状态继续生效。
          */
+        val normalColor = normalStyle?.actionsColor
+        if (normalColor != null) {
+            runCatching {
+                changingActionsColor = true
+                actionsViewObj.call("setActionsColor", normalColor, false)
+            }.also {
+                changingActionsColor = false
+            }
+        }
+
+        if (invalidate) {
+            actionsView.invalidate()
+        }
+    }
+
+    /**
+     * 下拉/头像展开状态：强制四个按钮在头像图上可读。
+     *
+     * 用深色半透明背景 + 白色图标文字。
+     */
+    private fun forceActionsReadableOnAvatar(actionsViewObj: Any?, invalidate: Boolean = true) {
+        val actionsView = actionsViewObj as? View ?: return
+
+        runCatching {
+            actionsViewObj.setObj("radialGradient", null)
+        }
+
         runCatching {
             val paint = actionsViewObj.getObjAs<Paint>("paint")
             paint.color = Color.BLACK
             paint.alpha = 88
         }
 
+        runCatching {
+            changingActionsColor = true
+            actionsViewObj.call("setActionsColor", Color.WHITE, false)
+        }.also {
+            changingActionsColor = false
+        }
+
         if (invalidate) {
             actionsView.invalidate()
+        }
+    }
+
+    /**
+     * 根据当前下拉状态选择按钮样式。
+     */
+    private fun fixActionsStyle(actionsViewObj: Any?, invalidate: Boolean = true) {
+        if (isActionsPulled(actionsViewObj)) {
+            forceActionsReadableOnAvatar(actionsViewObj, invalidate)
+        } else {
+            restoreActionsNormal(actionsViewObj, invalidate)
         }
     }
 
@@ -80,15 +206,12 @@ class DisableProfileAvatarBlur : DynHook() {
 
     override fun onHook() {
         /*
-         * 禁用 ProfileGalleryBlurView 的头像模糊绘制。
+         * 禁用头像模糊绘制。
          *
-         * 但是不能像原来一样简单 NOP 掉 draw 后就不管。
-         * 因为 draw 原本会影响 actionsView 的状态。
+         * 不能再简单 hookAllNopIf("draw")，
+         * 因为 ProfileGalleryBlurView.draw() 原本会间接更新 actionsView 的状态。
          *
-         * 这里做法：
-         * - draw 执行前，强制修复 actionsView 的按钮颜色和背景；
-         * - musicView / suggestionView 仍然可以关闭 blur；
-         * - 最后阻止原 draw 执行。
+         * 这里在 NOP draw 前，先修正 actionsView / musicView / suggestionView 状态。
          */
         findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
             .hookAllBefore("draw", cond = ::isEnabled) { param ->
@@ -106,63 +229,115 @@ class DisableProfileAvatarBlur : DynHook() {
                     blurView.getObj("suggestionView")
                 }.getOrNull()
 
-                forceActionsReadable(actionsView)
+                fixActionsStyle(actionsView)
                 disableNonActionBlurView(musicView)
                 disableNonActionBlurView(suggestionView)
 
-                // 阻止 ProfileGalleryBlurView.draw() 原逻辑执行
+                // 阻止 ProfileGalleryBlurView.draw() 原始模糊逻辑执行
                 param.result = null
             }
 
         /*
-         * 关键补丁：
+         * Hook ProfileActionsView。
          *
-         * 有些情况下，ProfileActionsView 自己会在 drawingBlur / onDraw / setActionsColor
-         * 之后重新把颜色改回 Telegram 的浅色主题状态。
-         *
-         * 所以这里直接 hook ProfileActionsView 本身，
-         * 每次它准备绘制或更新颜色时，都再次强制成深色半透明按钮。
+         * 目的：
+         * - 缓存 Telegram 自己算出来的动态主题色；
+         * - 防止禁用 blur 后按钮状态错乱；
+         * - 下拉状态保持可读。
          */
         val profileActionsViewClass = findClass("org.telegram.ui.Components.ProfileActionsView")
 
-        profileActionsViewClass.hookAllAfter(
-            "drawingBlur",
-            cond = ::isEnabled
-        ) { param ->
-            forceActionsReadable(param.thisObject)
-        }
-
         profileActionsViewClass.hookAllBefore(
-            "onDraw",
+            "setActionsColor",
             cond = ::isEnabled
         ) { param ->
-            // onDraw 里不要 invalidate，避免无意义重复刷新
-            forceActionsReadable(param.thisObject, invalidate = false)
+            if (changingActionsColor) return@hookAllBefore
+
+            val actionsViewObj = param.thisObject
+            val color = param.args.getOrNull(0) as? Int ?: return@hookAllBefore
+
+            /*
+             * 只在未下拉状态缓存 Telegram 的动态主题色。
+             */
+            if (!isActionsPulled(actionsViewObj)) {
+                cacheNormalActionsStyle(actionsViewObj, color)
+            }
         }
 
         profileActionsViewClass.hookAllAfter(
             "setActionsColor",
             cond = ::isEnabled
         ) { param ->
-            /*
-             * 防止 Telegram 后续又把按钮改成浅色主题颜色。
-             * 这里不再调用 setActionsColor，避免递归。
-             * 只修 paint 背景。
-             */
+            if (changingActionsColor) return@hookAllAfter
+
             val actionsViewObj = param.thisObject
-            val actionsView = actionsViewObj as? View ?: return@hookAllAfter
 
-            runCatching {
-                actionsViewObj.setObj("radialGradient", null)
+            /*
+             * setActionsColor 后，只修背景。
+             *
+             * 普通状态：
+             *   不再写死图标/文字颜色，由 Telegram 动态主题色负责。
+             *
+             * 下拉状态：
+             *   背景改成黑色半透明，图标文字稍后由 fixActionsStyle 改成白色。
+             */
+            if (isActionsPulled(actionsViewObj)) {
+                runCatching {
+                    actionsViewObj.setObj("radialGradient", null)
+                }
+                runCatching {
+                    val paint = actionsViewObj.getObjAs<Paint>("paint")
+                    paint.color = Color.BLACK
+                    paint.alpha = 88
+                }
+            } else {
+                val actionsView = actionsViewObj as? View
+                val normalStyle = if (actionsView != null) {
+                    normalActionsStyleMap[actionsView]
+                } else {
+                    null
+                }
+
+                runCatching {
+                    actionsViewObj.setObj("radialGradient", null)
+                }
+
+                runCatching {
+                    val paint = actionsViewObj.getObjAs<Paint>("paint")
+                    if (normalStyle != null) {
+                        paint.color = normalStyle.paintColor
+                        paint.alpha = normalStyle.paintAlpha
+                    } else {
+                        paint.color = Color.WHITE
+                        paint.alpha = 255
+                    }
+                }
             }
 
-            runCatching {
-                val paint = actionsViewObj.getObjAs<Paint>("paint")
-                paint.color = Color.BLACK
-                paint.alpha = 88
+            if (actionsViewObj is View) {
+                actionsViewObj.invalidate()
             }
+        }
 
-            actionsView.invalidate()
+        profileActionsViewClass.hookAllAfter(
+            "drawingBlur",
+            cond = ::isEnabled
+        ) { param ->
+            if (changingActionsColor) return@hookAllAfter
+            fixActionsStyle(param.thisObject)
+        }
+
+        profileActionsViewClass.hookAllBefore(
+            "onDraw",
+            cond = ::isEnabled
+        ) { param ->
+            if (changingActionsColor) return@hookAllBefore
+
+            /*
+             * 绘制前再保证一下样式正确。
+             * 这里不要 invalidate，避免绘制循环。
+             */
+            fixActionsStyle(param.thisObject, invalidate = false)
         }
 
         // move shadow up
@@ -171,10 +346,21 @@ class DisableProfileAvatarBlur : DynHook() {
             cond = ::isEnabled
         ) { param ->
             if (extendAvatar) return@hookAllAfter
+
             val pa = param.thisObject
             val overlaysView = pa.getObjAsN<View>("overlaysView") ?: return@hookAllAfter
             val actionsView = pa.getObjAsN<View>("actionsView") ?: return@hookAllAfter
             val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
+
+            /*
+             * 先标记当前状态。
+             * 如果是未下拉，再缓存正常样式。
+             */
+            markActionsPulled(actionsView, isPulledDown)
+
+            if (!isPulledDown) {
+                cacheNormalActionsStyle(actionsView)
+            }
 
             if (isPulledDown) {
                 val overlaysLp = overlaysView.layoutParams
@@ -182,7 +368,7 @@ class DisableProfileAvatarBlur : DynHook() {
                 overlaysView.requestLayout()
             }
 
-            forceActionsReadable(actionsView)
+            fixActionsStyle(actionsView)
         }
 
         // fix background turn black
@@ -230,63 +416,99 @@ class DisableProfileAvatarBlur : DynHook() {
         // fix animation of expanding avatar
         profileActivity.hookAllAfter("setAvatarExpandProgress", cond = ::isEnabled) { param ->
             if (!extendAvatar) return@hookAllAfter
-            val avatarsViewPager = param.thisObject.getObjAs<View>("avatarsViewPager")
-            val value = param.thisObject.getObjAs<Float>("currentExpandAnimatorValue")
-            val avatarContainer = param.thisObject.getObjAs<View>("avatarContainer")
-            val avatarScale = param.thisObject.getObjAs<Float>("avatarScale")
+
+            val pa = param.thisObject
+            val avatarsViewPager = pa.getObjAs<View>("avatarsViewPager")
+            val value = pa.getObjAs<Float>("currentExpandAnimatorValue")
+            val avatarContainer = pa.getObjAs<View>("avatarContainer")
+            val avatarScale = pa.getObjAs<Float>("avatarScale")
             val lp = avatarContainer.layoutParams as ViewGroup.MarginLayoutParams
             val realSize = avatarsViewPager.height
+
             val nh = lerp(
                 androidUtilities.callS("dpf2", 100f) as Float,
                 realSize / avatarScale,
                 value
             ).toInt()
+
             lp.height = nh
             lp.width = nh
             lp.leftMargin = 0
 
-            param.thisObject.call("fixAvatarImageInCenter")
+            pa.call("fixAvatarImageInCenter")
             avatarContainer.requestLayout()
 
             val actionsView = runCatching {
-                param.thisObject.getObj("actionsView")
+                pa.getObj("actionsView")
             }.getOrNull()
-            forceActionsReadable(actionsView)
+
+            val isPulledDown = runCatching {
+                pa.getObjAs<Boolean>("isPulledDown")
+            }.getOrDefault(false)
+
+            markActionsPulled(actionsView, isPulledDown)
+
+            if (!isPulledDown) {
+                cacheNormalActionsStyle(actionsView)
+            }
+
+            fixActionsStyle(actionsView)
         }
 
         profileActivity.hookAllAfter("needLayout", cond = ::isEnabled) { param ->
             if (!extendAvatar) return@hookAllAfter
+
+            val pa = param.thisObject
             val openAnimationInProgress =
-                param.thisObject.getObjAs<Boolean>("openAnimationInProgress")
-            val playProfileAnimation = param.thisObject.getObjAs<Int>("playProfileAnimation")
+                pa.getObjAs<Boolean>("openAnimationInProgress")
+            val playProfileAnimation = pa.getObjAs<Int>("playProfileAnimation")
+
+            val actionsView = runCatching {
+                pa.getObj("actionsView")
+            }.getOrNull()
+
+            val isPulledDown = runCatching {
+                pa.getObjAs<Boolean>("isPulledDown")
+            }.getOrDefault(false)
+
+            markActionsPulled(actionsView, isPulledDown)
+
+            if (!isPulledDown) {
+                cacheNormalActionsStyle(actionsView)
+            }
 
             if (openAnimationInProgress && playProfileAnimation == 2) {
-                val avatarsViewPager = param.thisObject.getObjAs<View>("avatarsViewPager")
-                val value = param.thisObject.getObjAs<Float>("currentExpandAnimatorValue")
-                val avatarContainer = param.thisObject.getObjAs<View>("avatarContainer")
-                val avatarScale = param.thisObject.getObjAs<Float>("avatarScale")
+                val avatarsViewPager = pa.getObjAs<View>("avatarsViewPager")
+                val value = pa.getObjAs<Float>("currentExpandAnimatorValue")
+                val avatarContainer = pa.getObjAs<View>("avatarContainer")
+                val avatarScale = pa.getObjAs<Float>("avatarScale")
                 val lp = avatarContainer.layoutParams as ViewGroup.MarginLayoutParams
                 val realSize = avatarsViewPager.height
+
                 val nh = lerp(
                     androidUtilities.callS("dpf2", 100f) as Float,
                     realSize / avatarScale,
                     value
                 ).toInt()
+
                 lp.height = nh
                 lp.width = nh
                 lp.leftMargin = 0
 
-                param.thisObject.call("fixAvatarImageInCenter")
+                pa.call("fixAvatarImageInCenter")
                 avatarContainer.requestLayout()
-
-                val actionsView = runCatching {
-                    param.thisObject.getObj("actionsView")
-                }.getOrNull()
-                forceActionsReadable(actionsView)
             }
+
+            fixActionsStyle(actionsView)
         }
 
-        // set color to readable when pulled down
+        /*
+         * updateBackgroundPaint 是 Telegram 经常刷新顶部背景 / actionsView 颜色的地方。
+         *
+         * 这里根据 isPulledDown 区分：
+         * - 未下拉：缓存并恢复 Telegram 原主题样式；
+         * - 已下拉：深色半透明背景 + 白色文字图标。
+         */
         topViewClass.hookAllAfter(
             "updateBackgroundPaint",
             cond = ::isEnabled
@@ -295,9 +517,13 @@ class DisableProfileAvatarBlur : DynHook() {
             val actionsView = pa.getObj("actionsView") ?: return@hookAllAfter
             val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
 
-            if (isPulledDown || extendAvatar) {
-                forceActionsReadable(actionsView)
+            markActionsPulled(actionsView, isPulledDown)
+
+            if (!isPulledDown) {
+                cacheNormalActionsStyle(actionsView)
             }
+
+            fixActionsStyle(actionsView)
         }
     }
 }
