@@ -8,6 +8,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.net.Uri
@@ -66,6 +67,8 @@ import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
 import io.github.a13e300.myinjector.ui.showModernInjectedDialog
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.lang.reflect.Field
@@ -136,6 +139,11 @@ abstract class MyDynHook(private val name: String) : DynHook() {
     }
 }
 
+private val RVIC_PATTERN = byteArrayOf(
+    // ftyp rvic
+    0x66, 0x74, 0x79, 0x70, 0x72, 0x76, 0x69, 0x63
+)
+
 class SaveOriginalImage : MyDynHook("saveOriginalImage") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.saveOriginalImage
 
@@ -160,6 +168,30 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
             }.single().toObfsInfo()
         }
         logD("picCache: $picCacheFieldInfo")
+        val picDecoder = XhsHandler.creator.create("picDecoder") { bridge ->
+            val decoderMethod = bridge.findMethod {
+                matcher {
+                    usingEqStrings("XYBitmapFactoryExtensionV2")
+                }
+            }.single()
+
+            decoderMethod.declaredClass!!.findMethod {
+                matcher {
+                    modifiers(Modifier.STATIC)
+                    invokeMethods {
+                        add {
+                            descriptor(decoderMethod.descriptor)
+                        }
+                    }
+                }
+            }.single().toObfsInfo()
+        }
+        logD("picDecoder: $picDecoder")
+        val picDecoderClass = findClass(picDecoder.className)
+        val picDecoderItselfField = picDecoderClass.declaredFields.single {
+            it.type == it.declaringClass && Modifier.isStatic(it.modifiers)
+        }
+            .also { it.isAccessible = true }
         val picCacheClass = findClass(picCacheFieldInfo.className)
         val savePicMethod =
             savePicClass.declaredMethods.single { it.name == savePicMethodInfo.memberName }
@@ -219,15 +251,63 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
             l
         }
 
+        fun isRvcImage(f: File): Boolean {
+            return runCatching {
+                val arr = FileInputStream(f).use {
+                    val arr = ByteArray(12)
+                    it.read(arr)
+                    arr
+                }
+                arr.sliceArray(4 until 12).contentEquals(RVIC_PATTERN)
+            }.getOrElse {
+                logE("check is RvcImage: ", it)
+                false
+            }
+        }
+
         val kotlinPair = findClass("kotlin.Pair")
+
+        fun saveAsPng(f: File): File? {
+            val outf = File(f.parent, f.name + ".png")
+            return runCatching {
+                val bitmap = picDecoderClass.callS(
+                    picDecoder.memberName,
+                    picDecoderItselfField.get(null),
+                    f.path,
+                    null,
+                    true,
+                    2,
+                    null
+                ) as Bitmap
+                logD("write to $outf")
+                FileOutputStream(outf).use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                outf
+            }.onFailure {
+                logE("saveAsPng bitmap $outf failed", it)
+            }.getOrNull()
+        }
+
+        fun handleSaveCachedPicCommon(f: File, param: HookParam, withUrl: Boolean) {
+            val realF = if (isRvcImage(f)) {
+                logD("try save rvc as png")
+                saveAsPng(f)
+            } else {
+                f
+            }
+            logD("save original $realF (withUrl=$withUrl)")
+            param.args.last().apply {
+                call("onNext", kotlinPair.newInst("success", realF))
+                call("onComplete")
+            }
+            param.result = null
+            param.throwable = null
+        }
 
         fun handleSaveCachedPic(param: HookParam) {
             val f = picCacheFileResolver(param)
-            logD("save original $f")
-            param.args.last().apply {
-                call("onNext", kotlinPair.newInst("success", f))
-                call("onComplete")
-            }
+            handleSaveCachedPicCommon(f, param, false)
         }
 
         if (version < 2) {
@@ -310,11 +390,7 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
                     param.throwable = null
                     param.result = null
                     val f = it.f
-                    logD("save original with url $f")
-                    param.args.last().apply {
-                        call("onNext", kotlinPair.newInst("success", f))
-                        call("onComplete")
-                    }
+                    handleSaveCachedPicCommon(f, param, true)
                 }
             }
 
@@ -342,7 +418,6 @@ class SaveOriginalImage : MyDynHook("saveOriginalImage") {
                     logD("savePic before type $type")
                     if (type == 0) {
                         handleSaveCachedPic(param)
-                        param.result = null
                     } else {
                         handleSavePicWithUrlBefore()
                     }
@@ -1028,7 +1103,7 @@ class SettingsHook : IHook() {
 object XhsHandler : DynHookManager<XhsHookConfig>() {
     private var _creator: ObfsTableCreator? = null
     val creator: ObfsTableCreator
-        get() = _creator ?: ObfsTableCreator("", 6, appInfo = loadPackageParam.appInfo)
+        get() = _creator ?: ObfsTableCreator("", 7, appInfo = loadPackageParam.appInfo)
             .also { _creator = it }
     val hookErrors = mutableMapOf<String, String>()
     val fileProviderClass by lazy { findClass("androidx.core.content.FileProvider") }
