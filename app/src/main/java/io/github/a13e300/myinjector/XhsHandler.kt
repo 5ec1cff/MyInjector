@@ -46,6 +46,7 @@ import io.github.a13e300.myinjector.arch.findPathToObject
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
+import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
@@ -54,6 +55,7 @@ import io.github.a13e300.myinjector.arch.hookCAfter
 import io.github.a13e300.myinjector.arch.hookReplace
 import io.github.a13e300.myinjector.arch.newInst
 import io.github.a13e300.myinjector.arch.newInstAs
+import io.github.a13e300.myinjector.arch.preference
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
@@ -860,6 +862,72 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
     }
 
     override fun onPrefClicked(preference: Preference): Boolean {
+        if (preference.key == "checkHotPatch") {
+
+            val activity = activityCtx.findBaseActivity()
+
+            thread {
+                val res = XhsHandler.checkHotPatch()
+                activity.runOnUiThread {
+
+
+                    showModernInjectedDialog(
+                        context,
+                        "热补丁检查",
+                        modernInjectedScrollContent(
+                            context,
+                            modernInjectedMessageView(context, res),
+                            0.45f,
+                        ),
+                        listOf(
+                            ModernInjectedDialogAction("分享") {
+                                thread {
+                                    runCatching {
+                                        val f =
+                                            File(context.filesDir, "myinjector-checkhotpatch.txt")
+                                        f.writeText(res.toString())
+                                        logD("wrote file $f")
+                                        val uri = XhsHandler.fileProviderClass.callS(
+                                            "getUriForFile",
+                                            context,
+                                            "com.xingin.xhs.provider",
+                                            f
+                                        ) as Uri
+                                        logD("uri $uri")
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                Intent(Intent.ACTION_SEND)
+                                                    .putExtra(Intent.EXTRA_STREAM, uri)
+                                                    .setType("text/plain"),
+                                                ""
+                                            )
+                                                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        )
+                                    }.onFailure { t ->
+                                        logE("share failed: ", t)
+                                        runCatching {
+                                            activityCtx.findBaseActivity().runOnUiThread {
+                                                Toast.makeText(
+                                                    context,
+                                                    "分享失败，请尝试复制",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            ModernInjectedDialogAction("复制") {
+                                context.getSystemService(ClipboardManager::class.java)
+                                    .setPrimaryClip(ClipData.newPlainText("", res))
+                            },
+                            ModernInjectedDialogAction("关闭"),
+                        ),
+                    )
+                }
+            }
+            return true
+        }
         return false
     }
 
@@ -913,6 +981,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 "提取视频链接",
                 "extractVideoLink",
                 summary = "在视频页面显示悬浮按钮，点击可提取视频链接"
+            )
+            preference(
+                "检查热补丁",
+                "checkHotPatch",
+                summary = "检查应用内置热补丁是否与 hook 冲突"
             )
         }
     }
@@ -1152,5 +1225,38 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         val obj = JSONObject()
         setting.writeToJson(obj)
         output.write(obj.toString().toByteArray())
+    }
+
+    fun checkHotPatch(): CharSequence {
+        val res = SpannableStringBuilder()
+        runCatching {
+            val patchProxyClass = findClass("com.xingin.robust.PatchProxy")
+            val quickRedirects =
+                patchProxyClass.getObjS("changeQuickRedirects") as Map<Class<*>, Any?>
+            if (quickRedirects.isEmpty()) {
+                res.append("无热补丁\n")
+                return@runCatching
+            }
+            quickRedirects.keys.forEach { clz ->
+                runCatching {
+                    val associated = creator.obfsTable.filter { it.value.className == clz.name }
+                    if (associated.isEmpty()) {
+                        res.append("$clz: 无影响\n")
+                    } else {
+                        res.append(
+                            "$clz: 影响 ${associated.keys.joinToString(",")}\n",
+                            ForegroundColorSpan(Color.RED), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                }.onFailure {
+                    logE("check $clz: ", it)
+                    res.append("$clz: 错误： ${it.message}")
+                }
+            }
+        }.onFailure {
+            logE("check patch proxy", it)
+            res.append("错误： ${it.message}")
+        }
+        return res
     }
 }
