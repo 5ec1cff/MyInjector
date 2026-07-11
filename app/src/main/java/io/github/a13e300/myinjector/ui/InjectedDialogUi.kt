@@ -77,10 +77,10 @@ internal fun showModernInjectedDialog(
 
     card.addView(
         content,
-        LinearLayout.LayoutParams(
+        (content.layoutParams as? LinearLayout.LayoutParams ?: LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
+        )).apply {
             if (actions.isNotEmpty()) bottomMargin = context.dp(18)
         },
     )

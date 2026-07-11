@@ -869,8 +869,6 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
             thread {
                 val res = XhsHandler.checkHotPatch()
                 activity.runOnUiThread {
-
-
                     showModernInjectedDialog(
                         context,
                         "热补丁检查",
@@ -927,6 +925,14 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 }
             }
             return true
+        } else if (preference.key == "clearHotPatch") {
+            runCatching {
+                XhsHandler.clearHotPatch()
+                Toast.makeText(activityCtx, "清理成功", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                logE("clear hot patch", it)
+                Toast.makeText(activityCtx, "清理失败： ${it.message}", Toast.LENGTH_SHORT).show()
+            }
         }
         return false
     }
@@ -986,6 +992,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 "检查热补丁",
                 "checkHotPatch",
                 summary = "检查应用内置热补丁是否与 hook 冲突"
+            )
+            preference(
+                "清理热补丁",
+                "clearHotPatch",
+                summary = "临时清理热补丁，重启恢复"
             )
         }
     }
@@ -1232,19 +1243,20 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         runCatching {
             val patchProxyClass = findClass("com.xingin.robust.PatchProxy")
             val quickRedirects =
-                patchProxyClass.getObjS("changeQuickRedirects") as Map<Class<*>, Any?>
+                patchProxyClass.getObjS("changeQuickRedirects") as Map<Class<*>, Any>
             if (quickRedirects.isEmpty()) {
                 res.append("无热补丁\n")
                 return@runCatching
             }
-            quickRedirects.keys.forEach { clz ->
+            quickRedirects.forEach { (clz, c) ->
                 runCatching {
                     val associated = creator.obfsTable.filter { it.value.className == clz.name }
+                    val loc = getDexLocation(c.javaClass)
                     if (associated.isEmpty()) {
-                        res.append("$clz: 无影响\n")
+                        res.append("$clz: $c [$loc] (无直接影响)\n")
                     } else {
                         res.append(
-                            "$clz: 影响 ${associated.keys.joinToString(",")}\n",
+                            "$clz: $c [$loc] (影响 ${associated.keys.joinToString(",")})\n",
                             ForegroundColorSpan(Color.RED), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
@@ -1259,4 +1271,15 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         }
         return res
     }
+
+    fun clearHotPatch() {
+        val patchProxyClass = findClass("com.xingin.robust.PatchProxy")
+        val quickRedirects =
+            patchProxyClass.getObjS("changeQuickRedirects") as MutableMap<Class<*>, Any>
+        quickRedirects.clear()
+    }
 }
+
+fun getDexLocation(clz: Class<*>): String =
+    clz.getObj("dexCache").getObjAs<String>("location")
+
