@@ -90,8 +90,9 @@ fun toHtmlText(title: String?, desc: String?, url: String): String {
     if (hasPre) sb.append("<br>")
     sb.append("<a href=\"$url\">$text</a>")
     if (desc?.isNotEmpty() == true) {
-        sb.append("<br>")
-        sb.append(desc.split("\n").joinToString("<br>") { "<pre>$it</pre>" })
+        sb.append("<br><blockquote>")
+        sb.append(desc.split("\n").joinToString("<br>"))
+        sb.append("</blockquote>")
     }
     return sb.toString()
 }
