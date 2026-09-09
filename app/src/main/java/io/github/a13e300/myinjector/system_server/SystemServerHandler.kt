@@ -18,8 +18,6 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.deoptimize
-import io.github.a13e300.myinjector.arch.findClass
-import io.github.a13e300.myinjector.arch.findClassN
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
@@ -43,11 +41,19 @@ import kotlin.String
 import kotlin.Suppress
 import kotlin.also
 import kotlin.getValue
+import kotlin.io.inputStream
+import kotlin.io.startsWith
+import kotlin.io.use
+import kotlin.io.writeBytes
 import kotlin.lazy
 import kotlin.let
 import kotlin.onFailure
 import kotlin.run
 import kotlin.runCatching
+import kotlin.text.isEmpty
+import kotlin.text.last
+import kotlin.text.removeSuffix
+import kotlin.text.startsWith
 
 fun matchSimple(p: String, s: String?): Boolean {
     if (s == null) return false
@@ -81,6 +87,7 @@ class SystemServerHandler : IHook() {
         hookForceNewTask()
         hookStatusBarAppearance()
         hookNoSwipeToKill()
+        hookHyperOSAvoidMoveToFront()
         broadcastManager = BroadcastManager("MyInjector-SystemServer")
         runConfigListener()
     }
@@ -433,5 +440,23 @@ class SystemServerHandler : IHook() {
         }
     }.onFailure {
         logE("hookMiui12DexOptRestriction", it)
+    }
+
+    private fun hookHyperOSAvoidMoveToFront() = runCatching {
+        val acr = findClass("com.android.server.wm.ActivityRecord")
+        val packageNameField = acr.getDeclaredField("packageName").also { it.isAccessible = true }
+        val launchedFromPackageField =
+            acr.getDeclaredField("launchedFromPackage").also { it.isAccessible = true }
+        findClass("com.android.server.wm.ActivityStarterImpl").hookAllBefore("avoidMoveToFront") { param ->
+            if (!config.fixHyperOSAvoidMoveToFromt) return@hookAllBefore
+            val r = param.args[0]
+            val pkg = packageNameField.get(r)
+            val lfp = launchedFromPackageField.get(r)
+            if (pkg == lfp) {
+                param.result = false
+            }
+        }
+    }.onFailure {
+        logE("hookHyperOSAvoidMoveToFront", it)
     }
 }

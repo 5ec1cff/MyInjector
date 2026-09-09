@@ -36,4 +36,5 @@ message SystemServerConfig {
   optional bool noSwipeToKillLockedProcess = 12;
   optional bool noSwipeToKillNoRestrictProcess = 13;
   optional bool bypassShellDexOptRestriction = 14;
+  optional bool fixHyperOSAvoidMoveToFromt = 15;
 }

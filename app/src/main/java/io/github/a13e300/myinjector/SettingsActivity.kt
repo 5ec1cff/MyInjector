@@ -1055,6 +1055,12 @@ class SettingsActivity : Activity() {
                     false,
                 )
             )
+            .setFixHyperOSAvoidMoveToFromt(
+                prefs.getBoolean(
+                    "fixHyperOSAvoidMoveToFront",
+                    false,
+                )
+            )
             .addAllClipboardWhitelistPackages(
                 Arrays.stream<String?>(
                     prefs.getString("clipboardWhitelistPackages", "")!!.trim { it <= ' ' }

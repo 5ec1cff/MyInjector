@@ -35,6 +35,7 @@ android
 - 允许移除某些 miui 锁定的 intent
 - <a id="noswipetokill"></a>（小米）划卡不杀最近任务中上锁应用或电量管控无限制应用
 - 绕过 MIUI 低版本对 pm compile 命令的限制，允许通过命令主动触发 AOT 编译
+- 修复 HyperOS 下快捷方式 App （如 Anywhere）拉起其他 App 后阻止该 App 拉起自身 Activity 的问题
 - 其他功能详见设置
 
 ### 百度输入法

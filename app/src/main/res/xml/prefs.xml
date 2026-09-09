@@ -79,6 +79,11 @@
             android:key="bypassShellDexOptRestriction"
             android:summary="绕过小米低版本的 pm compile 命令限制（允许强制编译）"
             android:title="绕过 pm compile 限制" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="fixHyperOSAvoidMoveToFront"
+            android:summary="修复 HyperOS 下快捷方式 App 拉起其他 App 后阻止该 App 拉起自身 Activity 的问题"
+            android:title="修复 avoidMoveToFront" />
         <Preference
             android:key="commit"
             android:persistent="false"
