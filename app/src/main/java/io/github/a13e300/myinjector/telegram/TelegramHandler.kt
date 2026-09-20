@@ -34,6 +34,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(Settings())
         subHook(ContactPermission())
         subHook(AutoCheckDeleteMessageOption())
+        subHook(CustomEmojiMapping)
 
         /*
         subHook(StickerLoadGuard())
@@ -44,7 +45,6 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(LongClickMention())
         subHook(FakeInstallPermission())
         subHook(NoGoogleMaps())
-        subHook(CustomEmojiMapping)
         subHook(EmojiStickerMenu())
         subHook(FixHasAppToOpen())
         subHook(DefaultSearchTab())
