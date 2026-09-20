@@ -37,6 +37,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(CustomEmojiMapping)
         subHook(DisableMiuiVarFont())
         subHook(MutualContact())
+        subHook(FakeInstallPermission())
 
         /*
         subHook(StickerLoadGuard())
@@ -44,7 +45,6 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(AutoUncheckSharePhoneNumber())
         subHook(DisableVoiceOrCameraButton())
         subHook(LongClickMention())
-        subHook(FakeInstallPermission())
         subHook(NoGoogleMaps())
         subHook(EmojiStickerMenu())
         subHook(FixHasAppToOpen())
