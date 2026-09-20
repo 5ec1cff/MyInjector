@@ -35,6 +35,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(ContactPermission())
         subHook(AutoCheckDeleteMessageOption())
         subHook(CustomEmojiMapping)
+        subHook(DisableMiuiVarFont())
 
         /*
         subHook(StickerLoadGuard())
@@ -59,7 +60,6 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
-        subHook(DisableMiuiVarFont())
         subHook(DisableProfileAvatarBlur())*/
         _creator?.let {
             it.persist()
