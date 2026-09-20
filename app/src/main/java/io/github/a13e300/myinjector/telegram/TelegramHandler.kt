@@ -40,15 +40,15 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(FakeInstallPermission())
         subHook(NoGoogleMaps())
         subHook(DisableVoiceOrCameraButton())
+        subHook(DefaultSearchTab())
 
-        /*
+        // TODO: deobf:
         subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
         subHook(AutoUncheckSharePhoneNumber())
         subHook(LongClickMention())
         subHook(EmojiStickerMenu())
         subHook(FixHasAppToOpen())
-        subHook(DefaultSearchTab())
         subHook(CustomMapPosition())
         subHook(AvatarPagerScrollToCurrent())
         subHook(SendImageWithHighQualityByDefault())
@@ -60,7 +60,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
-        subHook(DisableProfileAvatarBlur())*/
+        subHook(DisableProfileAvatarBlur())
         _creator?.let {
             it.persist()
             it.close()
