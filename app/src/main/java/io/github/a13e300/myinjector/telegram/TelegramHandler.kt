@@ -39,12 +39,12 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(MutualContact())
         subHook(FakeInstallPermission())
         subHook(NoGoogleMaps())
+        subHook(DisableVoiceOrCameraButton())
 
         /*
         subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
         subHook(AutoUncheckSharePhoneNumber())
-        subHook(DisableVoiceOrCameraButton())
         subHook(LongClickMention())
         subHook(EmojiStickerMenu())
         subHook(FixHasAppToOpen())
