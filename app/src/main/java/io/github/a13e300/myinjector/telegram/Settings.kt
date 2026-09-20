@@ -9,17 +9,23 @@ import android.view.View
 import io.github.a13e300.myinjector.SettingDialog
 import io.github.a13e300.myinjector.addSettingsIntentInterceptor
 import io.github.a13e300.myinjector.arch.IHook
+import io.github.a13e300.myinjector.arch.ObfsTable
+import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.category
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
+import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.newInst
 import io.github.a13e300.myinjector.arch.preference
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.switchPreference
+import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logE
+import org.luckypray.dexkit.query.enums.StringMatchType
+import java.lang.reflect.Modifier
 
 class TgSettingsDialog(context: Context) : SettingDialog(context) {
     override fun onPrefChanged(preference: Preference, newValue: Any?): Boolean {
@@ -391,8 +397,144 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 }
 
 class Settings : IHook() {
+    fun deobf(
+        creator: ObfsTableCreator
+    ): ObfsTable {
+
+        val settingsFragment = creator.create("SettingsActivity") { bridge ->
+            bridge.findClass {
+                matcher {
+                    usingStrings("store bundled ")
+                    superClass = creator.obfsTable["BaseFragment"]!!.className
+                }
+            }.single().toObfsInfo()
+        }
+
+        // it is in fact UItem.ofFactory, since getFactory only has one caller
+        val uItemOfFactory = creator.create("UItemOfFactory") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    // "UItemFactory was not setuped: "
+                    usingStrings {
+                        add("UItemFactory", StringMatchType.StartsWith)
+                    }
+                }
+            }.single().toObfsInfo()
+        }
+
+        // so we find the factoryInstance to retrieve the factory
+        val factoryInstancesField = creator.create("UItemFieldFactoryInstances") { bridge ->
+            bridge.findField {
+                matcher {
+                    declaredClass = uItemOfFactory.className
+                    readMethods {
+                        add {
+                            name(uItemOfFactory.memberName)
+                            declaredClass(uItemOfFactory.className)
+                        }
+                    }
+                    modifiers(Modifier.STATIC)
+                    type("java.util.HashMap")
+                }
+            }.single().toObfsInfo()
+        }
+
+        val uItemFactoryViewTypeField = creator.create("UItemFactoryViewTypeField") { bridge ->
+            bridge.findField {
+                matcher {
+                    readMethods {
+                        add {
+                            name(uItemOfFactory.memberName)
+                            declaredClass(uItemOfFactory.className)
+                        }
+                    }
+                    type("int")
+                }
+            }.single().toObfsInfo()
+        }
+
+        val settingsActivityFillItems = creator.create("SettingsActivityFillItems") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    declaredClass(settingsFragment.className)
+                    usingStrings("PREMIUM_GRACE")
+                }
+            }.single().toObfsInfo()
+        }
+
+        val settingsActivityOnClick = creator.create("SettingsActivityOnClick") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    declaredClass(settingsFragment.className)
+                    addInvoke {
+                        name("<init>")
+                        declaredClass("org.telegram.ui.UserInfoActivity")
+                    }
+                }
+            }.single().toObfsInfo()
+        }
+
+        // called by SettingsActivity.fillItems
+        val settingsActivitySettingsCellFactoryOf =
+            creator.create("SettingsActivitySettingsCellFactoryOf") { bridge ->
+                bridge.findMethod {
+                    matcher {
+                        addCaller {
+                            declaredClass(settingsFragment.className)
+                            name(settingsActivityFillItems.memberName)
+                        }
+                        modifiers(Modifier.STATIC)
+                        paramTypes(
+                            "int",
+                            "int",
+                            "int",
+                            "int",
+                            "java.lang.CharSequence",
+                            "java.lang.CharSequence",
+                            "java.lang.CharSequence"
+                        )
+                    }
+                }.single().toObfsInfo()
+            }
+
+        // also called by fillItems
+        val uItemAsShadow = creator.create("UItemAsShadow") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    addCaller {
+                        declaredClass(settingsFragment.className)
+                        name(settingsActivityFillItems.memberName)
+                    }
+                    declaredClass(uItemOfFactory.className)
+                    modifiers(Modifier.STATIC)
+                    paramTypes("java.lang.CharSequence")
+                }
+            }.single().toObfsInfo()
+        }
+
+        // we need UItem.id and UItem.viewType(AdapterWithDiffUtils.Item.viewType)
+        // AdapterWithDiffUtils.Item.viewType is the only int field in its declaring class, so we don't need to find it by dexkit
+        // we only find the id field by finding the only method write it
+        val uItemId = creator.create("UItemId") { bridge ->
+            bridge.findField {
+                matcher {
+                    declaredClass(uItemOfFactory.className)
+                    addWriteMethod {
+                        declaredClass(uItemOfFactory.className)
+                        modifiers(Modifier.STATIC)
+                        paramTypes("int", "java.lang.CharSequence")
+                    }
+                    type("int")
+                }
+            }.single().toObfsInfo()
+        }
+
+        return creator.obfsTable
+    }
+
     @Suppress("UNCHECKED_CAST")
     override fun onHook() {
+        val table = deobf(TelegramHandler.creator)
         addSettingsIntentInterceptor {
             TgSettingsDialog(it).show()
         }
@@ -420,42 +562,72 @@ class Settings : IHook() {
             return
         }
 
-        findClassOrNull("org.telegram.ui.SettingsActivity\$SettingCell\$Factory")?.let { settingsCellFactoryClass ->
-            val settingsActivity = findClass("org.telegram.ui.SettingsActivity")
-            val uItemClass = findClass("org.telegram.ui.Components.UItem")
+        val settingsActivitySettingsCellFactoryOf = table["SettingsActivitySettingsCellFactoryOf"]!!
+        val settingsActivityInfo = table["SettingsActivity"]!!
+        val UItemFieldFactoryInstances = table["UItemFieldFactoryInstances"]!!
+        val SettingsActivityFillItems = table["SettingsActivityFillItems"]!!
+        val UItemAsShadow = table["UItemAsShadow"]!!
+        val UItemId = table["UItemId"]!!
+        val SettingsActivityOnClick = table["SettingsActivityOnClick"]!!
+
+        findClassOrNull(settingsActivitySettingsCellFactoryOf.className)?.let { settingsCellFactoryClass ->
+            val settingsActivity = findClass(settingsActivityInfo.className)
+            val uItemClass = findClass(UItemFieldFactoryInstances.className)
+            val uItemViewTypeField =
+                uItemClass.superclass.declaredFields.single { it.type == Integer.TYPE }
+                    .also { it.isAccessible = true }
+            val uItemIdField =
+                uItemClass.getDeclaredField(UItemId.memberName).also { it.isAccessible = true }
             val viewType by lazy {
                 runCatching {
-                    uItemClass.callS("getFactory", settingsCellFactoryClass)
+                    // UItem.getFactory(SettingsActivity$SettingCell$Factory.class)
+                    (uItemClass.getObjS(UItemFieldFactoryInstances.memberName) as HashMap<*, *>)
+                        .get(findClass(settingsActivitySettingsCellFactoryOf.className))
                         .getObj("viewType") as Int
                 }.onFailure { t ->
                     logE("get ViewType", t)
                 }.getOrDefault(-1)
             }
             val myId = 11451419
-            settingsActivity.hookAllAfter("fillItems") { param ->
-                val items = param.args[0] as java.util.ArrayList<Any?>
+            val fillsItemsMethod =
+                settingsActivity.declaredMethods.single { it.name == SettingsActivityFillItems.memberName }
+            val fillsItemsItemsParamIdx =
+                fillsItemsMethod.parameterTypes.indexOfFirst { it == ArrayList::class.java }
+            require(fillsItemsItemsParamIdx >= 0)
+            val onClickMethod =
+                settingsActivity.declaredMethods.single { it.name == SettingsActivityOnClick.memberName }
+            val onClickItemParamIdx = onClickMethod.parameterTypes.indexOfFirst { it == uItemClass }
+            val onClickMethodIsStatic = Modifier.isStatic(onClickMethod.modifiers)
+            require(onClickItemParamIdx >= 0)
+            settingsActivity.hookAllAfter(SettingsActivityFillItems.memberName) { param ->
+                val items = param.args[fillsItemsItemsParamIdx] as java.util.ArrayList<Any?>
                 fun addSettings(idx: Int) {
                     runCatching {
-                        val shadow = uItemClass.callS("asShadow", null as String?)
+                        val shadow = uItemClass.callS(UItemAsShadow.memberName, null as String?)
                         items.add(idx, shadow)
                     }
                     items.add(
                         idx,
                         settingsCellFactoryClass.callS(
-                            "of",
+                            settingsActivitySettingsCellFactoryOf.memberName,
                             myId,
                             0,
                             0,
                             0,
                             "MyInjector",
-                            "MyInjector Settings"
+                            "MyInjector Settings",
+                            null
                         )
                     )
                 }
                 runCatching {
                     // always before id == 1
                     val idx =
-                        items.indexOfFirst { it?.getObjAs<Int>("id") == 1 && it?.getObj("viewType") == viewType }
+                        items.indexOfFirst {
+                            it != null && uItemIdField.getInt(it) == 1 && uItemViewTypeField.getInt(
+                                it
+                            ) == viewType
+                        }
                             .let { if (it < 0) 0 else it }
                     addSettings(idx)
                 }.onFailure {
@@ -463,9 +635,10 @@ class Settings : IHook() {
                     addSettings(0)
                 }
             }
-            settingsActivity.hookAllAfter("onClick") { param ->
-                if (param.args[0].getObjAs<Int>("id") == myId) {
-                    TgSettingsDialog(param.thisObject.call("getContext") as Context).show()
+            settingsActivity.hookAllAfter(SettingsActivityOnClick.memberName) { param ->
+                if (uItemIdField.getInt(param.args[onClickItemParamIdx]) == myId) {
+                    val self = if (onClickMethodIsStatic) param.args[0] else param.thisObject
+                    TgSettingsDialog(self.call("getContext") as Context).show()
                 }
             }
         }
