@@ -36,11 +36,11 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(AutoCheckDeleteMessageOption())
         subHook(CustomEmojiMapping)
         subHook(DisableMiuiVarFont())
+        subHook(MutualContact())
 
         /*
         subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
-        subHook(MutualContact())
         subHook(AutoUncheckSharePhoneNumber())
         subHook(DisableVoiceOrCameraButton())
         subHook(LongClickMention())
