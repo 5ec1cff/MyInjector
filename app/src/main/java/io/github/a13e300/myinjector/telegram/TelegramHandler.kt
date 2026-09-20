@@ -33,12 +33,12 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
         subHook(Settings())
         subHook(ContactPermission())
+        subHook(AutoCheckDeleteMessageOption())
 
         /*
         subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
         subHook(MutualContact())
-        subHook(AutoCheckDeleteMessageOption())
         subHook(AutoUncheckSharePhoneNumber())
         subHook(DisableVoiceOrCameraButton())
         subHook(LongClickMention())
