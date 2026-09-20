@@ -32,11 +32,12 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         }
 
         subHook(Settings())
+        subHook(ContactPermission())
 
+        /*
         subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
         subHook(MutualContact())
-        subHook(ContactPermission())
         subHook(AutoCheckDeleteMessageOption())
         subHook(AutoUncheckSharePhoneNumber())
         subHook(DisableVoiceOrCameraButton())
@@ -59,7 +60,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
         subHook(DisableMiuiVarFont())
-        subHook(DisableProfileAvatarBlur())
+        subHook(DisableProfileAvatarBlur())*/
         _creator?.let {
             it.persist()
             it.close()
