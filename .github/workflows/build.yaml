@@ -35,10 +35,17 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 17
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Build DexKit
+        run: |
+          git clone -b ext https://github.com/5ec1cff/DexKit --depth=1
+          cd DexKit
+          chmod +x gradlew
+          ./gradlew :dexkit-android:publishToMavenLocal
 
       - name: Build with Gradle
         run: |
