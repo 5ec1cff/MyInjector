@@ -33,8 +33,13 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
         val v = newValue as Boolean
         when (preference.key) {
             "enabled" -> settings.disabled = !v
+
             "showMsgId" ->
                 settings.showMsgId = v
+
+            "prohibitChannelSwitching" ->
+                settings.prohibitChannelSwitching = v
+
             "autoCheckDeleteMessageOption" ->
                 settings.autoCheckDeleteMessageOption = v
 
@@ -252,6 +257,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "在消息时间处显示消息 ID 、管理员头衔"
                 )
                 switchPreference(
+                    "阻止切换频道",
+                    "prohibitChannelSwitching",
+                    "阻止在频道底部上拉时切换到其他频道"
+                )
+                switchPreference(
                     "消息编辑框禁用语音或相机按钮",
                     "disableVoiceOrCameraButton",
                 )
@@ -310,6 +320,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "showMsgId" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.showMsgId
+
+            "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.prohibitChannelSwitching
 
             "autoCheckDeleteMessageOption" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.autoCheckDeleteMessageOption
