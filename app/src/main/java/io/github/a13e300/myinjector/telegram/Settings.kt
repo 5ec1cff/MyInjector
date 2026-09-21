@@ -67,6 +67,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "emojiStickerMenu" ->
                 settings.emojiStickerMenu = v
 
+            "useSystemEmoji" ->
+                settings.useSystemEmoji = v
+
             "fakeInstallPermission" ->
                 settings.fakeInstallPermission = v
 
@@ -226,6 +229,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "emojiStickerMenu",
                     "在 Emoji 和 Sticker Pack 列表对话框的菜单增加查看创建者"
                 )
+                switchPreference(
+                    "使用系统 emoji",
+                    "useSystemEmoji",
+                )
             }
 
             category("链接优化") {
@@ -353,6 +360,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "emojiStickerMenu" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.emojiStickerMenu
+
+            "useSystemEmoji" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.useSystemEmoji
 
             "fakeInstallPermission" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.fakeInstallPermission

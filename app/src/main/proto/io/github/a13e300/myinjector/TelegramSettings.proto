@@ -38,4 +38,5 @@ message TelegramSettings {
   optional bool disableProfileAvatarBlurExtendAvatar = 29;
   optional bool showMsgId = 30;
   optional bool prohibitChannelSwitching = 31;
+  optional bool useSystemEmoji = 32;
 }

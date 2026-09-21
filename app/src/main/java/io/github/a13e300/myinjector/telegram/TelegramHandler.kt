@@ -46,6 +46,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(AlwaysShowStorySaveIcon())
         subHook(ShowMsgId())
         subHook(ProhibitChannelSwitching())
+        subHook(UseSystemEmoji())
 
         // TODO: deobf:
         subHook(StickerLoadGuard())
