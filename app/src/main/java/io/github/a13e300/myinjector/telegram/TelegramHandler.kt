@@ -43,6 +43,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(DefaultSearchTab())
         subHook(HidePhoneNumber())
         subHook(AutoUncheckSharePhoneNumber())
+        subHook(AlwaysShowStorySaveIcon())
 
         // TODO: deobf:
         subHook(StickerLoadGuard())
@@ -53,7 +54,6 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(CustomMapPosition())
         subHook(AvatarPagerScrollToCurrent())
         subHook(SendImageWithHighQualityByDefault())
-        subHook(AlwaysShowStorySaveIcon())
         subHook(RemoveArchiveFolder())
         subHook(AlwaysShowDownloadManager())
         subHook(HideFloatFab())
