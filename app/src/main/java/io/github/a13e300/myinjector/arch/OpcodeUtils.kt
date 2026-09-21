@@ -67,7 +67,7 @@ data class Invoke(
 )
 
 fun decodeInvoke(arr: CharArray, pos: Int): Invoke? {
-    require(pos + 2 < arr.size)
+    if (pos + 2 >= arr.size) return null
     val agop = arr[pos].code
     val bbbb = arr[pos + 1].code
     val fedc = arr[pos + 2].code
@@ -121,7 +121,7 @@ data class IInstanceOp(
 )
 
 fun decodeIInstanceOp(arr: CharArray, pos: Int): IInstanceOp? {
-    require(pos + 1 < arr.size)
+    if (pos + 1 >= arr.size) return null
     val baop = arr[pos].code
     val cccc = arr[pos + 1].code
     val type = when (baop.and(0xff)) {
@@ -151,11 +151,11 @@ data class ConstHigh16(
     val value: Int,
 )
 
-fun decodeConstHigh16(arr: CharArray, pos: Int): ConstHigh16 {
-    require(pos + 1 < arr.size)
+fun decodeConstHigh16(arr: CharArray, pos: Int): ConstHigh16? {
+    if (pos + 1 >= arr.size) return null
     val aaop = arr[pos].code
     val bbbb = arr[pos + 1].code
-    require(aaop.and(0xff) == 0x15)
+    if (aaop.and(0xff) != 0x15) return null
     val aa = aaop.ushr(8)
     return ConstHigh16(dstReg = aa, value = bbbb.shl(16))
 }
@@ -166,7 +166,7 @@ data class ConstString(
 )
 
 fun decodeConstString(arr: CharArray, pos: Int): ConstString? {
-    require(pos + 1 < arr.size)
+    if (pos + 1 >= arr.size) return null
     val aaop = arr[pos].code
     val bbbb = arr[pos + 1].code
     if (aaop.and(0xff) != 0x1a) return null

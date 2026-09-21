@@ -36,4 +36,5 @@ message TelegramSettings {
   optional bool disableMiuiVarFonts = 27;
   optional bool disableProfileAvatarBlur = 28;
   optional bool disableProfileAvatarBlurExtendAvatar = 29;
+  optional bool showMsgId = 30;
 }

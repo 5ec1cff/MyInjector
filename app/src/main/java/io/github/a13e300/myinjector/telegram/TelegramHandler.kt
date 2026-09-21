@@ -44,6 +44,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(HidePhoneNumber())
         subHook(AutoUncheckSharePhoneNumber())
         subHook(AlwaysShowStorySaveIcon())
+        subHook(ShowMsgId())
 
         // TODO: deobf:
         subHook(StickerLoadGuard())

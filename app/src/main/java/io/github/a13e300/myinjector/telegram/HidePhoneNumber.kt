@@ -96,7 +96,7 @@ class HidePhoneNumber : DynHook() {
                     if (iputField.typeName != "android.widget.TextView") {
                         continue
                     }
-                    val constHigh = decodeConstHigh16(insns, poss[i + 1])
+                    val constHigh = decodeConstHigh16(insns, poss[i + 1]) ?: continue
                     val invoke = decodeInvoke(insns, poss[i + 2]) ?: continue
                     if (invoke.regs.size != 3) {
                         continue

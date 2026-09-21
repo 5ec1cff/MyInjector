@@ -33,6 +33,8 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
         val v = newValue as Boolean
         when (preference.key) {
             "enabled" -> settings.disabled = !v
+            "showMsgId" ->
+                settings.showMsgId = v
             "autoCheckDeleteMessageOption" ->
                 settings.autoCheckDeleteMessageOption = v
 
@@ -245,6 +247,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             category("其他") {
                 switchPreference(
+                    "显示消息 ID",
+                    "showMsgId",
+                    "在消息时间处显示消息 ID 、管理员头衔"
+                )
+                switchPreference(
                     "消息编辑框禁用语音或相机按钮",
                     "disableVoiceOrCameraButton",
                 )
@@ -300,6 +307,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
         when (preference.key) {
             "enabled" -> (preference as SwitchPreference).isChecked =
                 !TelegramHandler.settings.disabled
+
+            "showMsgId" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.showMsgId
 
             "autoCheckDeleteMessageOption" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.autoCheckDeleteMessageOption
