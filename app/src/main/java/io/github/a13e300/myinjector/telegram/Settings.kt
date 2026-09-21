@@ -37,6 +37,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "showMsgId" ->
                 settings.showMsgId = v
 
+            "antiAntiCopy" ->
+                settings.antiAntiCopy = v
+
             "prohibitChannelSwitching" ->
                 settings.prohibitChannelSwitching = v
 
@@ -149,6 +152,37 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                 setDefaultValue(true)
             }
 
+            category("聊天") {
+                switchPreference(
+                    "显示消息 ID",
+                    "showMsgId",
+                    "在消息时间处显示消息 ID 、管理员头衔"
+                )
+                switchPreference(
+                    "反反复制",
+                    "antiAntiCopy",
+                    "允许在禁止复制的群聊复制和保存内容，并仍然阻止转发（因为不可能成功）"
+                )
+                switchPreference(
+                    "阻止切换频道",
+                    "prohibitChannelSwitching",
+                    "阻止在频道底部上拉时切换到其他频道"
+                )
+                switchPreference(
+                    "消息编辑框禁用语音或相机按钮",
+                    "disableVoiceOrCameraButton",
+                )
+                switchPreference(
+                    "at 列表长按使用无用户名 at",
+                    "longClickMention",
+                    "at 列表中，长按某人以使用无用户名的方式 at 此人"
+                )
+                switchPreference(
+                    "保存私密媒体",
+                    "saveSecretMedia"
+                )
+            }
+
             category("更改默认行为") {
                 switchPreference(
                     "自动勾选删除",
@@ -259,28 +293,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             category("其他") {
                 switchPreference(
-                    "显示消息 ID",
-                    "showMsgId",
-                    "在消息时间处显示消息 ID 、管理员头衔"
-                )
-                switchPreference(
-                    "阻止切换频道",
-                    "prohibitChannelSwitching",
-                    "阻止在频道底部上拉时切换到其他频道"
-                )
-                switchPreference(
-                    "消息编辑框禁用语音或相机按钮",
-                    "disableVoiceOrCameraButton",
-                )
-                switchPreference(
                     "地图自定义经纬度",
                     "customMapPosition",
                     "长按定位按钮打开对话框"
-                )
-                switchPreference(
-                    "at 列表长按使用无用户名 at",
-                    "longClickMention",
-                    "at 列表中，长按某人以使用无用户名的方式 at 此人"
                 )
                 switchPreference(
                     "标记双向联系人",
@@ -294,10 +309,6 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                 switchPreference(
                     "移除主页浮动按钮",
                     "hideFloatFab"
-                )
-                switchPreference(
-                    "保存私密媒体",
-                    "saveSecretMedia"
                 )
                 if (DisableMiuiVarFont.needsDisableMiuiVarFonts) {
                     switchPreference(
@@ -324,6 +335,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
         when (preference.key) {
             "enabled" -> (preference as SwitchPreference).isChecked =
                 !TelegramHandler.settings.disabled
+
+            "antiAntiCopy" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.antiAntiCopy
 
             "showMsgId" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.showMsgId

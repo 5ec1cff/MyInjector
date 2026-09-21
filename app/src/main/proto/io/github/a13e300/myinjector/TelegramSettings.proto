@@ -39,4 +39,5 @@ message TelegramSettings {
   optional bool showMsgId = 30;
   optional bool prohibitChannelSwitching = 31;
   optional bool useSystemEmoji = 32;
+  optional bool antiAntiCopy = 33;
 }
