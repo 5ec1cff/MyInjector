@@ -42,12 +42,11 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(DisableVoiceOrCameraButton())
         subHook(DefaultSearchTab())
         subHook(HidePhoneNumber())
+        subHook(AutoUncheckSharePhoneNumber())
 
         // TODO: deobf:
-        /*
         subHook(StickerLoadGuard())
         subHook(OpenLinkDialog())
-        subHook(AutoUncheckSharePhoneNumber())
         subHook(LongClickMention())
         subHook(EmojiStickerMenu())
         subHook(FixHasAppToOpen())
@@ -61,7 +60,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
-        subHook(DisableProfileAvatarBlur())*/
+        subHook(DisableProfileAvatarBlur())
         _creator?.let {
             it.persist()
             it.close()
