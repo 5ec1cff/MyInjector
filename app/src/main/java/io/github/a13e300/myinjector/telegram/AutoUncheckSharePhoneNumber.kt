@@ -12,8 +12,7 @@ class AutoUncheckSharePhoneNumber : DynHook() {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoUncheckSharePhoneNumber
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {
-        val bridge = creator.bridge
-        val contactAddActivity = creator.create("ContactAddActivity") {
+        val contactAddActivity = creator.create("ContactAddActivity") { bridge ->
             bridge.findClass {
                 matcher {
                     usingEqStrings(
@@ -26,7 +25,7 @@ class AutoUncheckSharePhoneNumber : DynHook() {
             }.single().toObfsInfo()
         }
 
-        val checkShare = creator.create("ContactAddActivityCheckShare") {
+        val checkShare = creator.create("ContactAddActivityCheckShare") { bridge ->
             bridge.findField {
                 matcher {
                     addWriteMethod {
@@ -39,7 +38,7 @@ class AutoUncheckSharePhoneNumber : DynHook() {
         }
 
         // inlined and merged with other Callback2
-        val contactAddActivityFillItems = creator.create("ContactAddActivityFillItems") {
+        val contactAddActivityFillItems = creator.create("ContactAddActivityFillItems") { bridge ->
             bridge.findMethod {
                 matcher {
                     usingEqStrings("MobileVisibleInfo")

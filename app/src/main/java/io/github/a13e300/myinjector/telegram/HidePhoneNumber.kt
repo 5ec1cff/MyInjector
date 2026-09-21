@@ -52,9 +52,8 @@ class HidePhoneNumber : DynHook() {
         var subtitleView: FieldData? = null
         var titleView: FieldData? = null
 
-        val bridge = creator.bridge
-
         fun locateViews() {
+            val bridge = creator.bridge
             if (located) return
             located = true
 
@@ -144,7 +143,7 @@ class HidePhoneNumber : DynHook() {
 
         locateProfileActivityOnBindViewHolderAndRowFields(creator)
 
-        creator.create("TextDetailCell") {
+        creator.create("TextDetailCell") { bridge ->
             bridge.findClass {
                 matcher {
                     // onInitializeAccessibilityNodeInfo
@@ -162,7 +161,7 @@ class HidePhoneNumber : DynHook() {
             }.single().toObfsInfo()
         }
 
-        creator.create("ProfileActivityUserId") {
+        creator.create("ProfileActivityUserId") { bridge ->
             bridge.findMethod {
                 matcher {
                     declaredClass("org.telegram.ui.ProfileActivity")

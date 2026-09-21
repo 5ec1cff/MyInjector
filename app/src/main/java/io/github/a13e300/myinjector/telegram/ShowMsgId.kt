@@ -349,7 +349,10 @@ class ShowMsgId : DynHook() {
         )
             .also { it.isAccessible = true }
 
-        findClass(chatMessageCellMeasureTime.className).hookAllAfter(chatMessageCellMeasureTime.memberName) { param ->
+        findClass(chatMessageCellMeasureTime.className).hookAllAfter(
+            chatMessageCellMeasureTime.memberName,
+            cond = ::isEnabled
+        ) { param ->
             var time =
                 param.thisObject.getObjAs<CharSequence>(chatMessageCellCurrentTimeString.memberName)
             val messageObject = param.args[0]
