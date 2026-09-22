@@ -61,6 +61,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "showExactLastSeenTime" ->
                 settings.showExactLastSeenTime = v
 
+            "channelDetailNumbers" ->
+                settings.channelDetailNumbers = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -300,6 +303,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "showExactLastSeenTime",
                 )
                 switchPreference(
+                    "频道显示准确关注人数",
+                    "channelDetailNumbers",
+                )
+                switchPreference(
                     "地图自定义经纬度",
                     "customMapPosition",
                     "长按定位按钮打开对话框"
@@ -372,6 +379,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "showExactLastSeenTime" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.showExactLastSeenTime
+
+            "channelDetailNumbers" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.channelDetailNumbers
 
             "customMapPosition" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.customMapPosition

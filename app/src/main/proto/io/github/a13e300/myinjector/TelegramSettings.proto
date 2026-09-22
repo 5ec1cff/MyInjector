@@ -41,4 +41,5 @@ message TelegramSettings {
   optional bool useSystemEmoji = 32;
   optional bool antiAntiCopy = 33;
   optional bool showExactLastSeenTime = 34;
+  optional bool channelDetailNumbers = 35;
 }
