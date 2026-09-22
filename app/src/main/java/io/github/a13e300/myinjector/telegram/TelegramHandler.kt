@@ -50,9 +50,10 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(AntiAntiCopy())
         subHook(ShowExactLastSeenTime())
         subHook(ChannelDetailNumbers())
+        subHook(StickerLoadGuard())
 
         // TODO: deobf:
-        subHook(StickerLoadGuard())
+        /*
         subHook(OpenLinkDialog())
         subHook(LongClickMention())
         subHook(EmojiStickerMenu())
@@ -66,7 +67,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
-        subHook(DisableProfileAvatarBlur())
+        subHook(DisableProfileAvatarBlur())*/
         _creator?.let {
             it.persist()
             it.close()
