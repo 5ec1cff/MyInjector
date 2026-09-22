@@ -48,6 +48,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(ProhibitChannelSwitching())
         subHook(UseSystemEmoji())
         subHook(AntiAntiCopy())
+        subHook(ShowExactLastSeenTime())
 
         // TODO: deobf:
         subHook(StickerLoadGuard())

@@ -58,6 +58,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "customEmojiMapping" ->
                 settings.customEmojiMapping = v
 
+            "showExactLastSeenTime" ->
+                settings.showExactLastSeenTime = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -293,6 +296,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             category("其他") {
                 switchPreference(
+                    "最后上线时间精确到秒",
+                    "showExactLastSeenTime",
+                )
+                switchPreference(
                     "地图自定义经纬度",
                     "customMapPosition",
                     "长按定位按钮打开对话框"
@@ -362,6 +369,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "customEmojiMappingConfig" -> preference.summary =
                 "加载了${CustomEmojiMapping.emotionMap.map.size}条映射规则"
+
+            "showExactLastSeenTime" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.showExactLastSeenTime
 
             "customMapPosition" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.customMapPosition
