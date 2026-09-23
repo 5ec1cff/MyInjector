@@ -469,12 +469,16 @@ class Settings : IHook() {
     ): ObfsTable {
 
         val settingsFragment = creator.create("SettingsActivity") { bridge ->
-            bridge.findClass {
+            bridge.findMethod {
                 matcher {
-                    usingStrings("store bundled ")
-                    superClass = creator.obfsTable["BaseFragment"]!!.className
+                    // NaGram removed "store bundled ", so we use this key word in onFragmentCreated
+                    usingStrings("hasMainTabs")
+                    declaredClass {
+                        superClass = creator.obfsTable["BaseFragment"]!!.className
+                    }
                 }
-            }.single().toObfsInfo()
+                // only SettingsActivity.onFragmentCreated has only 1 string ref
+            }.single { it.usingStrings.size == 1 }.declaredClass!!.toObfsInfo()
         }
 
         // it is in fact UItem.ofFactory, since getFactory only has one caller
