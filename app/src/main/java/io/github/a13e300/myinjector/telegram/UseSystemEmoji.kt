@@ -6,11 +6,10 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.text.TextPaint
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import java.io.File
 
-class UseSystemEmoji : DynHook() {
+class UseSystemEmoji : MyDynHook("useSystemEmoji") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.useSystemEmoji
     private val textPaint: TextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
 

@@ -3,12 +3,11 @@ package io.github.a13e300.myinjector.telegram
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.hook
 
 // 修复重复打开链接的问题
-class FixHasAppToOpen : DynHook() {
+class FixHasAppToOpen : MyDynHook("fixHasAppToOpen") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.fixHasAppToOpen
 
     override fun onHook() {

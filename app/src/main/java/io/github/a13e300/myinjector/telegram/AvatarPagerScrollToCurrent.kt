@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -8,7 +7,7 @@ import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllBefore
 
 // 个人资料头像如果存在多个且主头像非第一个时，下拉展示完整头像列表时自动切到当前头像（原行为是总是切到第一个）
-class AvatarPagerScrollToCurrent : DynHook() {
+class AvatarPagerScrollToCurrent : MyDynHook("avatarPageScrollToCurrent") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.avatarPageScrollToCurrent
 
     override fun onHook() {

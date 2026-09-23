@@ -1,14 +1,13 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.graphics.Canvas
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.hookConstantIf
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
 
-class ProhibitChannelSwitching : DynHook() {
+class ProhibitChannelSwitching : MyDynHook("prohibitChannelSwitching") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.prohibitChannelSwitching
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {

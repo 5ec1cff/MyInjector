@@ -1,7 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.text.TextPaint
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.IInstanceOpType
 import io.github.a13e300.myinjector.arch.InvokeType
 import io.github.a13e300.myinjector.arch.ObfsTable
@@ -26,7 +25,7 @@ import java.lang.reflect.Modifier
 import kotlin.math.ceil
 import kotlin.math.min
 
-class ShowMsgId : DynHook() {
+class ShowMsgId : MyDynHook("showMsgId") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.showMsgId
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {

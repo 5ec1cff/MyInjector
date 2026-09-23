@@ -1,15 +1,12 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.setObj
 
-class SendImageWithHighQualityByDefault : DynHook() {
+class SendImageWithHighQualityByDefault : MyDynHook("SendImageWithHighQualityByDefault") {
     override fun isFeatureEnabled(): Boolean =
         TelegramHandler.settings.sendImageWithHighQualityByDefault
 

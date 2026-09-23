@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -18,7 +17,7 @@ import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
 
 // https://github.com/5ec1cff/TMoe/blob/1776e0ce2a23c318e3c506055ccda06d4b358dcf/app/src/main/java/cc/ioctl/tmoe/hook/func/HistoricalNewsOption.kt
-class CopyPrivateChatLink : DynHook() {
+class CopyPrivateChatLink : MyDynHook("copyPrivateChatLink") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.copyPrivateChatLink
 
     override fun onHook() {

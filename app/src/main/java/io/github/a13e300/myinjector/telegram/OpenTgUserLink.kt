@@ -2,11 +2,10 @@ package io.github.a13e300.myinjector.telegram
 
 import android.content.Intent
 import android.net.Uri
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.logD
 
-class OpenTgUserLink : DynHook() {
+class OpenTgUserLink : MyDynHook("openTgUserLink") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.openTgUserLink
 
     override fun onHook() {

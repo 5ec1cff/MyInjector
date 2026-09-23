@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.IInstanceOpType
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
@@ -14,7 +13,7 @@ import io.github.a13e300.myinjector.arch.toObfsInfo
 import org.luckypray.dexkit.result.FieldData
 import org.luckypray.dexkit.result.MethodData
 
-class AlwaysShowStorySaveIcon : DynHook() {
+class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.alwaysShowStorySaveIcon
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {

@@ -303,7 +303,8 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
             )
         }
         val searchBar = ModernInjectedSearchBar(context, palette)
@@ -353,7 +354,8 @@ abstract class SettingDialog(val activityCtx: Context) : Preference.OnPreference
             listView,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                listHeightForCurrentItems(),
+                // listHeightForCurrentItems(),
+                ViewGroup.LayoutParams.WRAP_CONTENT,
             ),
         )
         return contentView

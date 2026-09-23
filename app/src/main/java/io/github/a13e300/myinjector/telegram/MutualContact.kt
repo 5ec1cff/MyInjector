@@ -7,7 +7,6 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
@@ -17,7 +16,7 @@ import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
 
 // 标记双向联系人（↑↓图标）
-class MutualContact : DynHook() {
+class MutualContact : MyDynHook("mutualContact") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.mutualContact
 
     fun deobf(

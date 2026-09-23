@@ -2,12 +2,11 @@ package io.github.a13e300.myinjector.telegram
 
 import android.icu.text.SimpleDateFormat
 import android.icu.util.Calendar
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.hookBefore
 import java.util.Locale
 
-class ShowExactLastSeenTime : DynHook() {
+class ShowExactLastSeenTime : MyDynHook("showExactLastSeenTime") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.showExactLastSeenTime
     private val mFormatterTime = SimpleDateFormat("HH:mm:ss", Locale.ROOT)
     private val mFormatterDateTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)

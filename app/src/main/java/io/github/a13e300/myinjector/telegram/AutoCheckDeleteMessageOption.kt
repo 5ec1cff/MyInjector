@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector.telegram
 
 import android.app.Dialog
 import android.view.ViewGroup
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.findView
@@ -12,7 +11,7 @@ import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
 
 // 自动勾选为对方删除消息（原行为是默认不勾选）
-class AutoCheckDeleteMessageOption : DynHook() {
+class AutoCheckDeleteMessageOption : MyDynHook("autoCheckDeleteMessageOption") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoCheckDeleteMessageOption
 
     fun deobf(

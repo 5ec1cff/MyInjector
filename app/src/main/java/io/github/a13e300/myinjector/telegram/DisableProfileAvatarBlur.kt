@@ -6,7 +6,6 @@ import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -19,7 +18,7 @@ import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.setObj
 import java.util.WeakHashMap
 
-class DisableProfileAvatarBlur : DynHook() {
+class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
 
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableProfileAvatarBlur
 

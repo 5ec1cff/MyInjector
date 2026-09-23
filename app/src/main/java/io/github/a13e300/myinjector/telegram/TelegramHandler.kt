@@ -1,11 +1,19 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.util.Log
 import io.github.a13e300.myinjector.TelegramSettings
+import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.DynHookManager
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import java.io.InputStream
 import java.io.OutputStream
+
+abstract class MyDynHook(private val key: String) : DynHook() {
+    override fun onHookError(t: Throwable) {
+        TelegramHandler.hookErrors[key] = Log.getStackTraceString(t)
+    }
+}
 
 object TelegramHandler : DynHookManager<TelegramSettings>() {
     override fun isEnabled(): Boolean = !settings.disabled
@@ -14,6 +22,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
     val creator: ObfsTableCreator
         get() = _creator ?: ObfsTableCreator("tg", 1, appInfo = loadPackageParam.appInfo)
             .also { _creator = it }
+    val hookErrors = mutableMapOf<String, String>()
 
     override fun onHook() {
         super.onHook()
@@ -53,7 +62,6 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(StickerLoadGuard())
 
         // TODO: deobf:
-        /*
         subHook(OpenLinkDialog())
         subHook(LongClickMention())
         subHook(EmojiStickerMenu())
@@ -67,7 +75,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
-        subHook(DisableProfileAvatarBlur())*/
+        subHook(DisableProfileAvatarBlur())
         _creator?.let {
             it.persist()
             it.close()

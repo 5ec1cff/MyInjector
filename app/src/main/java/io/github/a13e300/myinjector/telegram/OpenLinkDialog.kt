@@ -7,7 +7,6 @@ import android.net.Uri
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.StyleSpan
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObjAs
@@ -16,7 +15,7 @@ import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
 
 // 自动修正一些包含了错误字符的链接，在打开时提供 fix 选项以打开修复后的链接
-class OpenLinkDialog : DynHook() {
+class OpenLinkDialog : MyDynHook("openLinkDialog") {
     data class FixLink(
         val pos: Int,
         val url: String,

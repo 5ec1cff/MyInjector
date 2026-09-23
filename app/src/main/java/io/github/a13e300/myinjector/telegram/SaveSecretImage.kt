@@ -5,7 +5,6 @@ package io.github.a13e300.myinjector.telegram
 import android.app.Activity
 import android.view.View
 import android.widget.Toast
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -20,7 +19,7 @@ import java.io.File
 import java.io.FileInputStream
 import kotlin.concurrent.thread
 
-class SaveSecretImage : DynHook() {
+class SaveSecretImage : MyDynHook("saveSecretMedia") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.saveSecretMedia
 
     override fun onHook() {

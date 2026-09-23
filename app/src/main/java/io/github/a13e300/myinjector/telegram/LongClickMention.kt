@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector.telegram
 
 import android.text.SpannableString
 import android.text.Spanned
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
@@ -12,7 +11,7 @@ import io.github.a13e300.myinjector.logE
 import java.lang.reflect.Proxy
 
 // 在 at 列表中，长按以强制使用无用户名的 at 形式
-class LongClickMention : DynHook() {
+class LongClickMention : MyDynHook("longClickMention") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.longClickMention
 
     override fun onHook() {

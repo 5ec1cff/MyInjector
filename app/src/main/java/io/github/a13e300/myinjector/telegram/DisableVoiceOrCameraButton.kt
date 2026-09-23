@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.hookAllConstantIf
@@ -8,7 +7,7 @@ import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
 
 // 禁用音频 / 摄像头按钮，防止误触
-class DisableVoiceOrCameraButton : DynHook() {
+class DisableVoiceOrCameraButton : MyDynHook("disableVoiceOrCameraButton") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.disableVoiceOrCameraButton
 
     fun deobf(

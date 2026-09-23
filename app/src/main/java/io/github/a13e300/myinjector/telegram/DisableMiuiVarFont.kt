@@ -1,11 +1,10 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.setObjS
 import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
 
-class DisableMiuiVarFont : DynHook() {
+class DisableMiuiVarFont : MyDynHook("disableMiuiVarFonts") {
     override fun isFeatureEnabled() =
         TelegramHandler.settings.disableMiuiVarFonts && needsDisableMiuiVarFonts
 

@@ -7,7 +7,6 @@ import android.view.View
 import android.widget.TextView
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.IInstanceOpType
 import io.github.a13e300.myinjector.arch.InvokeType
 import io.github.a13e300.myinjector.arch.ObfsTable
@@ -34,7 +33,7 @@ import org.luckypray.dexkit.result.FieldData
 import org.luckypray.dexkit.result.MethodData
 import kotlin.math.min
 
-class HidePhoneNumber : DynHook() {
+class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.hidePhoneNumber
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {

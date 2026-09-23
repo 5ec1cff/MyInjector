@@ -6,7 +6,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.currentApplication
 import io.github.a13e300.myinjector.arch.findBaseActivity
 import io.github.a13e300.myinjector.arch.hookAllAfter
@@ -17,7 +16,7 @@ import java.io.File
 
 // 支持导入和使用自定义 emoji 文本映射
 // 参见： https://github.com/5ec1cff/my-tg-emoji
-object CustomEmojiMapping : DynHook() {
+object CustomEmojiMapping : MyDynHook("customEmojiMapping") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.customEmojiMapping
 
     sealed class Emoji

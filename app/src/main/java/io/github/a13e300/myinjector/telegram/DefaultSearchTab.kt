@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.hook
@@ -9,7 +8,7 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.toObfsInfo
 
 // 强制在频道中点击 hash tag 时默认搜索本频道（原行为是搜索「全部帖子」）
-class DefaultSearchTab : DynHook() {
+class DefaultSearchTab : MyDynHook("defaultSearchTab") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.defaultSearchTab
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {

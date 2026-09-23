@@ -3,7 +3,6 @@ package io.github.a13e300.myinjector.telegram
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.widget.Toast
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.currentApplication
@@ -15,7 +14,7 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 
 // 在 emoji 和 sticker 查看页面增加更多按钮，包括查看创建者(id)和导出 emoji 信息
-class EmojiStickerMenu : DynHook() {
+class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
     companion object {
         private const val MENU_DUMP = 301
         private const val MENU_GET_PROFILE = 302

@@ -1,12 +1,11 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCBefore
 import io.github.a13e300.myinjector.arch.setObj
 
-class RemoveArchiveFolder : DynHook() {
+class RemoveArchiveFolder : MyDynHook("removeArchiveFolder") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.removeArchiveFolder
     override fun onHook() {
         val guard = ThreadLocal<Boolean>()

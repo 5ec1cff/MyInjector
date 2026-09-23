@@ -1,9 +1,8 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.hookBefore
 
-class ChannelDetailNumbers : DynHook() {
+class ChannelDetailNumbers : MyDynHook("channelDetailNumbers") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.channelDetailNumbers
 
     override fun onHook() {

@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.hookAllBefore
@@ -8,7 +7,7 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.toObfsInfo
 
 // 添加联系人时自动取消勾选分享手机号码（原行为是默认勾选）
-class AutoUncheckSharePhoneNumber : DynHook() {
+class AutoUncheckSharePhoneNumber : MyDynHook("autoUncheckSharePhoneNumber") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.autoUncheckSharePhoneNumber
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {

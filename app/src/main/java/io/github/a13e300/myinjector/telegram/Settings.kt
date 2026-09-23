@@ -1,10 +1,16 @@
 @file:Suppress("DEPRECATION")
 package io.github.a13e300.myinjector.telegram
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Color
 import android.preference.Preference
 import android.preference.PreferenceScreen
 import android.preference.SwitchPreference
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.view.View
 import io.github.a13e300.myinjector.SettingDialog
 import io.github.a13e300.myinjector.addSettingsIntentInterceptor
@@ -24,6 +30,10 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logE
+import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
+import io.github.a13e300.myinjector.ui.modernInjectedMessageView
+import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
+import io.github.a13e300.myinjector.ui.showModernInjectedDialog
 import org.luckypray.dexkit.query.enums.StringMatchType
 import java.lang.reflect.Modifier
 
@@ -460,6 +470,83 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                 isEnabled = TelegramHandler.settings.disableProfileAvatarBlur
             }
         }
+
+        if (preference.key in TelegramHandler.hookErrors) {
+            val newSummary = SpannableStringBuilder(preference.summary ?: "")
+                .apply { if (isNotEmpty()) append("\n") }
+                .append(
+                    "存在问题",
+                    ForegroundColorSpan(Color.RED),
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            preference.summary = newSummary
+        }
+    }
+
+    override fun onConfigureActions(actions: MutableList<ModernInjectedDialogAction>) {
+        if (TelegramHandler.hookErrors.isEmpty()) return
+        val errors = TelegramHandler.hookErrors.map {
+            "${it.key}:\n${it.value}"
+        }.joinToString("\n")
+        actions.add(
+            0,
+            ModernInjectedDialogAction("查看错误", dismissAfterClick = false) {
+                showModernInjectedDialog(
+                    context,
+                    "错误详情",
+                    modernInjectedScrollContent(
+                        context,
+                        modernInjectedMessageView(context, errors),
+                        0.45f,
+                    ),
+                    listOf(
+                        // TODO: share
+                        /*
+                        ModernInjectedDialogAction("分享") {
+                            thread {
+                                runCatching {
+                                    val f = File(context.filesDir, "myinjector-error.txt")
+                                    f.writeText(errors)
+                                    logD("wrote file $f")
+                                    val uri = XhsHandler.fileProviderClass.callS(
+                                        "getUriForFile",
+                                        context,
+                                        "com.xingin.xhs.provider",
+                                        f
+                                    ) as Uri
+                                    logD("uri $uri")
+                                    context.startActivity(
+                                        Intent.createChooser(
+                                            Intent(Intent.ACTION_SEND)
+                                                .putExtra(Intent.EXTRA_STREAM, uri)
+                                                .setType("text/plain"),
+                                            ""
+                                        )
+                                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    )
+                                }.onFailure { t ->
+                                    logE("share failed: ", t)
+                                    runCatching {
+                                        activityCtx.findBaseActivity().runOnUiThread {
+                                            Toast.makeText(
+                                                context,
+                                                "分享失败，请尝试复制",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            }
+                        },*/
+                        ModernInjectedDialogAction("复制") {
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("", errors))
+                        },
+                        ModernInjectedDialogAction("关闭"),
+                    ),
+                )
+            },
+        )
     }
 }
 

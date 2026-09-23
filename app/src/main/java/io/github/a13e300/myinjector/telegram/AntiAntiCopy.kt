@@ -1,7 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.widget.Toast
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.currentApplication
@@ -10,7 +9,7 @@ import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.toObfsInfo
 
-class AntiAntiCopy : DynHook() {
+class AntiAntiCopy : MyDynHook("antiAntiCopy") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.antiAntiCopy
 
     var isNoForw = false

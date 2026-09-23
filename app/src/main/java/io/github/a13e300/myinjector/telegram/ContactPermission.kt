@@ -1,6 +1,5 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
@@ -9,7 +8,7 @@ import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
 
 // 禁止询问联系人权限
-class ContactPermission : DynHook() {
+class ContactPermission : MyDynHook("contactPermission") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.contactPermission
 
     fun deobf(

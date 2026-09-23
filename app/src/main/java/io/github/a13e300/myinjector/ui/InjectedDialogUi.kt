@@ -80,6 +80,7 @@ internal fun showModernInjectedDialog(
         (content.layoutParams as? LinearLayout.LayoutParams ?: LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
+            1f
         )).apply {
             if (actions.isNotEmpty()) bottomMargin = context.dp(18)
         },
@@ -115,6 +116,7 @@ internal fun showModernInjectedDialog(
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
+                0f
             ),
         )
     }
@@ -136,7 +138,7 @@ internal fun showModernInjectedDialog(
         outer,
         ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
+            (context.resources.displayMetrics.heightPixels * 0.9).toInt(),
         ),
     )
     dialog.show()
