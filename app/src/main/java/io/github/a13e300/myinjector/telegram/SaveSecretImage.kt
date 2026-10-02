@@ -8,27 +8,39 @@ import android.widget.Toast
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hookAfter
-import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.logE
 import java.io.File
 import java.io.FileInputStream
 import kotlin.concurrent.thread
+import org.luckypray.dexkit.wrap.DexField
+import org.luckypray.dexkit.wrap.DexMethod
 
 class SaveSecretImage : MyDynHook("saveSecretMedia") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.saveSecretMedia
 
     override fun onHook() {
-        val chatActivity = findClass("org.telegram.ui.ChatActivity")
-        val rString = findClass("org.telegram.messenger.R\$string")
-        rString.getObjSAs<Int>("SaveToGallery")
-        val rDrawable = findClass("org.telegram.messenger.R\$drawable")
-        val msgGalleryDrawableId = rDrawable.getObjSAs<Int>("msg_gallery")
-        findClass("org.telegram.messenger.LocaleController")
+        val members = deobfSaveSecretImage(TelegramHandler.creator)
+        fun method(key: String) = DexMethod(members.getValue(key).descriptor)
+            .getMethodInstance(classLoader).apply { isAccessible = true }
+        fun field(key: String) = DexField(members.getValue(key).descriptor)
+            .getFieldInstance(classLoader).apply { isAccessible = true }
+        val selectedField = field("selected")
+        val providerField = field("provider")
+        val dialogField = field("dialog")
+        val mergeDialogField = field("mergeDialog")
+        val galleryField = field("gallery")
+        val gapField = field("gap")
+        val messageType = method("messageType")
+        val getInstance = method("instance")
+        val setParent = method("parent")
+        val getTheme = method("theme")
+        val getTopic = method("topic")
+        val openPhoto = method("open")
+        val msgGalleryDrawableId = findClass("org.telegram.messenger.R\$drawable").getObjSAs<Int>("msg_gallery")
         val MY_OPTION_OPEN_AS_PHOTO = 8989110
 
         val fileLoader = findClass("org.telegram.messenger.FileLoader")
@@ -64,71 +76,48 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
             return false
         }
 
-        chatActivity.hookAllAfter("fillMessageMenu", cond = ::isFeatureEnabled) { param ->
-
-            val selectedObject = param.thisObject.getObj("selectedObject")
-
-            val type = param.thisObject.call("getMessageType", selectedObject) as Int
-            if (type == 2) return@hookAllAfter // not loaded
-            if (!(selectedObject.call("needDrawBluredPreview") as Boolean)) return@hookAllAfter
-
-            val icons = param.args[1] as ArrayList<Int> // Int
-            val items = param.args[2] as ArrayList<CharSequence> // CharSequence
-            val options = param.args[3] as ArrayList<Int> // Int
-
-            // TODO: directly save menu item
-            /*
-            items.add(localeController.callS("getString", saveToGalleryStrId) as CharSequence)
-            options.add(OPTION_SAVE_TO_GALLERY)
-            icons.add(msgGalleryDrawableId)*/
-
+        method("fill").hookAfter(cond = ::isEnabled) { param ->
+            val message = param.args[0] ?: return@hookAfter
+            if (messageType.invoke(param.thisObject, message) == 2) return@hookAfter // not loaded
+            if (message.call("needDrawBluredPreview") != true) return@hookAfter
+            val icons = param.args[1] as ArrayList<Int>
+            val items = param.args[2] as ArrayList<CharSequence>
+            val options = param.args[3] as ArrayList<Int>
             items.add("作为正常媒体打开")
             options.add(MY_OPTION_OPEN_AS_PHOTO)
             icons.add(msgGalleryDrawableId)
         }
 
-        val photoViewer = findClass("org.telegram.ui.PhotoViewer")
-        chatActivity.hookAllBefore("processSelectedOption", cond = ::isFeatureEnabled) { param ->
-            if (param.args[0] != MY_OPTION_OPEN_AS_PHOTO) return@hookAllBefore
-            val instance = photoViewer.callS("getInstance")
+        method("options").hookBefore(cond = ::isEnabled) { param ->
+            if (param.args[0] != MY_OPTION_OPEN_AS_PHOTO) return@hookBefore
             val ca = param.thisObject
-            val selectedObject = ca.getObj("selectedObject")
-            instance.call("setParentActivity", ca, ca.getObj("themeDelegate"))
-            val typeIsN0 = selectedObject.getObj("type") != 0
-            val ctx = ca.call("getContext") as Activity
+            val message = selectedField.get(ca) ?: return@hookBefore
+            val context = ca.call("getParentActivity") as? Activity ?: return@hookBefore
+            val viewer = getInstance.invoke(null)
+            // The two-argument wrapper is inlined into the surviving implementation.
+            setParent.invoke(viewer, null, ca, getTheme.invoke(ca))
+            val hasType = message.getObj("type") != 0
+            val dialogId = if (hasType) dialogField.getLong(ca) else 0L
+            val mergeDialogId = if (hasType) mergeDialogField.getLong(ca) else 0L
+            val topicId = if (hasType) getTopic.invoke(ca) as Long else 0L
+            val provider = providerField.get(ca)
+            val account = ca.getObj("currentAccount") as Int
+            val owner = message.getObj("messageOwner")
             thread {
-                val success = dumpEncryptedFile(
-                    ca.getObjAs<Int>("currentAccount"),
-                    selectedObject.getObj("messageOwner")
-                )
-                ctx.runOnUiThread {
+                val success = dumpEncryptedFile(account, owner)
+                context.runOnUiThread {
                     if (success) {
-                        instance.call(
-                            "openPhoto",
-                            selectedObject,
-                            ca,
-                            if (typeIsN0) ca.getObj("dialog_id") else 0,
-                            if (typeIsN0) ca.getObj("mergeDialogId") else 0,
-                            if (typeIsN0) ca.call("getTopicId") else 0,
-                            ca.getObj("photoViewerProvider")
-                        )
+                        openPhoto.invoke(viewer, message, ca, dialogId, mergeDialogId, topicId, provider)
                     } else {
-                        Toast.makeText(ctx, "failed to dump", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "failed to dump", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         }
 
-        // allow save
-        photoViewer.hookAfter(
-            "setIsAboutToSwitchToIndex",
-            Integer.TYPE,
-            java.lang.Boolean.TYPE,
-            java.lang.Boolean.TYPE,
-            java.lang.Boolean.TYPE, cond = ::isFeatureEnabled
-        ) { param ->
-            param.thisObject.getObjAs<View>("galleryButton").visibility = View.VISIBLE
-            param.thisObject.getObjAs<View>("galleryGap").visibility = View.VISIBLE
+        method("switch").hookAfter(cond = ::isEnabled) { param ->
+            (galleryField.get(param.thisObject) as? View)?.visibility = View.VISIBLE
+            (gapField.get(param.thisObject) as? View)?.visibility = View.VISIBLE
         }
     }
 }

@@ -67,24 +67,14 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(DisableProfileAvatarBlur())
 
         subHook(AlwaysShowDownloadManager())
-
         subHook(RemoveArchiveFolder())
-
         subHook(SendImageWithHighQualityByDefault())
-
         subHook(HideFloatFab())
-
         subHook(CustomMapPosition())
-
         subHook(OpenLinkDialog())
-
         subHook(EmojiStickerMenu())
-
         subHook(CopyPrivateChatLink())
-
-        // TODO: deobf:
-        /*
-        subHook(SaveSecretImage())*/
+        subHook(SaveSecretImage())
         _creator?.let {
             it.persist()
             it.close()
