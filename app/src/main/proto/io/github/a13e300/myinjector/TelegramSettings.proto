@@ -42,4 +42,5 @@ message TelegramSettings {
   optional bool antiAntiCopy = 33;
   optional bool showExactLastSeenTime = 34;
   optional bool channelDetailNumbers = 35;
+  optional bool showIdInProfile = 36;
 }

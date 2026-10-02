@@ -74,6 +74,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "channelDetailNumbers" ->
                 settings.channelDetailNumbers = v
 
+            "showIdInProfile" ->
+                settings.showIdInProfile = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -309,6 +312,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             category("其他") {
                 switchPreference(
+                    "资料页显示 ID",
+                    "showIdInProfile",
+                    "显示用户、群组、频道或话题 ID，点击复制；重新打开资料页生效"
+                )
+                switchPreference(
                     "最后上线时间精确到秒",
                     "showExactLastSeenTime",
                 )
@@ -365,6 +373,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "showMsgId" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.showMsgId
+
+            "showIdInProfile" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.showIdInProfile
 
             "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching

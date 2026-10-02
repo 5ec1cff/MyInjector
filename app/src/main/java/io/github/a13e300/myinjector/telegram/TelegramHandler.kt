@@ -59,6 +59,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(AntiAntiCopy())
         subHook(ShowExactLastSeenTime())
         subHook(ChannelDetailNumbers())
+        subHook(ShowIdInProfile())
         subHook(StickerLoadGuard())
         subHook(OpenTgUserLink())
         subHook(FixHasAppToOpen())
@@ -75,6 +76,19 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(EmojiStickerMenu())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
+        finishDeobf()
+    }
+
+    override fun onChanged() {
+        try {
+            super.onChanged()
+        } finally {
+            // A newly enabled feature can open DexKit after initial startup.
+            finishDeobf()
+        }
+    }
+
+    private fun finishDeobf() {
         _creator?.let {
             it.persist()
             it.close()
