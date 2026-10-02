@@ -60,6 +60,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(ShowExactLastSeenTime())
         subHook(ChannelDetailNumbers())
         subHook(ShowIdInProfile())
+        subHook(ShowDCInProfile())
         subHook(StickerLoadGuard())
         subHook(OpenTgUserLink())
         subHook(FixHasAppToOpen())

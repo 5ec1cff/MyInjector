@@ -116,6 +116,7 @@ fork.risin42.nagramx
 - 最后上线时间精确到秒
 - 频道显示准确关注人数
 - 资料页显示用户、群组、频道或话题 ID，点击复制（移植自 [TMoe](https://github.com/cinit/TMoe)，重新打开资料页生效）
+- 资料页根据头像显示数据中心 DC，点击复制；可独立开关（移植自 [TMoe](https://github.com/cinit/TMoe)，重新打开资料页生效）
 
 ### 知乎
 

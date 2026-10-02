@@ -43,4 +43,5 @@ message TelegramSettings {
   optional bool showExactLastSeenTime = 34;
   optional bool channelDetailNumbers = 35;
   optional bool showIdInProfile = 36;
+  optional bool showDCInProfile = 37;
 }

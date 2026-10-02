@@ -77,6 +77,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "showIdInProfile" ->
                 settings.showIdInProfile = v
 
+            "showDCInProfile" ->
+                settings.showDCInProfile = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -317,6 +320,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "显示用户、群组、频道或话题 ID，点击复制；重新打开资料页生效"
                 )
                 switchPreference(
+                    "资料页显示 DC",
+                    "showDCInProfile",
+                    "根据头像显示数据中心，点击复制；无头像或资料未加载时显示未知，重新打开资料页生效"
+                )
+                switchPreference(
                     "最后上线时间精确到秒",
                     "showExactLastSeenTime",
                 )
@@ -376,6 +384,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "showIdInProfile" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.showIdInProfile
+
+            "showDCInProfile" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.showDCInProfile
 
             "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching
