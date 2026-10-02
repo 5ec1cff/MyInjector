@@ -78,9 +78,10 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
         subHook(OpenLinkDialog())
 
+        subHook(EmojiStickerMenu())
+
         // TODO: deobf:
         /*
-        subHook(EmojiStickerMenu())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())*/
         _creator?.let {
