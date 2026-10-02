@@ -1,9 +1,9 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.IInstanceOpType
+import io.github.a13e300.myinjector.arch.InstanceOpType
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
-import io.github.a13e300.myinjector.arch.SInstanceOpType
+import io.github.a13e300.myinjector.arch.StaticOpType
 import io.github.a13e300.myinjector.arch.decodeIInstanceOp
 import io.github.a13e300.myinjector.arch.decodeSInstanceOp
 import io.github.a13e300.myinjector.arch.getInsnWide
@@ -81,24 +81,24 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
             val searchWindow = 20
             for (i in 0 until poss.size - searchWindow) {
                 val iget1 = decodeIInstanceOp(insns, poss[i]) ?: continue
-                if (iget1.type != IInstanceOpType.IGetBoolean) continue
+                if (iget1.type != InstanceOpType.IGetBoolean) continue
                 val if1op = insns[poss[i + 1]].code.and(0xff)
                 // if-nez
                 if (if1op != 0x39) continue
                 val iget2 = decodeIInstanceOp(insns, poss[i + 2]) ?: continue
-                if (iget2.type != IInstanceOpType.IGetBoolean) continue
+                if (iget2.type != InstanceOpType.IGetBoolean) continue
                 val if2op = insns[poss[i + 3]].code.and(0xff)
                 // if-eqz
                 if (if2op != 0x38) continue
                 val iget3 = decodeIInstanceOp(insns, poss[i + 4]) ?: continue
-                if (iget3.type != IInstanceOpType.IGetBoolean) continue
+                if (iget3.type != InstanceOpType.IGetBoolean) continue
                 val if3op = insns[poss[i + 5]].code.and(0xff)
                 // if-nez
                 if (if3op != 0x39) continue
                 var hasDrawableMsgGallery = false
                 for (j in i + 6 until i + searchWindow - 6) {
                     val sget = decodeSInstanceOp(insns, poss[j]) ?: continue
-                    if (sget.type != SInstanceOpType.SGet) continue
+                    if (sget.type != StaticOpType.SGet) continue
                     val field = bridge.getFieldDataByDexAndId(
                         peerStoriesViewCustomPopupMenuOnCreate.dexId,
                         sget.ref
@@ -130,7 +130,7 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
             //    00124e08: 6003 fa09               0336: sget                v3, Lorg/telegram/messenger/R$drawable;->msg_link2:I # field@09fa
             for (i in 0 until poss.size - 3) {
                 val iget = decodeIInstanceOp(insns, poss[i]) ?: continue
-                if (iget.type != IInstanceOpType.IGetBoolean) continue
+                if (iget.type != InstanceOpType.IGetBoolean) continue
                 val igetField = bridge.getFieldDataByDexAndId(
                     peerStoriesViewCustomPopupMenuOnCreate.dexId,
                     iget.ref
@@ -140,7 +140,7 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
                 // if-eqz
                 if (ifop != 0x38) continue
                 val sget = decodeSInstanceOp(insns, poss[i + 2]) ?: continue
-                if (sget.type != SInstanceOpType.SGet) continue
+                if (sget.type != StaticOpType.SGet) continue
                 val sgetField = bridge.getFieldDataByDexAndId(
                     peerStoriesViewCustomPopupMenuOnCreate.dexId,
                     sget.ref

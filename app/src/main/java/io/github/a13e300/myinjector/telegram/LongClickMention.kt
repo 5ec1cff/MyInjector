@@ -2,7 +2,7 @@ package io.github.a13e300.myinjector.telegram
 
 import android.text.SpannableString
 import android.text.Spanned
-import io.github.a13e300.myinjector.arch.IInstanceOpType
+import io.github.a13e300.myinjector.arch.InstanceOpType
 import io.github.a13e300.myinjector.arch.InvokeType
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
@@ -249,14 +249,14 @@ class LongClickMention : MyDynHook("longClickMention") {
             // const/4 0
             if (insns[poss[i]].code != 0x0a12) continue
             val iput = decodeIInstanceOp(insns, poss[i + 1]) ?: continue
-            if (iput.type != IInstanceOpType.IPut) continue
+            if (iput.type != InstanceOpType.IPut) continue
             val iv = decodeInvoke(insns, poss[i + 2]) ?: continue
             if (iv.type != InvokeType.Virtual) continue
             val ivm =
                 bridge.getMethodDataByDexAndId(searchUsernameOrHashtag.dexId, iv.ref) ?: continue
             if (ivm.descriptor != "Ljava/lang/StringBuilder;->length()I") continue
             val iput2 = decodeIInstanceOp(insns, poss[i + 4]) ?: continue
-            if (iput2.type != IInstanceOpType.IPut) continue
+            if (iput2.type != InstanceOpType.IPut) continue
 
             val resultStartPositionField =
                 bridge.getFieldDataByDexAndId(searchUsernameOrHashtag.dexId, iput.ref) ?: continue

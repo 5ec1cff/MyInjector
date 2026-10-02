@@ -7,11 +7,11 @@ import android.view.View
 import android.widget.TextView
 import io.github.a13e300.myinjector.Entry
 import io.github.a13e300.myinjector.R
-import io.github.a13e300.myinjector.arch.IInstanceOpType
+import io.github.a13e300.myinjector.arch.InstanceOpType
 import io.github.a13e300.myinjector.arch.InvokeType
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
-import io.github.a13e300.myinjector.arch.SInstanceOpType
+import io.github.a13e300.myinjector.arch.StaticOpType
 import io.github.a13e300.myinjector.arch.addModuleAssets
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
@@ -88,7 +88,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                 //    0096dace: 6e30 f60a 3206          028f: invoke-virtual      {v2, v3, v6}, Landroid/widget/TextView;->setTextSize(I, F)V # method@0af6
                 if (op1.and(0xff) == 0x5b && op2.and(0xff) == 0x15 && op3.and(0xff) == 0x6e) {
                     val iput = decodeIInstanceOp(insns, poss[i]) ?: continue
-                    if (iput.type != IInstanceOpType.IPutObject) continue
+                    if (iput.type != InstanceOpType.IPutObject) continue
                     val iputField =
                         bridge.getFieldDataByDexAndId(createView.dexId, iput.ref) ?: continue
                     if (iputField.typeName != "android.widget.TextView") {
@@ -185,7 +185,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
 
                 for (i in 0 until min(poss.size, searchUserIdMax)) {
                     val iop = decodeIInstanceOp(insns, poss[i]) ?: continue
-                    if (iop.type != IInstanceOpType.IPutWide) continue
+                    if (iop.type != InstanceOpType.IPutWide) continue
                     userIdField = bridge.getFieldDataByDexAndId(it.dexId, iop.ref) ?: continue
                     break
                 }
@@ -297,7 +297,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
 
                             status_meet_invoke_getCurrentUser -> {
                                 val iget = decodeIInstanceOp(insns, poss[j]) ?: continue
-                                if (iget.type != IInstanceOpType.IGetObject) continue
+                                if (iget.type != InstanceOpType.IGetObject) continue
                                 val f =
                                     bridge.getFieldDataByDexAndId(onBindViewHolder.dexId, iget.ref)
                                         ?: continue
@@ -360,13 +360,13 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
             val searchThemeKeyMax = 8
             for (i in 0 until poss.size - searchThemeKeyMax) {
                 val sget1 = decodeSInstanceOp(insns, poss[i]) ?: continue
-                if (sget1.type != SInstanceOpType.SGet) continue
+                if (sget1.type != StaticOpType.SGet) continue
                 val sget1f =
                     bridge.getFieldDataByDexAndId(onBindViewHolder.dexId, sget1.ref) ?: continue
                 if (sget1f.descriptor != "Lorg/telegram/messenger/R\$drawable;->msg_input_gift:I") continue
                 for (j in i + 1 until i + searchThemeKeyMax) {
                     val sget2 = decodeSInstanceOp(insns, poss[j]) ?: continue
-                    if (sget2.type != SInstanceOpType.SGet) continue
+                    if (sget2.type != StaticOpType.SGet) continue
                     theme_key_switch2TrackChecked =
                         bridge.getFieldDataByDexAndId(onBindViewHolder.dexId, sget2.ref) ?: continue
                     break

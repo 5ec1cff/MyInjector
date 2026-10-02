@@ -96,7 +96,7 @@ fun decodeInvoke(arr: CharArray, pos: Int): Invoke? {
     return Invoke(type, regs, bbbb)
 }
 
-enum class IInstanceOpType {
+enum class InstanceOpType {
     IGet,
     IGetWide,
     IGetObject,
@@ -113,37 +113,37 @@ enum class IInstanceOpType {
     IPutShort,
 }
 
-data class IInstanceOp(
-    val type: IInstanceOpType,
+data class InstanceOp(
+    val type: InstanceOpType,
     val srcReg: Int,
     val objReg: Int,
     val ref: Int,
 )
 
-fun decodeIInstanceOp(arr: CharArray, pos: Int): IInstanceOp? {
+fun decodeIInstanceOp(arr: CharArray, pos: Int): InstanceOp? {
     if (pos + 1 >= arr.size) return null
     val baop = arr[pos].code
     val cccc = arr[pos + 1].code
     val type = when (baop.and(0xff)) {
-        0x52 -> IInstanceOpType.IGet
-        0x53 -> IInstanceOpType.IGetWide
-        0x54 -> IInstanceOpType.IGetObject
-        0x55 -> IInstanceOpType.IGetBoolean
-        0x56 -> IInstanceOpType.IGetByte
-        0x57 -> IInstanceOpType.IGetChar
-        0x58 -> IInstanceOpType.IGetShort
-        0x59 -> IInstanceOpType.IPut
-        0x5a -> IInstanceOpType.IPutWide
-        0x5b -> IInstanceOpType.IPutObject
-        0x5c -> IInstanceOpType.IPutBoolean
-        0x5d -> IInstanceOpType.IPutByte
-        0x5e -> IInstanceOpType.IPutChar
-        0x5f -> IInstanceOpType.IPutShort
+        0x52 -> InstanceOpType.IGet
+        0x53 -> InstanceOpType.IGetWide
+        0x54 -> InstanceOpType.IGetObject
+        0x55 -> InstanceOpType.IGetBoolean
+        0x56 -> InstanceOpType.IGetByte
+        0x57 -> InstanceOpType.IGetChar
+        0x58 -> InstanceOpType.IGetShort
+        0x59 -> InstanceOpType.IPut
+        0x5a -> InstanceOpType.IPutWide
+        0x5b -> InstanceOpType.IPutObject
+        0x5c -> InstanceOpType.IPutBoolean
+        0x5d -> InstanceOpType.IPutByte
+        0x5e -> InstanceOpType.IPutChar
+        0x5f -> InstanceOpType.IPutShort
         else -> return null
     }
     val a = baop.ushr(8).and(0xf)
     val b = baop.ushr(12)
-    return IInstanceOp(type = type, srcReg = a, objReg = b, ref = cccc)
+    return InstanceOp(type = type, srcReg = a, objReg = b, ref = cccc)
 }
 
 data class ConstHigh16(
@@ -175,7 +175,7 @@ fun decodeConstString(arr: CharArray, pos: Int): ConstString? {
 }
 
 
-enum class SInstanceOpType {
+enum class StaticOpType {
     SGet,
     SGetWide,
     SGetObject,
@@ -192,33 +192,33 @@ enum class SInstanceOpType {
     SPutShort,
 }
 
-data class SInstanceOp(
-    val type: SInstanceOpType,
+data class StaticOp(
+    val type: StaticOpType,
     val reg: Int,
     val ref: Int,
 )
 
-fun decodeSInstanceOp(arr: CharArray, pos: Int): SInstanceOp? {
+fun decodeSInstanceOp(arr: CharArray, pos: Int): StaticOp? {
     require(pos + 1 < arr.size)
     val aaop = arr[pos].code
     val bbbb = arr[pos + 1].code
     val type = when (aaop.and(0xff)) {
-        0x60 -> SInstanceOpType.SGet
-        0x61 -> SInstanceOpType.SGetWide
-        0x62 -> SInstanceOpType.SGetObject
-        0x63 -> SInstanceOpType.SGetBoolean
-        0x64 -> SInstanceOpType.SGetByte
-        0x65 -> SInstanceOpType.SGetChar
-        0x66 -> SInstanceOpType.SGetShort
-        0x67 -> SInstanceOpType.SPut
-        0x68 -> SInstanceOpType.SPutWide
-        0x69 -> SInstanceOpType.SPutObject
-        0x6a -> SInstanceOpType.SPutBoolean
-        0x6b -> SInstanceOpType.SPutByte
-        0x6c -> SInstanceOpType.SPutChar
-        0x6d -> SInstanceOpType.SPutShort
+        0x60 -> StaticOpType.SGet
+        0x61 -> StaticOpType.SGetWide
+        0x62 -> StaticOpType.SGetObject
+        0x63 -> StaticOpType.SGetBoolean
+        0x64 -> StaticOpType.SGetByte
+        0x65 -> StaticOpType.SGetChar
+        0x66 -> StaticOpType.SGetShort
+        0x67 -> StaticOpType.SPut
+        0x68 -> StaticOpType.SPutWide
+        0x69 -> StaticOpType.SPutObject
+        0x6a -> StaticOpType.SPutBoolean
+        0x6b -> StaticOpType.SPutByte
+        0x6c -> StaticOpType.SPutChar
+        0x6d -> StaticOpType.SPutShort
         else -> return null
     }
     val a = aaop.ushr(8)
-    return SInstanceOp(type = type, reg = a, ref = bbbb)
+    return StaticOp(type = type, reg = a, ref = bbbb)
 }

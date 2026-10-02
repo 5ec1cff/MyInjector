@@ -1,7 +1,7 @@
 package io.github.a13e300.myinjector.telegram
 
 import android.text.TextPaint
-import io.github.a13e300.myinjector.arch.IInstanceOpType
+import io.github.a13e300.myinjector.arch.InstanceOpType
 import io.github.a13e300.myinjector.arch.InvokeType
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
@@ -163,7 +163,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
         var firstGetMegaGroup = 0
         for (i in 0 until poss.size) {
             val iget = decodeIInstanceOp(insns, poss[i]) ?: continue
-            if (iget.type != IInstanceOpType.IGetBoolean) continue
+            if (iget.type != InstanceOpType.IGetBoolean) continue
             val igetf = bridge.getFieldDataByDexAndId(methodData.dexId, iget.ref) ?: continue
             if (igetf.descriptor != "Lorg/telegram/tgnet/TLRPC\$Chat;->megagroup:Z") continue
             firstGetMegaGroup = i
@@ -197,7 +197,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
             val searchWindow = 10
             for (i in firstGetMegaGroup until min(firstGetMegaGroup + searchWindow, poss.size)) {
                 val iput = decodeIInstanceOp(insns, poss[i]) ?: continue
-                if (iput.type != IInstanceOpType.IPutBoolean) continue
+                if (iput.type != InstanceOpType.IPutBoolean) continue
                 val iputf = bridge.getFieldDataByDexAndId(methodData.dexId, iput.ref) ?: continue
                 if (iputf.declaredClassName != chatMessageCellCls) {
                     logE("??? not ChatMessageCell field ${iputf.descriptor}")
@@ -246,14 +246,14 @@ class ShowMsgId : MyDynHook("showMsgId") {
         var timeWidth: FieldData? = null
         for (i in 0 until poss.size - searchWindow) {
             val iget1 = decodeIInstanceOp(insns, poss[i]) ?: continue
-            if (iget1.type != IInstanceOpType.IGet) continue
+            if (iget1.type != InstanceOpType.IGet) continue
             val iget1Field = bridge.getFieldDataByDexAndId(onLayout.dexId, iget1.ref) ?: continue
             if (iget1Field.declaredClassName != onLayout.className) continue
             var timeWidthField: FieldData? = null
             var hasConstHigh16_42f = false
             for (j in i + 1 until i + searchWindow) {
                 val iget2 = decodeIInstanceOp(insns, poss[j])
-                if (iget2 != null && iget2.type == IInstanceOpType.IGet) {
+                if (iget2 != null && iget2.type == InstanceOpType.IGet) {
                     val iget2Field = bridge.getFieldDataByDexAndId(onLayout.dexId, iget2.ref)
                     if (iget2Field != null) {
                         // iget more than 2 ?
@@ -303,7 +303,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
         var timeTextWidth: FieldData? = null
         for (i in 0 until poss.size - searchTimeTextWidthWindow) {
             val iget = decodeIInstanceOp(insns, poss[i]) ?: continue
-            if (iget.type != IInstanceOpType.IGet) continue
+            if (iget.type != InstanceOpType.IGet) continue
             val igetField = bridge.getFieldDataByDexAndId(onLayout.dexId, iget.ref) ?: continue
             if (igetField.declaredClassName != onLayout.className) continue
             val ifgez = insns[poss[i + 1]].code.and(0xff)
@@ -315,7 +315,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
                 bridge.getMethodDataByDexAndId(onLayout.dexId, invoke.ref) ?: continue
             if (invokeMethod.descriptor != "Lorg/telegram/messenger/AndroidUtilities;->dp(F)I") continue
             val iput = decodeIInstanceOp(insns, poss[i + 4]) ?: continue
-            if (iput.type != IInstanceOpType.IPut) continue
+            if (iput.type != InstanceOpType.IPut) continue
             if (iput.ref != iget.ref) continue
             // println("found timeTextWidth ${igetField.descriptor}")
             timeTextWidth = igetField
