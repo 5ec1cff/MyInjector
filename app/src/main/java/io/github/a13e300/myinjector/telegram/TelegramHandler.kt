@@ -72,12 +72,13 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
         subHook(SendImageWithHighQualityByDefault())
 
+        subHook(HideFloatFab())
+
         // TODO: deobf:
         /*
         subHook(OpenLinkDialog())
         subHook(EmojiStickerMenu())
         subHook(CustomMapPosition())
-        subHook(HideFloatFab())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())*/
         _creator?.let {
