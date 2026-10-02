@@ -64,6 +64,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(FixHasAppToOpen())
         subHook(LongClickMention())
         subHook(AvatarPagerScrollToCurrent())
+        subHook(DisableProfileAvatarBlur())
 
         // TODO: deobf:
         subHook(OpenLinkDialog())
@@ -75,7 +76,6 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(HideFloatFab())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
-        subHook(DisableProfileAvatarBlur())
         _creator?.let {
             it.persist()
             it.close()

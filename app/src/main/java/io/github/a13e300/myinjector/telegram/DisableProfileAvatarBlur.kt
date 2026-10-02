@@ -6,16 +6,16 @@ import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
-import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.callS
-import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.getObjAs
-import io.github.a13e300.myinjector.arch.getObjAsN
-import io.github.a13e300.myinjector.arch.hookAllAfter
-import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hook
+import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
-import io.github.a13e300.myinjector.arch.hookAllNopIf
-import io.github.a13e300.myinjector.arch.setObj
+import io.github.a13e300.myinjector.arch.hookBefore
+import io.github.a13e300.myinjector.arch.hookNopIf
+import org.luckypray.dexkit.wrap.DexField
+import org.luckypray.dexkit.wrap.DexMethod
+import java.lang.reflect.Field
+import java.lang.reflect.Method
+import java.lang.reflect.Modifier
 import java.util.WeakHashMap
 
 class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
@@ -32,27 +32,37 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
      * 其他官方 / 第三方 Telegram 继续使用原方案一。
      */
     private val isExteragram: Boolean by lazy {
-        getCurrentPackageName() == "com.exteragram.messenger"
+        loadPackageParam.appInfo.packageName == "com.exteragram.messenger"
     }
 
-    private fun getCurrentPackageName(): String? {
-        return runCatching {
-            val activityThreadClass = Class.forName("android.app.ActivityThread")
-            activityThreadClass
-                .getMethod("currentPackageName")
-                .invoke(null) as? String
-        }.getOrNull()
-            ?: runCatching {
-                val activityThreadClass = Class.forName("android.app.ActivityThread")
-                val currentApplication = activityThreadClass
-                    .getMethod("currentApplication")
-                    .invoke(null)
+    private lateinit var memberFields: Map<String, Field>
+    private lateinit var memberMethods: Map<String, Method>
 
-                currentApplication
-                    ?.javaClass
-                    ?.getMethod("getPackageName")
-                    ?.invoke(currentApplication) as? String
-            }.getOrNull()
+    private fun read(obj: Any?, key: String): Any? = memberFields[key]?.get(obj)
+
+    private inline fun <reified T> readAs(obj: Any?, key: String): T = read(obj, key) as T
+
+    private fun invoke(key: String, obj: Any?, vararg args: Any?): Any? {
+        val method = memberMethods.getValue(key)
+        return if (Modifier.isStatic(method.modifiers) &&
+            method.parameterTypes.firstOrNull() == method.declaringClass
+        ) {
+            // R8 may prepend the former receiver to a static method's arguments.
+            method.invoke(null, obj, *args)
+        } else {
+            method.invoke(obj, *args)
+        }
+    }
+
+    private fun setActionsColor(actionsView: Any, color: Int, hasColorById: Boolean) {
+        if ("actionsSetActionsColor" in memberMethods) {
+            invoke("actionsSetActionsColor", actionsView, color, hasColorById)
+        } else {
+            // setActionsColor can be inlined into TopView.onDraw; checkPaints is empty.
+            memberFields.getValue("actionsColor").setInt(actionsView, color)
+            memberFields.getValue("actionsHasColorById").setBoolean(actionsView, hasColorById)
+            invoke("actionsCreateColorShader", actionsView)
+        }
     }
 
     /**
@@ -94,6 +104,7 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
      * 防止我们自己调用 setActionsColor(...) 时，被 hook 误缓存。
      */
     private var changingActionsColor = false
+    private val inTopViewDraw = ThreadLocal<Boolean>()
 
     private fun markActionsPulled(actionsViewObj: Any?, pulled: Boolean) {
         val actionsView = actionsViewObj as? View ?: return
@@ -132,14 +143,12 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         }
 
         val paintInfo = runCatching {
-            val paint = actionsViewObj.getObjAs<Paint>("paint")
+            val paint = readAs<Paint>(actionsViewObj, "actionsPaint")
             paint.color to paint.alpha
         }.getOrNull() ?: return
 
-        val oldStyle = originalActionsStyleMap[actionsView]
-
         originalActionsStyleMap[actionsView] = ActionsOriginalStyle(
-            actionsColor = colorFromSetActionsColor ?: oldStyle?.actionsColor,
+            actionsColor = colorFromSetActionsColor ?: readAs<Int>(actionsViewObj, "actionsColor"),
             paintColor = paintInfo.first,
             paintAlpha = paintInfo.second
         )
@@ -153,12 +162,12 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         val originalStyle = originalActionsStyleMap[actionsView]
 
         runCatching {
-            actionsViewObj.setObj("radialGradient", null)
+            memberFields.getValue("actionsRadialGradient").set(actionsViewObj, null)
         }
 
         if (originalStyle != null) {
             runCatching {
-                val paint = actionsViewObj.getObjAs<Paint>("paint")
+                val paint = readAs<Paint>(actionsViewObj, "actionsPaint")
                 paint.color = originalStyle.paintColor
                 paint.alpha = originalStyle.paintAlpha
             }
@@ -167,7 +176,7 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
             if (originalColor != null) {
                 runCatching {
                     changingActionsColor = true
-                    actionsViewObj.call("setActionsColor", originalColor, false)
+                    setActionsColor(actionsViewObj, originalColor, false)
                 }.also {
                     changingActionsColor = false
                 }
@@ -192,18 +201,18 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         }
 
         runCatching {
-            actionsViewObj.setObj("radialGradient", null)
+            memberFields.getValue("actionsRadialGradient").set(actionsViewObj, null)
         }
 
         runCatching {
-            val paint = actionsViewObj.getObjAs<Paint>("paint")
+            val paint = readAs<Paint>(actionsViewObj, "actionsPaint")
             paint.color = Color.BLACK
             paint.alpha = 88
         }
 
         runCatching {
             changingActionsColor = true
-            actionsViewObj.call("setActionsColor", Color.WHITE, false)
+            setActionsColor(actionsViewObj, Color.WHITE, false)
         }.also {
             changingActionsColor = false
         }
@@ -228,20 +237,21 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         }
     }
 
-    private fun disableNonActionBlurView(viewObj: Any?) {
-        runCatching {
-            viewObj?.call("drawingBlur", false)
+    private fun disableNonActionBlurView(viewObj: Any?, key: String) {
+        if (viewObj == null) return
+        memberMethods[key]?.let { method ->
+            if (method.parameterCount == 0) invoke(key, viewObj)
+            else invoke(key, viewObj, false)
         }
-
-        if (viewObj is View) {
-            viewObj.invalidate()
-        }
+        (viewObj as? View)?.invalidate()
     }
 
     override fun onHook() {
-        val profileActivity = findClass("org.telegram.ui.ProfileActivity")
-        val topViewClass = findClass("org.telegram.ui.ProfileActivity\$TopView")
-        val androidUtilities = findClass("org.telegram.messenger.AndroidUtilities")
+        val members = profileAvatarBlurMembers(TelegramHandler.creator)
+        memberFields = members.filterValues { it.descriptor.isNotEmpty() && '(' !in it.descriptor }
+            .mapValues { DexField(it.value.descriptor).getFieldInstance(classLoader).also { it.isAccessible = true } }
+        memberMethods = members.filterValues { '(' in it.descriptor }
+            .mapValues { DexMethod(it.value.descriptor).getMethodInstance(classLoader).also { it.isAccessible = true } }
 
         /*
          * =========================
@@ -257,27 +267,25 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
          */
         if (isExteragram) {
             hookExteragramBlurDraw()
-            hookExteragramProfileActionsView()
         } else {
-            findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
-                .hookAllNopIf("draw", ::isEnabled)
+            memberMethods.getValue("blurDraw").hookNopIf(::isEnabled)
         }
+        hookProfileActionsView()
 
         /*
          * move shadow up
          */
-        profileActivity.hookAllAfter(
-            "updateExtraViews",
+        memberMethods.getValue("updateExtraViews").hookAfter(
             cond = ::isEnabled
         ) { param ->
             if (extendAvatar) {
-                return@hookAllAfter
+                return@hookAfter
             }
 
             val pa = param.thisObject
-            val overlaysView = pa.getObjAsN<View>("overlaysView") ?: return@hookAllAfter
-            val actionsView = pa.getObjAsN<View>("actionsView") ?: return@hookAllAfter
-            val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
+            val overlaysView = (read(pa, "overlaysView") as? View) ?: return@hookAfter
+            val actionsView = (read(pa, "actionsView") as? View) ?: return@hookAfter
+            val isPulledDown = readAs<Boolean>(pa, "isPulledDown")
 
             if (isExteragram) {
                 if (!isForcedByUs(actionsView)) {
@@ -301,9 +309,9 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         /*
          * fix background turn black
          */
-        topViewClass.hookAllBefore("setBackgroundColor", cond = ::isEnabled) { param ->
+        memberMethods.getValue("topSetBackgroundColor").hookBefore(cond = ::isEnabled) { param ->
             if (extendAvatar) {
-                return@hookAllBefore
+                return@hookBefore
             }
 
             if (param.args[0] == Color.BLACK) {
@@ -316,7 +324,7 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         /*
          * let avatar gallery expand to actions area
          */
-        findClass("org.telegram.ui.Components.ProfileGalleryView")
+        findClass(members.getValue("galleryClass").className)
             .hookAllCAfter(cond = ::isEnabled) { param ->
                 if (!extendAvatar) {
                     return@hookAllCAfter
@@ -328,19 +336,18 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         /*
          * set proper shadow
          */
-        findClass("org.telegram.ui.ProfileActivity\$OverlaysView").hookAllAfter(
-            "onSizeChanged",
+        memberMethods.getValue("overlaysOnSizeChanged").hookAfter(
             cond = ::isEnabled
         ) { param ->
             if (!extendAvatar) {
-                return@hookAllAfter
+                return@hookAfter
             }
 
             val bottomOverlayGradient =
-                param.thisObject.getObjAs<GradientDrawable>("bottomOverlayGradient")
-            val bottomOverlayRect = param.thisObject.getObjAs<Rect>("bottomOverlayRect")
+                readAs<GradientDrawable>(param.thisObject, "bottomOverlayGradient")
+            val bottomOverlayRect = readAs<Rect>(param.thisObject, "bottomOverlayRect")
             val actionsExtraHeight =
-                param.thisObject.getObj("this\$0").call("getActionsExtraHeight") as Int
+                invoke("getActionsExtraHeight", read(param.thisObject, "overlaysProfileActivity")) as Int
 
             bottomOverlayRect.top -= actionsExtraHeight
 
@@ -350,8 +357,6 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
             bottomOverlayGradient.bounds = newBounds
         }
 
-        findClass("org.telegram.ui.ActionBar.ActionBar")
-
         fun lerp(a: Float, b: Float, f: Float): Float {
             return a + f * (b - a)
         }
@@ -359,21 +364,21 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
         /*
          * fix animation of expanding avatar
          */
-        profileActivity.hookAllAfter("setAvatarExpandProgress", cond = ::isEnabled) { param ->
+        memberMethods.getValue("setAvatarExpandProgress").hookAfter(cond = ::isEnabled) { param ->
             if (!extendAvatar) {
-                return@hookAllAfter
+                return@hookAfter
             }
 
             val pa = param.thisObject
-            val avatarsViewPager = pa.getObjAs<View>("avatarsViewPager")
-            val value = pa.getObjAs<Float>("currentExpandAnimatorValue")
-            val avatarContainer = pa.getObjAs<View>("avatarContainer")
-            val avatarScale = pa.getObjAs<Float>("avatarScale")
+            val avatarsViewPager = readAs<View>(pa, "avatarsViewPager")
+            val value = readAs<Float>(pa, "currentExpandAnimatorValue")
+            val avatarContainer = readAs<View>(pa, "avatarContainer")
+            val avatarScale = readAs<Float>(pa, "avatarScale")
             val lp = avatarContainer.layoutParams as ViewGroup.MarginLayoutParams
             val realSize = avatarsViewPager.height
 
             val nh = lerp(
-                androidUtilities.callS("dpf2", 100f) as Float,
+                invoke("dpf2", null, 100f) as Float,
                 realSize / avatarScale,
                 value
             ).toInt()
@@ -382,16 +387,16 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
             lp.width = nh
             lp.leftMargin = 0
 
-            pa.call("fixAvatarImageInCenter")
+            invoke("fixAvatarImageInCenter", pa)
             avatarContainer.requestLayout()
 
             if (isExteragram) {
                 val actionsView = runCatching {
-                    pa.getObj("actionsView")
+                    read(pa, "actionsView")
                 }.getOrNull()
 
                 val isPulledDown = runCatching {
-                    pa.getObjAs<Boolean>("isPulledDown")
+                    readAs<Boolean>(pa, "isPulledDown")
                 }.getOrDefault(false)
 
                 if (!isForcedByUs(actionsView)) {
@@ -403,19 +408,19 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
             }
         }
 
-        profileActivity.hookAllAfter("needLayout", cond = ::isEnabled) { param ->
+        memberMethods.getValue("needLayout").hookAfter(cond = ::isEnabled) { param ->
             if (!extendAvatar) {
-                return@hookAllAfter
+                return@hookAfter
             }
 
             val pa = param.thisObject
             val openAnimationInProgress =
-                pa.getObjAs<Boolean>("openAnimationInProgress")
-            val playProfileAnimation = pa.getObjAs<Int>("playProfileAnimation")
+                readAs<Boolean>(pa, "openAnimationInProgress")
+            val playProfileAnimation = readAs<Int>(pa, "playProfileAnimation")
 
             val actionsView = if (isExteragram) {
                 runCatching {
-                    pa.getObj("actionsView")
+                    read(pa, "actionsView")
                 }.getOrNull()
             } else {
                 null
@@ -423,7 +428,7 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
 
             val isPulledDown = if (isExteragram) {
                 runCatching {
-                    pa.getObjAs<Boolean>("isPulledDown")
+                    readAs<Boolean>(pa, "isPulledDown")
                 }.getOrDefault(false)
             } else {
                 false
@@ -438,15 +443,15 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
             }
 
             if (openAnimationInProgress && playProfileAnimation == 2) {
-                val avatarsViewPager = pa.getObjAs<View>("avatarsViewPager")
-                val value = pa.getObjAs<Float>("currentExpandAnimatorValue")
-                val avatarContainer = pa.getObjAs<View>("avatarContainer")
-                val avatarScale = pa.getObjAs<Float>("avatarScale")
+                val avatarsViewPager = readAs<View>(pa, "avatarsViewPager")
+                val value = readAs<Float>(pa, "currentExpandAnimatorValue")
+                val avatarContainer = readAs<View>(pa, "avatarContainer")
+                val avatarScale = readAs<Float>(pa, "avatarScale")
                 val lp = avatarContainer.layoutParams as ViewGroup.MarginLayoutParams
                 val realSize = avatarsViewPager.height
 
                 val nh = lerp(
-                    androidUtilities.callS("dpf2", 100f) as Float,
+                    invoke("dpf2", null, 100f) as Float,
                     realSize / avatarScale,
                     value
                 ).toInt()
@@ -455,7 +460,7 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
                 lp.width = nh
                 lp.leftMargin = 0
 
-                pa.call("fixAvatarImageInCenter")
+                invoke("fixAvatarImageInCenter", pa)
                 avatarContainer.requestLayout()
             }
 
@@ -477,13 +482,14 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
          *   回来时恢复原样；
          *   不写死普通状态背景，避免大会员按钮变白盒。
          */
-        topViewClass.hookAllAfter(
-            "updateBackgroundPaint",
+        // In this APK updateBackgroundPaint is inlined into TopView.onDraw. Run before
+        // drawing so the adjusted action paint is used by the same frame.
+        memberMethods.getValue("topUpdateBackgroundPaint").hookBefore(
             cond = ::isEnabled
         ) { param ->
-            val pa = param.thisObject.getObj("this\$0")
-            val actionsView = pa.getObj("actionsView") ?: return@hookAllAfter
-            val isPulledDown = pa.getObjAs<Boolean>("isPulledDown")
+            val pa = read(param.thisObject, "topProfileActivity")
+            val actionsView = read(pa, "actionsView") ?: return@hookBefore
+            val isPulledDown = readAs<Boolean>(pa, "isPulledDown")
 
             if (isExteragram) {
                 if (!isForcedByUs(actionsView)) {
@@ -493,16 +499,11 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
                 markActionsPulled(actionsView, isPulledDown)
                 applyActionsStyleByState(actionsView)
             } else {
-                if (!extendAvatar) {
-                    return@hookAllAfter
-                }
-
-                if (isPulledDown) {
-                    actionsView.setObj("radialGradient", null)
-                    actionsView.call("setActionsColor", Color.BLACK, false)
-                    actionsView.getObjAs<Paint>("paint").alpha = 40
-                }
+                inTopViewDraw.set(extendAvatar && isPulledDown)
             }
+        }
+        memberMethods.getValue("topUpdateBackgroundPaint").hookAfter(cond = ::isEnabled) {
+            inTopViewDraw.remove()
         }
     }
 
@@ -510,74 +511,72 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
      * 方案二：Exteragram 专用 draw hook。
      */
     private fun hookExteragramBlurDraw() {
-        findClass("org.telegram.ui.Components.ProfileGalleryBlurView")
-            .hookAllBefore("draw", cond = ::isEnabled) { param ->
-                val blurView = param.thisObject
+        memberMethods.getValue("blurDraw").hookBefore(cond = ::isEnabled) { param ->
+            val blurView = param.thisObject
 
-                val actionsView = runCatching {
-                    blurView.getObj("actionsView")
-                }.getOrNull()
+            val actionsView = runCatching {
+                read(blurView, "blurActionsView")
+            }.getOrNull()
 
-                val musicView = runCatching {
-                    blurView.getObj("musicView")
-                }.getOrNull()
+            val musicView = runCatching {
+                read(blurView, "blurMusicView")
+            }.getOrNull()
 
-                val suggestionView = runCatching {
-                    blurView.getObj("suggestionView")
-                }.getOrNull()
+            val suggestionView = runCatching {
+                read(blurView, "blurSuggestionView")
+            }.getOrNull()
 
-                applyActionsStyleByState(actionsView)
+            applyActionsStyleByState(actionsView)
 
-                disableNonActionBlurView(musicView)
-                disableNonActionBlurView(suggestionView)
+            disableNonActionBlurView(musicView, "musicDrawingBlur")
+            disableNonActionBlurView(suggestionView, "suggestionDrawingBlur")
 
-                param.result = null
-            }
+            param.result = null
+        }
     }
 
     /**
      * 方案二：Exteragram 专用 ProfileActionsView hook。
      *
-     * 只 hook setActionsColor：
+     * hook setActionsColor，或内联后调用的 createColorShader：
      * - 缓存 Exteragram 原本动态主题色；
      * - 下拉状态时保持可读。
      *
      * 不 hook onDraw。
      * 不 hook drawingBlur。
      */
-    private fun hookExteragramProfileActionsView() {
-        val profileActionsViewClass =
-            findClass("org.telegram.ui.Components.ProfileActionsView")
-
-        profileActionsViewClass.hookAllBefore(
-            "setActionsColor",
-            cond = ::isEnabled
-        ) { param ->
-            if (changingActionsColor) {
-                return@hookAllBefore
+    private fun hookProfileActionsView() {
+        // Hook createColorShader when setActionsColor has been inlined.
+        val setter = memberMethods["actionsSetActionsColor"]
+        val hookMethod = setter ?: memberMethods.getValue("actionsCreateColorShader")
+        hookMethod.hook(
+            cond = ::isEnabled,
+            before = { param ->
+                if (!changingActionsColor) {
+                    val actionsView = if (Modifier.isStatic(hookMethod.modifiers)) param.args[0] else param.thisObject
+                    if (isExteragram && !isForcedByUs(actionsView)) {
+                        val color = if (setter != null) {
+                            param.args[hookMethod.parameterCount - 2] as Int
+                        } else readAs<Int>(actionsView, "actionsColor")
+                        cacheOriginalActionsStyle(actionsView, color)
+                    }
+                }
+            },
+            after = { param ->
+                if (!changingActionsColor) {
+                    val actionsView = if (Modifier.isStatic(hookMethod.modifiers)) param.args[0] else param.thisObject
+                    if (isExteragram && isActionsPulled(actionsView)) {
+                        forceActionsReadableOnAvatar(actionsView)
+                    } else if (!isExteragram && inTopViewDraw.get() == true) {
+                        memberFields.getValue("actionsRadialGradient").set(actionsView, null)
+                        readAs<Paint>(actionsView, "actionsPaint").apply {
+                            color = Color.BLACK
+                            alpha = 40
+                        }
+                        (actionsView as? View)?.invalidate()
+                    }
+                }
             }
-
-            val actionsViewObj = param.thisObject
-            val color = param.args.getOrNull(0) as? Int ?: return@hookAllBefore
-
-            if (!isForcedByUs(actionsViewObj)) {
-                cacheOriginalActionsStyle(actionsViewObj, color)
-            }
-        }
-
-        profileActionsViewClass.hookAllAfter(
-            "setActionsColor",
-            cond = ::isEnabled
-        ) { param ->
-            if (changingActionsColor) {
-                return@hookAllAfter
-            }
-
-            val actionsViewObj = param.thisObject
-
-            if (isActionsPulled(actionsViewObj)) {
-                forceActionsReadableOnAvatar(actionsViewObj)
-            }
-        }
+        )
     }
 }
