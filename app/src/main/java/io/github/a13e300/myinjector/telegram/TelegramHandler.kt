@@ -68,13 +68,14 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
         subHook(AlwaysShowDownloadManager())
 
+        subHook(RemoveArchiveFolder())
+
         // TODO: deobf:
         /*
         subHook(OpenLinkDialog())
         subHook(EmojiStickerMenu())
         subHook(CustomMapPosition())
         subHook(SendImageWithHighQualityByDefault())
-        subHook(RemoveArchiveFolder())
         subHook(HideFloatFab())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())*/

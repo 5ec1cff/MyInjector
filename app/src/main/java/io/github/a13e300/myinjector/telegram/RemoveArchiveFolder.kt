@@ -3,21 +3,27 @@ package io.github.a13e300.myinjector.telegram
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCBefore
+import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.setObj
 
 class RemoveArchiveFolder : MyDynHook("removeArchiveFolder") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.removeArchiveFolder
     override fun onHook() {
         val guard = ThreadLocal<Boolean>()
-        findClass("org.telegram.messenger.MessagesController").hookAllBefore(
+        // MessagesController and its members are kept by Telegram's ProGuard rules.
+        findClass("org.telegram.messenger.MessagesController").hookBefore(
             "getDialogs",
+            Integer.TYPE,
             cond = ::isEnabled
         ) { param ->
             // for com.exteragram.messenger
             if (guard.get() != true) {
                 guard.set(true)
-                param.thisObject.call("removeFolder", 1)
-                guard.set(false)
+                try {
+                    param.thisObject.call("removeFolder", 1)
+                } finally {
+                    guard.remove()
+                }
             }
         }
         val specialPackageNames = listOf(
