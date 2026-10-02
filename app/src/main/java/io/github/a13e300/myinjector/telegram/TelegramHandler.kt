@@ -74,11 +74,12 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
         subHook(HideFloatFab())
 
+        subHook(CustomMapPosition())
+
         // TODO: deobf:
         /*
         subHook(OpenLinkDialog())
         subHook(EmojiStickerMenu())
-        subHook(CustomMapPosition())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())*/
         _creator?.let {
