@@ -1,114 +1,228 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.getObjAs
-import io.github.a13e300.myinjector.arch.hookAll
-import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.ObfsTable
+import io.github.a13e300.myinjector.arch.ObfsTableCreator
+import io.github.a13e300.myinjector.arch.hook
+import io.github.a13e300.myinjector.arch.hookBefore
+import io.github.a13e300.myinjector.arch.toObfsInfo
+import org.luckypray.dexkit.wrap.DexField
+import org.luckypray.dexkit.wrap.DexMethod
+import java.lang.reflect.Modifier
 
 // 个人资料头像如果存在多个且主头像非第一个时，下拉展示完整头像列表时自动切到当前头像（原行为是总是切到第一个）
 class AvatarPagerScrollToCurrent : MyDynHook("avatarPageScrollToCurrent") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.avatarPageScrollToCurrent
 
+    private fun deobf(creator: ObfsTableCreator): ObfsTable {
+        val baseFragment = creator.obfsTable["BaseFragment"]!!
+        val foreground = creator.create("ProfileActivitySetForegroundImage") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    declaredClass { superClass(baseFragment.className) }
+                    usingEqStrings("avatar")
+                    returnType("void")
+                    addInvoke {
+                        descriptor("Lorg/telegram/messenger/ImageReceiver;->getDrawable()Landroid/graphics/drawable/Drawable;")
+                    }
+                }
+            }.single {
+                // R8 can turn the instance method into a static (ProfileActivity, boolean) method.
+                it.usingStrings.size == 1 &&
+                    (it.paramTypeNames == listOf("boolean") ||
+                        (Modifier.isStatic(it.modifiers) && it.paramTypeNames == listOf(it.className, "boolean")))
+            }.toObfsInfo()
+        }
+
+        val imageLocation = creator.create("ProfileGalleryViewGetImageLocation") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    addCaller { descriptor(foreground.descriptor) }
+                    paramTypes("int")
+                    returnType("org.telegram.messenger.ImageLocation")
+                }
+            }.single().toObfsInfo()
+        }
+
+        val reset = creator.create("ProfileGalleryViewResetCurrentItem") { bridge ->
+            // setCurrentItem(adapter.getExtraCount(), false): two calls and one field read.
+            bridge.findMethod {
+                matcher {
+                    declaredClass(imageLocation.className)
+                    paramTypes()
+                    returnType("void")
+                    addInvoke {
+                        paramTypes("int", "boolean")
+                        returnType("void")
+                    }
+                    addInvoke {
+                        paramTypes()
+                        returnType("int")
+                    }
+                }
+            }.single { it.invokes.size == 2 && it.usingFields.size == 1 }.toObfsInfo()
+        }
+
+        creator.create("AvatarViewPagerSetCurrentItem") { bridge ->
+            bridge.getMethodData(reset.descriptor)!!.invokes.single {
+                it.paramTypeNames == listOf("int", "boolean") && it.returnTypeName == "void"
+            }.toObfsInfo()
+        }
+
+        val adapter = creator.create("ProfileGalleryViewAdapter") { bridge ->
+            bridge.getMethodData(reset.descriptor)!!.usingFields.single().field.toObfsInfo()
+        }
+
+        creator.create("AvatarCircularViewPagerAdapterGetRealPosition") { bridge ->
+            // The gallery's getRealPosition(int) wrapper can be inlined away. Its no-arg
+            // overload still calls adapter.getRealPosition(getCurrentItem()).
+            bridge.findMethod {
+                matcher {
+                    declaredClass(imageLocation.className)
+                    paramTypes()
+                    returnType("int")
+                    addUsingField { descriptor(adapter.descriptor) }
+                    addInvoke {
+                        paramTypes("int")
+                        returnType("int")
+                    }
+                }
+            }.single().invokes.single {
+                it.paramTypeNames == listOf("int") && it.returnTypeName == "int"
+            }.toObfsInfo()
+        }
+
+        creator.create("ProfileGalleryViewProfileActivity") { bridge ->
+            // The anonymous subclass holds its enclosing ProfileActivity; both names can change.
+            bridge.findField {
+                matcher {
+                    declaredClass { superClass(imageLocation.className) }
+                    type(foreground.className)
+                }
+            }.single().toObfsInfo()
+        }
+
+        creator.create("ProfileActivityUserInfo") { bridge ->
+            bridge.findField {
+                matcher {
+                    declaredClass(foreground.className)
+                    type("org.telegram.tgnet.TLRPC\$UserFull")
+                }
+            }.single().toObfsInfo()
+        }
+
+        creator.create("ProfileActivityChatInfo") { bridge ->
+            bridge.findField {
+                matcher {
+                    declaredClass(foreground.className)
+                    type("org.telegram.tgnet.TLRPC\$ChatFull")
+                }
+            }.single().toObfsInfo()
+        }
+
+        creator.create("ProfileGalleryViewPhotos") { bridge ->
+            bridge.findField {
+                matcher {
+                    declaredClass(imageLocation.className)
+                    type("java.util.ArrayList")
+                    addReadMethod {
+                        declaredClass(imageLocation.className)
+                        paramTypes("int")
+                        returnType("org.telegram.tgnet.TLRPC\$Photo")
+                    }
+                }
+            }.single().toObfsInfo()
+        }
+
+        // Telegram keeps org.telegram.tgnet.** and its members in proguard-rules.pro.
+        creator.create("AvatarUserFullProfilePhoto") { bridge ->
+            bridge.findField {
+                matcher {
+                    descriptor("Lorg/telegram/tgnet/TLRPC\$UserFull;->profile_photo:Lorg/telegram/tgnet/TLRPC\$Photo;")
+                }
+            }.single().toObfsInfo()
+        }
+        creator.create("AvatarChatFullChatPhoto") { bridge ->
+            bridge.findField {
+                matcher {
+                    descriptor("Lorg/telegram/tgnet/TLRPC\$ChatFull;->chat_photo:Lorg/telegram/tgnet/TLRPC\$Photo;")
+                }
+            }.single().toObfsInfo()
+        }
+        creator.create("AvatarPhotoId") { bridge ->
+            bridge.findField {
+                matcher {
+                    descriptor("Lorg/telegram/tgnet/TLRPC\$Photo;->id:J")
+                }
+            }.single().toObfsInfo()
+        }
+        return creator.obfsTable
+    }
+
     override fun onHook() {
-        val pgvClass = findClass("org.telegram.ui.Components.ProfileGalleryView")
-        pgvClass.hookAllBefore("resetCurrentItem", cond = ::isEnabled) { param ->
-            if (!param.thisObject.javaClass.name.startsWith("org.telegram.ui.ProfileActivity")) return@hookAllBefore
-            val pa = param.thisObject.getObj("this$0")
-            val currentPhoto = pa.getObj("userInfo")?.getObj("profile_photo")
-                ?: pa.getObj("chatInfo")?.getObj("chat_photo") ?: return@hookAllBefore
-            val id = currentPhoto.getObjAs<Long>("id")
-            val photos = param.thisObject.getObjAs<List<*>>("photos")
-            val idx = photos.indexOfFirst {
-                it?.getObjAs<Long>("id") == id
-            }
-            if (idx == -1) return@hookAllBefore
+        val table = deobf(TelegramHandler.creator)
+        fun method(key: String) = DexMethod(table[key]!!.descriptor)
+            .getMethodInstance(classLoader).also { it.isAccessible = true }
+        fun field(key: String) = DexField(table[key]!!.descriptor)
+            .getFieldInstance(classLoader).also { it.isAccessible = true }
+
+        val resetCurrentItem = method("ProfileGalleryViewResetCurrentItem")
+        val setCurrentItem = method("AvatarViewPagerSetCurrentItem")
+        val getRealPosition = method("AvatarCircularViewPagerAdapterGetRealPosition")
+        val setForegroundImage = method("ProfileActivitySetForegroundImage")
+        val getImageLocation = method("ProfileGalleryViewGetImageLocation")
+        val adapterField = field("ProfileGalleryViewAdapter")
+        val profileActivityField = field("ProfileGalleryViewProfileActivity")
+        val userInfoField = field("ProfileActivityUserInfo")
+        val chatInfoField = field("ProfileActivityChatInfo")
+        val photosField = field("ProfileGalleryViewPhotos")
+        val profilePhotoField = field("AvatarUserFullProfilePhoto")
+        val chatPhotoField = field("AvatarChatFullChatPhoto")
+        val photoIdField = field("AvatarPhotoId")
+
+        fun currentPhotoIndex(gallery: Any): Int {
+            if (!profileActivityField.declaringClass.isInstance(gallery)) return -1
+            val pa = profileActivityField.get(gallery) ?: return -1
+            val currentPhoto = userInfoField.get(pa)?.let { profilePhotoField.get(it) }
+                ?: chatInfoField.get(pa)?.let { chatPhotoField.get(it) } ?: return -1
+            val id = photoIdField.getLong(currentPhoto)
+            val photos = photosField.get(gallery) as List<*>
+            return photos.indexOfFirst { it != null && photoIdField.getLong(it) == id }
+        }
+
+        resetCurrentItem.hookBefore(cond = ::isEnabled) { param ->
+            val idx = currentPhotoIndex(param.thisObject)
+            if (idx == -1) return@hookBefore
+            val adapter = adapterField.get(param.thisObject) ?: return@hookBefore
             var exactIdx = 0
-            // I know it's dumb, but ...
-            // https://github.com/DrKLO/Telegram/blob/289c4625035feafbfac355eb01591b726894a623/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileGalleryView.java#L1502
-            while (param.thisObject.call("getRealPosition", exactIdx) != idx) {
+            // CircularViewPager has extra pages at both ends; preserve the first matching page.
+            while (getRealPosition.invoke(adapter, exactIdx) != idx) {
                 exactIdx++
                 // I believe no one can set over 300 photos
-                if (exactIdx > 300) return@hookAllBefore
+                if (exactIdx > 300) return@hookBefore
             }
-            param.thisObject.call("setCurrentItem", exactIdx, false)
+            setCurrentItem.invoke(param.thisObject, exactIdx, false)
             param.result = null
         }
-        // fix wrong transition image
+
+        // Fix the transition image. In the static R8 variant, the boolean is the last argument.
         val inSetFgImg = ThreadLocal<Boolean>()
-        val paClass = findClass("org.telegram.ui.ProfileActivity")
-        paClass.hookAll(
-            "setForegroundImage",
+        val secondParentArg = setForegroundImage.parameterCount - 1
+        setForegroundImage.hook(
             cond = ::isEnabled,
             before = { param ->
-                if (param.args[0] == false) {
+                if (param.args[secondParentArg] == false) {
                     inSetFgImg.set(true)
                 }
             },
-            after = { param ->
-                inSetFgImg.set(false)
+            after = { _ ->
+                inSetFgImg.remove()
             }
         )
-        pgvClass.hookAllBefore("getImageLocation", cond = ::isEnabled) { param ->
+        getImageLocation.hookBefore(cond = ::isEnabled) { param ->
             if (inSetFgImg.get() == true) {
-                val pa = param.thisObject.getObj("this$0")
-                val currentPhoto = pa.getObj("userInfo")?.getObj("profile_photo")
-                    ?: pa.getObj("chatInfo")?.getObj("chat_photo") ?: return@hookAllBefore
-                val id = currentPhoto.getObjAs<Long>("id")
-                val photos = param.thisObject.getObjAs<List<*>>("photos")
-                val idx = photos.indexOfFirst {
-                    it?.getObjAs<Long>("id") == id
-                }
-                if (idx == -1) return@hookAllBefore
-                param.args[0] = idx
+                val idx = currentPhotoIndex(param.thisObject)
+                if (idx != -1) param.args[0] = idx
             }
         }
-        /*
-        val currentExactIdx = ThreadLocal<Int?>()
-        XposedBridge.hookAllMethods(
-            pgvClass, "setAnimatedFileMaybe", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (!param.thisObject.javaClass.name.startsWith("org.telegram.ui.ProfileActivity")) return
-                    val pa = param.thisObject.getObj("this$0")
-                    val currentPhoto = pa.getObj("userInfo")?.getObj("profile_photo")
-                        ?: pa.getObj("chatInfo")?.getObj("chat_photo") ?: return
-                    val id = currentPhoto.getObjAs<Long>("id")
-                    val photos = param.thisObject.getObjAs<List<*>>("photos")
-                    val idx = photos.indexOfFirst {
-                        it?.getObjAs<Long>("id") == id
-                    }
-                    if (idx == -1) return
-                    var exactIdx = 0
-                    // I know it's dumb, but ...
-                    // https://github.com/DrKLO/Telegram/blob/289c4625035feafbfac355eb01591b726894a623/TMessagesProj/src/main/java/org/telegram/ui/Components/ProfileGalleryView.java#L1502
-                    while (param.thisObject.call("getRealPosition", exactIdx) != idx) {
-                        exactIdx++
-                        // I believe no one can set over 300 photos
-                        if (exactIdx > 300) return
-                    }
-                    logD("current photo for anim idx $idx real $exactIdx")
-                    currentExactIdx.set(exactIdx)
-                }
-
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    currentExactIdx.set(null)
-                }
-            }
-        )
-        val adapterClass = findClass("org.telegram.ui.Components.CircularViewPager\$Adapter")
-        XposedBridge.hookAllMethods(adapterClass, "getRealPosition", object : XC_MethodHook() {
-            override fun beforeHookedMethod(param: MethodHookParam) {
-                val exactIdx = currentExactIdx.get()
-                logD("getRealPosition ${param.args[0]} $exactIdx")
-                if (exactIdx == null) return
-
-                if (param.args[0] != exactIdx) {
-                    param.result = 114514
-                } else {
-                    logD("set fake position for anim")
-                    param.result = 0
-                }
-            }
-        })*/
     }
 }

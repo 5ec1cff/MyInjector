@@ -63,12 +63,12 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(OpenTgUserLink())
         subHook(FixHasAppToOpen())
         subHook(LongClickMention())
+        subHook(AvatarPagerScrollToCurrent())
 
         // TODO: deobf:
         subHook(OpenLinkDialog())
         subHook(EmojiStickerMenu())
         subHook(CustomMapPosition())
-        subHook(AvatarPagerScrollToCurrent())
         subHook(SendImageWithHighQualityByDefault())
         subHook(RemoveArchiveFolder())
         subHook(AlwaysShowDownloadManager())
