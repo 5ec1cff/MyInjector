@@ -72,7 +72,13 @@ class OpenLinkDialog : MyDynHook("openLinkDialog") {
                 val tryTelegraph = param.args[3]
                 val progress = param.args[7]
                 fix.openRunnable = Runnable {
-                    openUrl.invoke(null, context, Uri.parse(fix.url), inlineReturn == 0L, tryTelegraph, progress)
+                    val args = if (openUrl.parameterCount == 5) {
+                        arrayOf(context, Uri.parse(fix.url), inlineReturn == 0L, tryTelegraph, progress)
+                    } else {
+                        arrayOf(context, Uri.parse(fix.url), inlineReturn == 0L, tryTelegraph,
+                            false, progress, null, false, true, false)
+                    }
+                    openUrl.invoke(null, *args)
                 }
             }
         }
@@ -110,18 +116,24 @@ private fun findOpenLinkDialog(bridge: DexKitBridge): Map<String, String> {
         addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("OpenUrlTitle") }
     } }.single()
     check(alert.paramTypeNames.take(7) == listOf("android.content.Context", "java.lang.String", "boolean", "boolean", "boolean", "boolean", "long"))
-    val browserClass = alert.invokes.single { it.paramCount == 10 && it.paramTypeNames.take(2) == listOf("android.content.Context", "android.net.Uri") }.className
+    val openFull = alert.invokes.single { it.paramCount == 10 && it.paramTypeNames.take(2) == listOf("android.content.Context", "android.net.Uri") }
+    val browserClass = openFull.className
     val open = bridge.findMethod { matcher {
         declaredClass(browserClass)
         paramTypes("android.content.Context", "android.net.Uri", "boolean", "boolean", alert.paramTypeNames[7])
         returnType("void")
-    } }.single()
+    } }.singleOrNull() ?: openFull
     val positive = alert.invokes.single { it.paramCount == 2 && it.paramTypeNames[0] == "java.lang.CharSequence" }
     val setters = bridge.getClassData(positive.className)!!.methods.filter {
         it.paramCount == 2 && it.paramTypeNames[0] in listOf("java.lang.String", "java.lang.CharSequence") && it.paramTypeNames[1] == positive.paramTypeNames[1]
     }
     val used = (alert.invokes + alert.invokes.flatMap { it.invokes }).map { it.descriptor }.toSet()
-    val neutral = setters.single { it.descriptor !in used }
+    // NaGram already uses the neutral button for Copy. Telegram leaves it
+    // unused; recognize both layouts without relying on obfuscated names.
+    val neutral = setters.singleOrNull { it.descriptor !in used }
+        ?: scanTelegramDex(bridge, alert).calls.single { call ->
+            call.method.descriptor in setters.map { it.descriptor } && call.args.first()?.resource == "Copy"
+        }.method
     val neutralFields = neutral.usingFields.filter { it.usingType == FieldUsingType.Write }.map { it.field }.distinctBy { it.descriptor }
     val text = neutralFields.single { it.typeName == "java.lang.CharSequence" }
     val listener = neutralFields.single { it.typeName == positive.paramTypeNames[1] }
