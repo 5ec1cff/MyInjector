@@ -46,13 +46,26 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     found["adminCell"] = admin.descriptor
     found["blockCell"] = cell("ChannelBlacklist", updateCode).descriptor
     found["logCell"] = cell("EventLog", createCode).descriptor
-    val hasAdmin = createCode.calls.last { it.method.className == "org.telegram.messenger.ChatObject" && it.method.name == "hasAdminRights" }
-    val hidden = createCode.calls.filter { call ->
-        call.offset > hasAdmin.offset && call.method.name == "setVisibility" && call.args.singleOrNull()?.number == 8 && call.receiver?.field?.className == edit
-    }.take(2).map { it.receiver!!.field!! }
-    check(hidden.size == 2 && hidden.count { it.typeName == "android.widget.LinearLayout" } == 1)
-    found["infoContainer"] = hidden.single { it.typeName == "android.widget.LinearLayout" }.descriptor
-    found["settingsTopSection"] = hidden.single { it.typeName != "android.widget.LinearLayout" }.descriptor
+    // NaGram removes the non-admin setVisibility calls. Find the container
+    // through its native child, and the separator preceding the type settings.
+    found["infoContainer"] = createCode.calls.filter { call ->
+        call.method.name == "addView" && call.args.firstOrNull()?.field?.descriptor == admin.descriptor &&
+            call.receiver?.field?.className == edit
+    }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single().descriptor
+    val typeCell = updateCode.calls.filter { call ->
+        call.receiver?.field?.className == edit && call.args.any { it?.resource in listOf("ChannelType", "GroupType") }
+    }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single()
+    val typeContainerField = createCode.calls.filter { call ->
+        call.method.name == "addView" && call.args.firstOrNull()?.field?.descriptor == typeCell.descriptor &&
+            call.receiver?.field?.className == edit
+    }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single()
+    val typeContainer = createCode.calls.first {
+        it.method.name == "setOrientation" && it.receiver?.field?.descriptor == typeContainerField.descriptor
+    }
+    found["settingsTopSection"] = createCode.calls.last { call ->
+        call.offset < typeContainer.offset && call.method.name == "addView" &&
+            call.args.firstOrNull()?.field?.let { it.className == edit && it.typeName != "android.widget.LinearLayout" } == true
+    }.args.first()!!.field!!.descriptor
     found["editChat"] = bridge.findField { matcher { declaredClass(edit); type("org.telegram.tgnet.TLRPC\$Chat") } }.single().descriptor
     // Reuse the native TextCell overload. R8 inserts/reorders the animated flag.
     found["setAdminText"] = updateCode.calls.first { it.receiver?.field?.descriptor == admin.descriptor && it.args.any { arg -> arg?.resource == "ChannelAdministrators" } }.method.descriptor
