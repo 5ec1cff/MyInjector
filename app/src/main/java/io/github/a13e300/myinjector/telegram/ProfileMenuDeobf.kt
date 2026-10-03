@@ -22,7 +22,7 @@ internal fun findProfileMenu(bridge: DexKitBridge): Map<String, String> {
         "menu" to menu.descriptor,
         "otherItem" to discussion.receiver!!.field!!.descriptor,
         "addSubItem" to discussion.method.descriptor,
-        "discussionId" to discussion.args[0]!!.number!!.toString(),
+        "discussionId" to telegramIntArgument(bridge, menu, discussion.offset, 0).toString(),
         "currentChat" to field("org.telegram.tgnet.TLRPC\$Chat"),
         "chatInfo" to field("org.telegram.tgnet.TLRPC\$ChatFull"),
     )

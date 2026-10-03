@@ -105,3 +105,81 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
     }
     return TgDexCode(calls, writes, compares, returns)
 }
+
+// R8 reuses constant registers across mutually exclusive menu branches. A
+// linear scan can see an unrelated zero overwrite a menu ID. Merge constants
+// along the actual control-flow edges before reading an invocation argument.
+internal fun telegramIntArgument(bridge: DexKitBridge, method: MethodData, offset: Int, argument: Int): Int {
+    val code = method.insns
+    val states = mutableMapOf(0 to emptyMap<Int, Int>())
+    val queue = ArrayDeque<Int>().apply { add(0) }
+    fun intAt(pos: Int) = code[pos].code or (code[pos + 1].code shl 16)
+    while (queue.isNotEmpty()) {
+        val pos = queue.removeFirst()
+        val values = states.getValue(pos).toMutableMap()
+        val word = code[pos].code
+        val op = word and 0xff
+        val a = (word ushr 8) and 0xf
+        val b = word ushr 12
+        val aa = word ushr 8
+        fun assign(reg: Int, value: Int?) { values.remove(reg); value?.let { values[reg] = it } }
+        when (op) {
+            0x01, 0x07 -> assign(a, values[b])
+            0x02, 0x08 -> assign(aa, values[code[pos + 1].code])
+            0x03, 0x09 -> assign(code[pos + 1].code, values[code[pos + 2].code])
+            0x04 -> { assign(a, null); assign(a + 1, null) }
+            0x05 -> { assign(aa, null); assign(aa + 1, null) }
+            0x06 -> { val dst = code[pos + 1].code; assign(dst, null); assign(dst + 1, null) }
+            0x12 -> assign(a, b.shl(28).shr(28))
+            0x13 -> assign(aa, code[pos + 1].code.toShort().toInt())
+            0x14 -> assign(aa, intAt(pos + 1))
+            0x15 -> assign(aa, code[pos + 1].code shl 16)
+            0x0b, in 0x16..0x19 -> { assign(aa, null); assign(aa + 1, null) }
+            0x53 -> { assign(a, null); assign(a + 1, null) }
+            0x61 -> { assign(aa, null); assign(aa + 1, null) }
+            0x45, in 0x9b..0xa5, in 0xab..0xaf -> { assign(aa, null); assign(aa + 1, null) }
+            0x7d, 0x7e, 0x80, 0x81, 0x83, 0x86, 0x88, 0x89, 0x8b, in 0xbb..0xc5, in 0xcb..0xcf -> {
+                assign(a, null); assign(a + 1, null)
+            }
+            0x20, 0x23, in 0x52..0x58, in 0x7b..0x8f, in 0xb0..0xd7 -> assign(a, null)
+            0x0a, 0x0c, 0x0d, in 0x1a..0x1c, 0x21, 0x22, in 0x2d..0x31,
+            in 0x44..0x4a, in 0x60..0x66, in 0x90..0xaf, in 0xd8..0xe2 -> assign(aa, null)
+        }
+        val next = pos + getInsnWide(code, pos)
+        val successors = when (op) {
+            in 0x0e..0x11, 0x27 -> emptyList()
+            0x28 -> listOf(pos + aa.toByte())
+            0x29 -> listOf(pos + code[pos + 1].code.toShort())
+            0x2a -> listOf(pos + intAt(pos + 1))
+            in 0x32..0x3d -> listOf(next, pos + code[pos + 1].code.toShort())
+            0x2b, 0x2c -> {
+                val payload = pos + intAt(pos + 1)
+                val count = code[payload + 1].code
+                val keys = if (op == 0x2b) List(count) { intAt(payload + 2) + it }
+                    else List(count) { intAt(payload + 2 + it * 2) }
+                val targets = if (op == 0x2b) payload + 4 else payload + 2 + count * 2
+                val value = values[aa]
+                if (value == null) listOf(next) + List(count) { pos + intAt(targets + it * 2) }
+                else keys.indexOf(value).let { if (it == -1) listOf(next) else listOf(pos + intAt(targets + it * 2)) }
+            }
+            else -> listOf(next)
+        }
+        for (target in successors.filter { it in code.indices }) {
+            val previous = states[target]
+            val merged = if (previous == null) values.toMap() else previous.filter { (reg, value) -> values[reg] == value }
+            if (previous != merged) { states[target] = merged; queue.add(target) }
+        }
+    }
+    val word = code[offset].code
+    val op = word and 0xff
+    check(op in 0x6e..0x72 || op in 0x74..0x78)
+    val invoked = bridge.getMethodDataByDexAndId(method.dexId, code[offset + 1].code)!!
+    check(invoked.paramTypeNames[argument] == "int")
+    val registers = if (op >= 0x74) List(word ushr 8) { code[offset + 2].code + it } else {
+        val packed = code[offset + 2].code
+        listOf(packed and 0xf, (packed ushr 4) and 0xf, (packed ushr 8) and 0xf, packed ushr 12, (word ushr 8) and 0xf).take(word ushr 12)
+    }
+    val parameter = (if (op == 0x71 || op == 0x77) 0 else 1) +
+        invoked.paramTypeNames.take(argument).map { if (it == "long" || it == "double") 2 else 1 }.sum()
+    return states[offset]?.get(registers[parameter]) ?: error("Unknown integer argument $argument at ${method.descriptor}:$offset")
+}

@@ -20,7 +20,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
     private var _creator: ObfsTableCreator? = null
     val creator: ObfsTableCreator
-        get() = _creator ?: ObfsTableCreator("tg", 1, appInfo = loadPackageParam.appInfo)
+        get() = _creator ?: ObfsTableCreator("tg", 2, appInfo = loadPackageParam.appInfo)
             .also { _creator = it }
     val hookErrors = mutableMapOf<String, String>()
 
