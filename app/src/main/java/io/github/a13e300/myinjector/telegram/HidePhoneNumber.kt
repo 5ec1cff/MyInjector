@@ -350,6 +350,22 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                 }
                 if (getNumberRowMethod != null && getPhoneRowMethod != null) break
             }
+            if (getNumberRowMethod == null) {
+                // NaGram inserts its phone-privacy check before reading the
+                // number, outside the old instruction window. Anchor the row
+                // comparison to its localized placeholder instead.
+                val code = scanTelegramDex(bridge, onBindViewHolder)
+                val placeholder = code.calls.first { call -> call.args.any { it?.resource == "NumberUnknown" } }
+                val numberRow = code.compares.last { cmp ->
+                    cmp.offset < placeholder.offset && cmp.fields.any {
+                        it.className == "org.telegram.ui.ProfileActivity" && it.typeName == "int"
+                    }
+                }.fields.single { it.className == "org.telegram.ui.ProfileActivity" && it.typeName == "int" }
+                getNumberRowMethod = onBindViewHolder.invokes.distinctBy { it.descriptor }.single {
+                    it.className == numberRow.className && it.returnTypeName == "int" &&
+                        it.usingFields.singleOrNull()?.field?.descriptor == numberRow.descriptor
+                }
+            }
             //    0091ce08: 6002 2919               130c: sget                v2, Lorg/telegram/messenger/R$drawable;->msg_input_gift:I # field@1929
             //    0091ce0c: 7120 020e 2000          130e: invoke-static       {v0, v2}, Le0/c;->c(Landroid/content/Context;, I)Landroid/graphics/drawable/Drawable; # method@0e02
             //    0091ce12: 0c00                    1311: move-result-object  v0
