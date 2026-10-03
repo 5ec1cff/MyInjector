@@ -6,6 +6,7 @@ import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hookAfter
+import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.bridge.Unhook
 import io.github.a13e300.myinjector.logE
 import org.luckypray.dexkit.wrap.DexField
@@ -32,17 +33,9 @@ class AddInfoContainer : MyDynHook("addInfoContainer") {
         val adminIcon = drawables.getObjSAs<Int>("msg_admins")
         val strings = findClass("org.telegram.messenger.R\$string")
         val locale = findClass("org.telegram.messenger.LocaleController")
-        val adminTitle = locale.callS("getString", "ChannelAdministrators", strings.getObjSAs<Int>("ChannelAdministrators"))
+        val adminTitleId = strings.getObjSAs<Int>("ChannelAdministrators")
         val setAdmin = methods.getValue("setAdminText")
         check(setAdmin.parameterTypes.count { CharSequence::class.java.isAssignableFrom(it) } == 2)
-        val adminArgs = setAdmin.parameterTypes.mapIndexed { index, type ->
-            when {
-                CharSequence::class.java.isAssignableFrom(type) -> if (index == 0) adminTitle else "**"
-                type == Integer.TYPE -> adminIcon
-                type == java.lang.Boolean.TYPE -> index == setAdmin.parameterCount - 1
-                else -> error("Unexpected TextCell parameter $type")
-            }
-        }.toTypedArray()
         fun hasAdmin(chat: Any?) = chat != null && chatObject.callS("hasAdminRights", chat) == true
         fun isChannel(chat: Any?) = chat != null && chatObject.callS("isChannel", chat) == true
         fun showInfo(activity: Any) {
@@ -58,7 +51,20 @@ class AddInfoContainer : MyDynHook("addInfoContainer") {
                 val view = log.get(activity) as View?
                 (view?.parent as ViewGroup?)?.removeView(view)
                 log.set(activity, null)
-                fields.getValue("adminCell").get(activity)?.let { setAdmin.invoke(it, *adminArgs) }
+                fields.getValue("adminCell").get(activity)?.let { cell ->
+                    // Hook installation runs before ApplicationLoader sets its
+                    // Context. Resolve localized text only when the UI is ready.
+                    val adminTitle = locale.callS("getString", "ChannelAdministrators", adminTitleId)
+                    val args = setAdmin.parameterTypes.mapIndexed { index, type ->
+                        when {
+                            CharSequence::class.java.isAssignableFrom(type) -> if (index == 0) adminTitle else "**"
+                            type == Integer.TYPE -> adminIcon
+                            type == java.lang.Boolean.TYPE -> index == setAdmin.parameterCount - 1
+                            else -> error("Unexpected TextCell parameter $type")
+                        }
+                    }.toTypedArray()
+                    setAdmin.invoke(cell, *args)
+                }
             }
         }
         fun guarded(action: () -> Unit) {
@@ -99,6 +105,15 @@ class AddInfoContainer : MyDynHook("addInfoContainer") {
                 guarded {
                     val activity = param.thisObject
                     hideManagementButtons(activity, fields.getValue("usersChat").get(activity))
+                }
+            }
+            installed += methods.getValue("usersDiscard").hookBefore(cond = ::isEnabled) { param ->
+                guarded {
+                    val chat = fields.getValue("usersChat").get(param.thisObject) ?: return@guarded
+                    // Native dirty checks treat hidden booster restrictions as
+                    // edits, even in member lists. Non-admins only query these
+                    // settings, so allow every native back/swipe-back route.
+                    if (!hasAdmin(chat)) param.result = true
                 }
             }
             installed += methods.getValue("updateRows").hookAfter(cond = ::isEnabled) { param ->

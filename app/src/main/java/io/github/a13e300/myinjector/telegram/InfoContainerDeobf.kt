@@ -63,6 +63,12 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     } }.single()
     found["usersCreate"] = usersCreate.descriptor
     val users = usersCreate.className
+    found["usersDiscard"] = bridge.findMethod { matcher {
+        declaredClass(users); paramTypes("boolean"); returnType("boolean")
+        for (resource in listOf("UserRestrictionsApplyChanges", "ChannelSettingsChangedAlert", "GroupSettingsChangedAlert")) {
+            addUsingField { declaredClass("org.telegram.messenger.R\$string"); name(resource) }
+        }
+    } }.single().descriptor
     val usersCreateCode = scanTelegramDex(bridge, usersCreate)
     for ((key, resource) in mapOf("searchItem" to "outline_header_search", "doneItem" to "ic_ab_done")) {
         found[key] = usersCreateCode.writes.filter { it.field.className == users && it.value?.resource == resource }
@@ -113,7 +119,7 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     return found
 }
 
-internal val infoContainerMethodKeys = listOf("setIcon", "updateFields", "editCreate", "setAdminText", "usersCreate", "updateRows")
+internal val infoContainerMethodKeys = listOf("setIcon", "updateFields", "editCreate", "setAdminText", "usersCreate", "usersDiscard", "updateRows")
 private val infoContainerKeys = infoContainerMethodKeys + listOf("profileTopic", "editVisible", "editItem", "adminCell", "blockCell", "logCell",
     "infoContainer", "settingsTopSection", "editChat", "searchItem", "doneItem", "usersType", "usersChat", "rowCount", "rowFields",
     "recentActionsRow", "addNewSectionRow", "participantsDivider2Row", "removedUsersRow")
