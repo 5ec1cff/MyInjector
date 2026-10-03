@@ -14,6 +14,7 @@ import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import org.luckypray.dexkit.DexKitBridge
+import org.luckypray.dexkit.result.MethodData
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
 import java.lang.reflect.Modifier
@@ -30,11 +31,12 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
     override fun onHook() {
         val creator = TelegramHandler.creator
         val found by lazy { findEmojiStickerMenu(creator.bridge, creator.obfsTable.getValue("BaseFragment").className) }
-        val keys = listOf("emojiClick", "header", "emojiOptions", "loader", "sets", "emojiFragment",
-            "stickerClick", "stickerInit", "stickerOptions", "stickerSet", "stickerFragment", "addText")
+        val keys = listOf("emojiClick", "emojiOwner", "header", "emojiOptions", "loader", "sets", "emojiFragment",
+            "stickerClick", "stickerOwner", "stickerInit", "stickerOptions", "stickerSet", "stickerFragment", "addText")
         val members = keys.associateWith { key -> creator.create("EmojiStickerMenu.$key") {
             val descriptor = found.getValue(key)
             when {
+                descriptor.isEmpty() -> ObfsInfo("", "")
                 key == "header" -> ObfsInfo(descriptor, "")
                 key in listOf("emojiClick", "stickerClick", "stickerInit", "addText") -> {
                     val m = DexMethod(descriptor); ObfsInfo(m.className, m.name, descriptor)
@@ -53,6 +55,8 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
         val emojiFragment = field("emojiFragment")
         val stickerFragment = field("stickerFragment")
         val stickerSetField = field("stickerSet")
+        val emojiOwner = members.getValue("emojiOwner").descriptor.takeIf { it.isNotEmpty() }?.let { field("emojiOwner") }
+        val stickerOwner = members.getValue("stickerOwner").descriptor.takeIf { it.isNotEmpty() }?.let { field("stickerOwner") }
         val addText = method("addText")
         val customEmojiClass = findClass("org.telegram.tgnet.TLRPC\$TL_documentAttributeCustomEmoji")
         val messagesController = findClass("org.telegram.messenger.MessagesController")
@@ -85,7 +89,9 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
         emojiClick.hookBefore(cond = ::isEnabled) { param ->
             val id = param.args.last() as Int
             if (id != MENU_DUMP && id != MENU_GET_PROFILE) return@hookBefore
-            val alert = if (Modifier.isStatic(emojiClick.modifiers)) param.args[0]!! else param.thisObject
+            val receiver = if (Modifier.isStatic(emojiClick.modifiers)) param.args[0]!! else param.thisObject
+            val alert = emojiOwner?.get(receiver) ?: receiver
+            if (!loaderField.declaringClass.isInstance(alert)) return@hookBefore
             val loader = loaderField.get(alert) ?: return@hookBefore
             val stickerSets = setsField.get(loader) as? List<*> ?: return@hookBefore
             param.result = null
@@ -134,7 +140,9 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
         val stickerClick = method("stickerClick")
         stickerClick.hookBefore(cond = ::isEnabled) { param ->
             if (param.args.last() != MENU_GET_PROFILE) return@hookBefore
-            val alert = if (Modifier.isStatic(stickerClick.modifiers)) param.args[0]!! else param.thisObject
+            val receiver = if (Modifier.isStatic(stickerClick.modifiers)) param.args[0]!! else param.thisObject
+            val alert = stickerOwner?.get(receiver) ?: receiver
+            if (!stickerSetField.declaringClass.isInstance(alert)) return@hookBefore
             val set = stickerSetField.get(alert) ?: return@hookBefore
             param.result = null
             showAdmin(alert, set, stickerFragment.get(alert))
@@ -147,30 +155,43 @@ private fun findEmojiStickerMenu(bridge: DexKitBridge, baseFragment: String): Ma
         returnType("void"); usingStrings("/addemoji/", "/addstickers/")
     } }.filter { it.paramTypeNames == listOf("int") || (Modifier.isStatic(it.modifiers) && it.paramTypeNames == listOf(it.className, "int")) }
     check(handlers.size == 2)
-    val sticker = handlers.single { m -> m.usingFields.any { it.field.className == m.className && it.field.typeName == "org.telegram.tgnet.TLRPC\$TL_messages_stickerSet" } }
+    val sticker = handlers.single { m -> m.usingFields.any { it.field.typeName == "org.telegram.tgnet.TLRPC\$TL_messages_stickerSet" } }
     val emoji = handlers.single { it != sticker }
+    val stickerSet = sticker.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
+        it.typeName == "org.telegram.tgnet.TLRPC\$TL_messages_stickerSet"
+    }
+    val stickerClass = stickerSet.className
+    val sets = emoji.usingFields.map { it.field }.distinctBy { it.descriptor }.single { it.typeName == "java.util.ArrayList" }
+    val loader = emoji.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
+        it.typeName == sets.className || it.type.superClass?.name == sets.className
+    }
+    val emojiClass = loader.className
+    fun capturedOwner(handler: MethodData, owner: String): String {
+        if (handler.className == owner) return ""
+        // R8 may keep the callback in a listener and merge its captured
+        // receiver into an Object field instead of inlining it into the alert.
+        return bridge.getClassData(handler.className)!!.fields.single {
+            it.typeName == owner || it.typeName == "java.lang.Object"
+        }.descriptor
+    }
     val initializers = bridge.findMethod { matcher {
         addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("StickersShare") }
         addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("CopyLink") }
     } }
-    val header = initializers.single { it.isConstructor && it.declaredClass!!.fields.any { f -> f.typeName == emoji.className } }
-    val init = initializers.single { it.className == sticker.className }
+    val header = initializers.single { it.isConstructor && it.declaredClass!!.fields.any { f -> f.typeName == emojiClass } }
+    val init = initializers.single { it.className == stickerClass }
     val addMenu = header.invokes.distinctBy { it.descriptor }.single { it.paramTypeNames.take(2) == listOf("int", "int") && it.paramTypeNames.lastOrNull() in listOf("java.lang.String", "java.lang.CharSequence") && it.paramCount == 3 }
     val addText = bridge.findMethod { matcher { declaredClass(addMenu.className); paramTypes("int", "java.lang.CharSequence") } }.single()
     fun field(c: String, type: String) = bridge.findField { matcher { declaredClass(c); type(type) } }.single()
-    val sets = emoji.usingFields.map { it.field }.distinctBy { it.descriptor }.single { it.typeName == "java.util.ArrayList" }
-    val loader = emoji.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
-        it.className == emoji.className && (it.typeName == sets.className || it.type.superClass?.name == sets.className)
-    }
     return mapOf(
-        "emojiClick" to emoji.descriptor, "header" to header.className,
+        "emojiClick" to emoji.descriptor, "emojiOwner" to capturedOwner(emoji, emojiClass), "header" to header.className,
         "emojiOptions" to field(header.className, addMenu.className).descriptor,
         "loader" to loader.descriptor, "sets" to sets.descriptor,
-        "emojiFragment" to field(emoji.className, baseFragment).descriptor,
-        "stickerClick" to sticker.descriptor, "stickerInit" to init.descriptor,
-        "stickerOptions" to field(sticker.className, addMenu.className).descriptor,
-        "stickerSet" to field(sticker.className, "org.telegram.tgnet.TLRPC\$TL_messages_stickerSet").descriptor,
-        "stickerFragment" to field(sticker.className, baseFragment).descriptor,
+        "emojiFragment" to field(emojiClass, baseFragment).descriptor,
+        "stickerClick" to sticker.descriptor, "stickerOwner" to capturedOwner(sticker, stickerClass), "stickerInit" to init.descriptor,
+        "stickerOptions" to field(stickerClass, addMenu.className).descriptor,
+        "stickerSet" to stickerSet.descriptor,
+        "stickerFragment" to field(stickerClass, baseFragment).descriptor,
         "addText" to addText.descriptor
     )
 }
