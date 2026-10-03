@@ -38,10 +38,12 @@ class AntiAntiCopy : MyDynHook("antiAntiCopy") {
         creator.create("ChatActivityProcessSelectedOption") { bridge ->
             bridge.findMethod {
                 matcher {
-                    usingEqStrings("onlySelect")
                     declaredClass(openForward.className)
+                    paramTypes("int")
+                    returnType("void")
+                    usingEqStrings("tel:", "canSelectTopics", "messagesCount")
                 }
-            }.single { it.descriptor != openForward.descriptor }.toObfsInfo()
+            }.single().toObfsInfo()
         }
         return creator.obfsTable
     }
