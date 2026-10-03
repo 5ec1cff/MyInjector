@@ -64,7 +64,15 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
                 try {
                     // Native forwarding handles slow mode, media restrictions
                     // and paid-message confirmation; retain TMoe's attribution.
-                    methods.getValue("forward").invoke(chat, ArrayList(messages), false, false, true, 0, 0L)
+                    val forward = methods.getValue("forward")
+                    val args = mutableListOf<Any?>(ArrayList(messages), false, false, true, 0, 0L)
+                    // Some forks retain the mono-forum/suggestion arguments
+                    // that R8 folds into the six-argument Telegram method.
+                    if (forward.parameterCount == 8) {
+                        args += methods.getValue("monoPeer").invoke(chat)
+                        args += fields.getValue("suggestion").get(chat)
+                    }
+                    forward.invoke(chat, *args.toTypedArray())
                 } finally {
                     MessageMenuHook.dismiss(chat)
                 }
@@ -148,9 +156,11 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
     val params = "$helper\$SendMessageParams"
     val forward = bridge.findMethod { matcher {
         declaredClass(chat); returnType("void")
-        paramTypes("java.util.ArrayList", "boolean", "boolean", "boolean", "int", "long")
         addInvoke { declaredClass(helper); name("sendMessage") }
-    } }.single()
+    } }.single {
+        val prefix = listOf("java.util.ArrayList", "boolean", "boolean", "boolean", "int", "long")
+        it.paramTypeNames == prefix || it.paramTypeNames == prefix + listOf("long", suggestion)
+    }
     val forwardFields = forward.usingFields.map { it.field }.distinctBy { it.descriptor }
     fun forwardField(type: String) = forwardFields.single { it.className == chat && it.typeName == type }.descriptor
     // processSelectedOption first reads the selected album in its Retry branch;
@@ -174,10 +184,14 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
     return mapOf(
         "forward" to forward.descriptor,
         "slowMode" to invoked("boolean"),
-        "monoPeer" to invoked("long"),
+        "monoPeer" to bridge.findMethod { matcher {
+            declaredClass(chat); paramTypes(); returnType("long")
+            addInvoke { declaredClass("org.telegram.messenger.ChatObject"); name("isMonoForum") }
+            addInvoke { declaredClass("org.telegram.messenger.ChatObject"); name("canManageMonoForum") }
+        } }.single().descriptor,
         "dialog" to forwardField("long"),
         "thread" to forwardField(message),
-        "suggestion" to forwardField(suggestion),
+        "suggestion" to bridge.findField { matcher { declaredClass(chat); type(suggestion) } }.single().descriptor,
         "group" to group.descriptor,
         "currentChat" to bridge.findField { matcher {
             declaredClass(chat); type("org.telegram.tgnet.TLRPC\$Chat"); addReadMethod { descriptor(createMenu) }
