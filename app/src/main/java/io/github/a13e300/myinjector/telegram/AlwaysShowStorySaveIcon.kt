@@ -122,6 +122,19 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
                 break
             }
 
+            if (peerStoriesAllowShare == null) {
+                // Forks can expose Save to Gallery unconditionally, removing
+                // allowShare from the popup. Its state is still updated just
+                // before testing whether the current story is pinned/expired.
+                val code = scanTelegramDex(bridge, peerStoriesViewUpdatePosition)
+                val pinned = code.compares.first { cmp -> cmp.fields.any {
+                    it.descriptor == "Lorg/telegram/tgnet/tl/TL_stories\$StoryItem;->pinned:Z"
+                } }
+                peerStoriesAllowShare = code.writes.last {
+                    it.offset < pinned.offset && it.field.className == peerStoriesViewUpdatePosition.className && it.field.typeName == "boolean"
+                }.field
+            }
+
             // allowShareLink: if (allowShareLink) {
             //                            ActionBarMenuItem.addItem(popupLayout, R.drawable.msg_link2
             //    00124e00: 55b0 c625               0332: iget-boolean        v0, v11, Lsg/j3;->T2:Z # field@25c6
