@@ -83,6 +83,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "historicalNewsOption" ->
                 settings.historicalNewsOption = v
 
+            "repeatMessage" ->
+                settings.repeatMessage = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -182,6 +185,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "查看发送者历史消息",
                     "historicalNewsOption",
                     "在消息菜单增加「查看历史消息」，按发送者筛选当前聊天；长按菜单项复制发送者 ID"
+                )
+                switchPreference(
+                    "复读消息",
+                    "repeatMessage",
+                    "在消息菜单增加「复读」，发送到当前聊天；禁止转发或话题内仅支持重发文字、贴纸"
                 )
                 switchPreference(
                     "显示消息 ID",
@@ -398,6 +406,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "historicalNewsOption" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.historicalNewsOption
+
+            "repeatMessage" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.repeatMessage
 
             "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching

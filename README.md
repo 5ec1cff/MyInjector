@@ -118,6 +118,7 @@ fork.risin42.nagramx
 - 资料页显示用户、群组、频道或话题 ID，点击复制（移植自 [TMoe](https://github.com/cinit/TMoe)，重新打开资料页生效）
 - 资料页根据头像显示数据中心 DC，点击复制；可独立开关（移植自 [TMoe](https://github.com/cinit/TMoe)，重新打开资料页生效）
 - 消息菜单查看发送者在当前聊天的历史消息，长按菜单项复制发送者 ID（移植自 [TMoe](https://github.com/cinit/TMoe)）
+- 消息菜单复读消息或整组相册；禁止转发或话题内重发所选消息的文字、贴纸，与查看历史独立开关（移植自 [TMoe](https://github.com/cinit/TMoe)）
 
 ### 知乎
 
