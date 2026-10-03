@@ -15,8 +15,9 @@ internal data class TgDexValue(
 )
 internal data class TgDexCall(val offset: Int, val method: MethodData, val receiver: TgDexValue?, val args: List<TgDexValue?>)
 internal data class TgDexWrite(val offset: Int, val field: FieldData, val value: TgDexValue?)
-internal data class TgDexCompare(val offset: Int, val fields: List<FieldData>)
-internal data class TgDexCode(val calls: List<TgDexCall>, val writes: List<TgDexWrite>, val compares: List<TgDexCompare>)
+internal data class TgDexCompare(val offset: Int, val target: Int, val fields: List<FieldData>)
+internal data class TgDexReturn(val offset: Int, val value: TgDexValue?)
+internal data class TgDexCode(val calls: List<TgDexCall>, val writes: List<TgDexWrite>, val compares: List<TgDexCompare>, val returns: List<TgDexReturn>)
 
 // Follow local register origins to associate resource labels with their UI
 // receivers. This is not a control-flow interpreter: queries below validate
@@ -26,6 +27,7 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
     val calls = mutableListOf<TgDexCall>()
     val writes = mutableListOf<TgDexWrite>()
     val compares = mutableListOf<TgDexCompare>()
+    val returns = mutableListOf<TgDexReturn>()
     val code = method.insns
     var pending: TgDexValue? = null
     var pos = 0
@@ -47,6 +49,7 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
                 assign(dst, regs[src])
             }
             in 0x0a..0x0c -> assign(aa, pending)
+            in 0x0f..0x11 -> returns += TgDexReturn(pos, regs[aa])
             0x12 -> assign(a, TgDexValue(number = b.shl(28).shr(28)))
             0x13 -> assign(aa, TgDexValue(number = code[pos + 1].code.toShort().toInt()))
             0x14 -> assign(aa, TgDexValue(number = code[pos + 1].code or (code[pos + 2].code shl 16)))
@@ -56,13 +59,19 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
                 assign(aa, TgDexValue(string = bridge.getStringByDexAndId(method.dexId, id)))
             }
             in 0x52..0x58 -> assign(a, TgDexValue(field = bridge.getFieldDataByDexAndId(method.dexId, code[pos + 1].code)!!))
-            in 0x59..0x5f -> writes += TgDexWrite(pos, bridge.getFieldDataByDexAndId(method.dexId, code[pos + 1].code)!!, regs[a])
+            in 0x59..0x5f -> {
+                val field = bridge.getFieldDataByDexAndId(method.dexId, code[pos + 1].code)!!
+                writes += TgDexWrite(pos, field, regs[a])
+                // Constructors store a new view and then call setters through
+                // the same local register instead of reading the field again.
+                if (op == 0x5b && field.className == method.className) assign(a, (regs[a] ?: TgDexValue()).copy(field = field))
+            }
             in 0x60..0x66 -> {
                 val field = bridge.getFieldDataByDexAndId(method.dexId, code[pos + 1].code)!!
                 assign(aa, TgDexValue(field = field, resource = if (field.className.startsWith("org.telegram.messenger.R\$")) field.name else null))
             }
-            in 0x32..0x37 -> compares += TgDexCompare(pos, listOfNotNull(regs[a]?.field, regs[b]?.field))
-            in 0x38..0x3d -> compares += TgDexCompare(pos, listOfNotNull(regs[aa]?.field))
+            in 0x32..0x37 -> compares += TgDexCompare(pos, pos + code[pos + 1].code.toShort(), listOfNotNull(regs[a]?.field, regs[b]?.field))
+            in 0x38..0x3d -> compares += TgDexCompare(pos, pos + code[pos + 1].code.toShort(), listOfNotNull(regs[aa]?.field))
             in 0x6e..0x72, in 0x74..0x78 -> {
                 val invoked = bridge.getMethodDataByDexAndId(method.dexId, code[pos + 1].code)!!
                 val args = if (op >= 0x74) List(aa) { code[pos + 2].code + it } else {
@@ -84,6 +93,8 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
                     pending = TgDexValue(bundleKey = values.first()?.string)
                 } else if (invoked.modifiers and 0x1000 != 0 && invoked.invokes.isEmpty()) {
                     pending = invoked.usingFields.singleOrNull { it.usingType == FieldUsingType.Read }?.field?.let { TgDexValue(field = it) }
+                } else if (invoked.returnTypeName != "void") {
+                    pending = TgDexValue(resource = values.firstNotNullOfOrNull { it?.resource })
                 }
             }
             0x23, in 0x7b..0x8f, in 0xb0..0xd7 -> assign(a, null)
@@ -92,5 +103,5 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
         }
         pos += getInsnWide(code, pos)
     }
-    return TgDexCode(calls, writes, compares)
+    return TgDexCode(calls, writes, compares, returns)
 }

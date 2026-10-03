@@ -47,4 +47,5 @@ message TelegramSettings {
   optional bool historicalNewsOption = 38;
   optional bool repeatMessage = 39;
   optional bool addSubItemChannel = 40;
+  optional bool addInfoContainer = 41;
 }

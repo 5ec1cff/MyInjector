@@ -120,6 +120,7 @@ fork.risin42.nagramx
 - 消息菜单查看发送者在当前聊天的历史消息，长按菜单项复制发送者 ID（移植自 [TMoe](https://github.com/cinit/TMoe)）
 - 消息菜单复读消息或整组相册；禁止转发或话题内重发所选消息的文字、贴纸，与查看历史独立开关（移植自 [TMoe](https://github.com/cinit/TMoe)）
 - 关联讨论群的资料页菜单增加打开频道选项（移植自 [TMoe](https://github.com/cinit/TMoe)，重新打开资料页生效）
+- 群资料页显示信息查询入口，非管理员可查看服务端允许获取的管理员、成员和群权限信息（移植自 [TMoe](https://github.com/cinit/TMoe)，重新打开资料页生效）
 
 ### 知乎
 

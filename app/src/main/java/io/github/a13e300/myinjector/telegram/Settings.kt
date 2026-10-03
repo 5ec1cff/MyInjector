@@ -89,6 +89,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "addSubItemChannel" ->
                 settings.addSubItemChannel = v
 
+            "addInfoContainer" ->
+                settings.addInfoContainer = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -339,6 +342,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "在关联讨论群的资料页菜单增加「打开频道」；重新打开资料页生效"
                 )
                 switchPreference(
+                    "群信息查询",
+                    "addInfoContainer",
+                    "显示群信息入口，允许非管理员查询可获取的管理员、成员和群权限；重新打开资料页生效"
+                )
+                switchPreference(
                     "资料页显示 ID",
                     "showIdInProfile",
                     "显示用户、群组、频道或话题 ID，点击复制；重新打开资料页生效"
@@ -420,6 +428,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "addSubItemChannel" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.addSubItemChannel
+
+            "addInfoContainer" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.addInfoContainer
 
             "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching
