@@ -45,9 +45,17 @@ class LongClickMention : MyDynHook("longClickMention") {
             if (called) return
             called = true
             val bridge = creator.bridge
+            val chatClass = bridge.findMethod {
+                matcher { usingStrings("open menu msg_id="); returnType("boolean") }
+            }.single().className
             chatActivityCreateView = bridge.findMethod {
                 matcher {
-                    usingEqStrings("ChatActivity.createView")
+                    name("createView")
+                    paramTypes("android.content.Context")
+                    returnType("android.view.View")
+                    // Forks can remove the createView log. The message menu
+                    // identifies ChatActivity independently of that log.
+                    declaredClass(chatClass)
                 }
             }.single()
 
@@ -60,6 +68,13 @@ class LongClickMention : MyDynHook("longClickMention") {
                             superClass("android.text.style.URLSpan")
                         }
                     }
+                }
+            }.singleOrNull()?.declaredClass ?: bridge.findMethod {
+                matcher {
+                    name("updateDrawState")
+                    addUsingField { descriptor("Landroid/text/TextPaint;->linkColor:I") }
+                    usingNumbers(2, -1)
+                    declaredClass { superClass { superClass("android.text.style.URLSpan") } }
                 }
             }.single().declaredClass
 
@@ -247,9 +262,11 @@ class LongClickMention : MyDynHook("longClickMention") {
         //    009e8e2e: 5913 fdfa               03c3: iput                v3, v1, Lxe/u0;->X:I # field@fafd
         for (i in 0 until poss.size - 5) {
             // const/4 0
-            if (insns[poss[i]].code != 0x0a12) continue
+            val zero = insns[poss[i]].code
+            if (zero.and(0xff) != 0x12 || zero.ushr(12) != 0) continue
             val iput = decodeIInstanceOp(insns, poss[i + 1]) ?: continue
             if (iput.type != InstanceOpType.IPut) continue
+            if (iput.srcReg != zero.ushr(8).and(0xf)) continue
             val iv = decodeInvoke(insns, poss[i + 2]) ?: continue
             if (iv.type != InvokeType.Virtual) continue
             val ivm =
