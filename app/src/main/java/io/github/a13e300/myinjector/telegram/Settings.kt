@@ -86,6 +86,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "repeatMessage" ->
                 settings.repeatMessage = v
 
+            "addSubItemChannel" ->
+                settings.addSubItemChannel = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -331,6 +334,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             category("其他") {
                 switchPreference(
+                    "打开关联频道",
+                    "addSubItemChannel",
+                    "在关联讨论群的资料页菜单增加「打开频道」；重新打开资料页生效"
+                )
+                switchPreference(
                     "资料页显示 ID",
                     "showIdInProfile",
                     "显示用户、群组、频道或话题 ID，点击复制；重新打开资料页生效"
@@ -409,6 +417,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "repeatMessage" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.repeatMessage
+
+            "addSubItemChannel" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.addSubItemChannel
 
             "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching

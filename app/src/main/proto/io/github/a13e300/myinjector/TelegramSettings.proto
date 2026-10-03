@@ -46,4 +46,5 @@ message TelegramSettings {
   optional bool showDCInProfile = 37;
   optional bool historicalNewsOption = 38;
   optional bool repeatMessage = 39;
+  optional bool addSubItemChannel = 40;
 }

@@ -63,6 +63,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(ShowDCInProfile())
         subHook(HistoricalNewsOption())
         subHook(RepeatMessage())
+        subHook(AddSubItemChannel())
         subHook(StickerLoadGuard())
         subHook(OpenTgUserLink())
         subHook(FixHasAppToOpen())
