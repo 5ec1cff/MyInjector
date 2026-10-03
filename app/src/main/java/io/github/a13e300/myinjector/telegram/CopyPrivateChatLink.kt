@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.a13e300.myinjector.arch.ObfsInfo
+import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hook
@@ -23,19 +24,7 @@ class CopyPrivateChatLink : MyDynHook("copyPrivateChatLink") {
     private data class MenuState(val chat: Any, var added: Int = 0)
 
     override fun onHook() {
-        val creator = TelegramHandler.creator
-        val found by lazy { findCopyPrivateChatLink(creator.bridge) }
-        val keys = listOf("createMenu", "options", "selected", "user", "popupAdd", "layout", "provider", "subClass", "subText", "setText")
-        val members = keys.associateWith { key -> creator.create("CopyPrivateChatLink.$key") {
-            val descriptor = found.getValue(key)
-            when {
-                key == "subClass" -> ObfsInfo(descriptor, "")
-                key in listOf("selected", "user", "layout") -> {
-                    val f = DexField(descriptor); ObfsInfo(f.className, f.name, descriptor)
-                }
-                else -> { val m = DexMethod(descriptor); ObfsInfo(m.className, m.name, descriptor) }
-            }
-        } }
+        val members = messageMenuMembers(TelegramHandler.creator)
         fun method(key: String) = DexMethod(members.getValue(key).descriptor)
             .getMethodInstance(classLoader).apply { isAccessible = true }
         fun field(key: String) = DexField(members.getValue(key).descriptor)
@@ -114,6 +103,21 @@ class CopyPrivateChatLink : MyDynHook("copyPrivateChatLink") {
             }
         }
     }
+}
+
+internal fun messageMenuMembers(creator: ObfsTableCreator): Map<String, ObfsInfo> {
+    val found by lazy { findCopyPrivateChatLink(creator.bridge) }
+    val keys = listOf("createMenu", "options", "selected", "user", "popupAdd", "layout", "provider", "subClass", "subText", "setText")
+    return keys.associateWith { key -> creator.create("CopyPrivateChatLink.$key") {
+        val descriptor = found.getValue(key)
+        when {
+            key == "subClass" -> ObfsInfo(descriptor, "")
+            key in listOf("selected", "user", "layout") -> {
+                val f = DexField(descriptor); ObfsInfo(f.className, f.name, descriptor)
+            }
+            else -> { val m = DexMethod(descriptor); ObfsInfo(m.className, m.name, descriptor) }
+        }
+    } }
 }
 
 private fun findCopyPrivateChatLink(bridge: DexKitBridge): Map<String, String> {

@@ -80,6 +80,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "showDCInProfile" ->
                 settings.showDCInProfile = v
 
+            "historicalNewsOption" ->
+                settings.historicalNewsOption = v
+
             "customMapPosition" ->
                 settings.customMapPosition = v
 
@@ -175,6 +178,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             }
 
             category("聊天") {
+                switchPreference(
+                    "查看发送者历史消息",
+                    "historicalNewsOption",
+                    "在消息菜单增加「查看历史消息」，按发送者筛选当前聊天；长按菜单项复制发送者 ID"
+                )
                 switchPreference(
                     "显示消息 ID",
                     "showMsgId",
@@ -387,6 +395,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "showDCInProfile" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.showDCInProfile
+
+            "historicalNewsOption" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.historicalNewsOption
 
             "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching

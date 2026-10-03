@@ -44,4 +44,5 @@ message TelegramSettings {
   optional bool channelDetailNumbers = 35;
   optional bool showIdInProfile = 36;
   optional bool showDCInProfile = 37;
+  optional bool historicalNewsOption = 38;
 }
