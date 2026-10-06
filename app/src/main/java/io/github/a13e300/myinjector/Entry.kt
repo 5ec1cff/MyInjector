@@ -40,12 +40,12 @@ class Entry : XposedModule() {
                 "com.lbe.security.miui" -> LbeHandler()
                 "com.miui.securitycenter" -> MIUISecurityCenterHandler()
                 "com.twitter.android" -> TwitterXposedHandler()
+                "com.exteragram.messenger" -> io.github.a13e300.myinjector.telegram.legacy224.TelegramHandler
                 in listOf(
                     "org.telegram.messenger",
                     "org.telegram.messenger.web",
                     "org.telegram.messenger.beta",
                     "org.telegram.plus",
-                    "com.exteragram.messenger",
                     "com.radolyn.ayugram",
                     "uz.unnarsx.cherrygram",
                     "xyz.nextalone.nagram",
