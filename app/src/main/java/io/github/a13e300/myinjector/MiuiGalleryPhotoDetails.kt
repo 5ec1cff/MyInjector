@@ -239,8 +239,8 @@ class MiuiGalleryPhotoDetails : DynHook() {
         values["光圈"] = aperture?.let { "f/${decimal(it)}" } ?: UNKNOWN
         values["尺寸"] = if (width > 0 && height > 0) "$width × $height px" else UNKNOWN
         values["像素 MP"] = if (width > 0 && height > 0) decimal(width.toDouble() * height / 1_000_000) + " MP" else UNKNOWN
-        // EV at ISO 100, not exposure compensation. Use f-number, not APEX ApertureValue.
-        values["EV（ISO 100）"] = if (aperture != null && exposure != null) decimal(ln(aperture * aperture / exposure) / ln(2.0)) else UNKNOWN
+        // Camera exposure setting EV, not ISO-normalized scene EV or exposure compensation.
+        values["EV（由光圈/曝光计算）"] = if (aperture != null && exposure != null) decimal(ln(aperture * aperture / exposure) / ln(2.0)) else UNKNOWN
         values["曝光补偿"] = number("ExposureBiasValue")?.let { decimal(it) + " EV" } ?: UNKNOWN
         values["位置"] = location ?: UNKNOWN
         values["创建时间"] = date(created) + if (created == null) attribute("DateTimeOriginal")?.let { "（EXIF: $it）" }.orEmpty() else ""

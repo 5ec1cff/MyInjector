@@ -84,8 +84,9 @@ class MiuiGallerySettingsDialog(ctx: Context) : SettingDialog(ctx) {
     }
 
     override fun onCreatePref(prefScreen: PreferenceScreen) {
-        prefScreen.switchPreference("照片预览页显示更多详情", "photoDetails").apply {
+        prefScreen.switchPreference(
+            "照片预览页显示更多详情", "photoDetails",
             summary = "预览页内显示详情按钮；开启后重新打开照片。读取当前应用已有权限可访问的文件和 EXIF，不申请 root。"
-        }
+        )
     }
 }
