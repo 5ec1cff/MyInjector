@@ -39,6 +39,10 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "contactPermission" ->
                 settings.contactPermission = v
 
+            "showMsgId" -> settings.showMsgId = v
+
+            "prohibitChannelSwitching" -> settings.prohibitChannelSwitching = v
+
             "customEmojiMapping" ->
                 settings.customEmojiMapping = v
 
@@ -239,6 +243,16 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             category("其他") {
                 switchPreference(
+                    "显示消息 ID",
+                    "showMsgId",
+                    "在消息时间前显示消息 ID"
+                )
+                switchPreference(
+                    "阻止切换频道",
+                    "prohibitChannelSwitching",
+                    "禁止在聊天末尾继续上拉切换到下一个未读频道，不影响手动打开频道"
+                )
+                switchPreference(
                     "消息编辑框禁用语音或相机按钮",
                     "disableVoiceOrCameraButton",
                 )
@@ -306,6 +320,12 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "contactPermission" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.contactPermission
+
+            "showMsgId" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.showMsgId
+
+            "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
+                TelegramHandler.settings.prohibitChannelSwitching
 
             "customEmojiMapping" -> (preference as SwitchPreference).isChecked =
                 TelegramHandler.settings.customEmojiMapping
