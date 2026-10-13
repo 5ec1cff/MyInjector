@@ -2056,6 +2056,7 @@ class SettingsActivity : Activity() {
         private val loadingClipboardIcons = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
         private val APP_PACKAGES = listOf(
+            "com.miui.gallery",
             "com.xingin.xhs",
             "com.kiwibrowser.browser",
             "com.android.chrome",
