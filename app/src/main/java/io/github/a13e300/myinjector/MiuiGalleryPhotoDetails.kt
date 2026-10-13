@@ -286,11 +286,9 @@ class MiuiGalleryPhotoDetails : DynHook() {
         values["位置"] = location ?: UNKNOWN
         values["创建时间"] = date(created) + if (created == null) attribute("DateTimeOriginal")?.let { "（EXIF: $it）" }.orEmpty() else ""
         values["修改时间"] = date(modified)
-        values["Media ID"] = mediaId?.toString() ?: UNKNOWN
         if (path == null) notes.add("启动参数没有路径，仅显示已有信息")
-        val text = values.entries.joinToString("\n") { "${it.key}：${it.value}" } +
-            "\n注：启动照片的信息；滑动切换后不保证对应当前照片。" +
-            if (notes.isEmpty()) "" else "\n" + notes.joinToString("\n")
+        if (notes.isNotEmpty()) logW("Gallery details: ${notes.joinToString("; ")}")
+        val text = values.entries.joinToString("\n") { "${it.key}：${it.value}" }
         return Details(text, mediaId, editUri, mime)
     }
 
@@ -299,7 +297,8 @@ class MiuiGalleryPhotoDetails : DynHook() {
         fun dp(value: Int) = (value * metrics.density + 0.5f).toInt()
         val dark = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val foreground = if (dark) 0xFFF1F1F1.toInt() else 0xFF222222.toInt()
-        val surface = if (dark) 0xDE242424.toInt() else 0xDEFFFFFF.toInt()
+        // Match Yuki's #bfffffff surface: translucent tint, not an opaque white sheet.
+        val surface = if (dark) 0xBF242424.toInt() else 0xBFFFFFFF.toInt()
         val dialog = Dialog(activity)
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         val panel = LinearLayout(activity).apply {
