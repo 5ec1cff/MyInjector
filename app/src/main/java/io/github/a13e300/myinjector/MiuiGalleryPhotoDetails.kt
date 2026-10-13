@@ -1,13 +1,21 @@
 package io.github.a13e300.myinjector
 
 import android.app.Activity
-import android.app.AlertDialog
+import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
+import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,8 +23,13 @@ import android.provider.MediaStore
 import android.text.format.Formatter
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -47,66 +60,69 @@ class MiuiGalleryPhotoDetails : DynHook() {
     }
 
     private fun addButton(activity: Activity) {
-        if (activity.isFinishing || activity.isDestroyed) return
-        // Without the launch object we cannot reliably identify the displayed photo.
-        if (readPhoto(activity) == null) return
+        if (activity.isFinishing || activity.isDestroyed || readPhoto(activity) == null) return
         val decor = activity.window.decorView as? FrameLayout ?: return
         if (decor.findViewWithTag<View>(BUTTON_TAG) != null) return
         val density = activity.resources.displayMetrics.density
         fun dp(value: Int) = (value * density + 0.5f).toInt()
-        val button = Button(activity).apply {
+        val button = ImageButton(activity).apply {
             tag = BUTTON_TAG
-            text = "照片详情"
             contentDescription = "显示启动照片的详细信息"
-            alpha = 0.85f
+            setImageDrawable(Entry.moduleRes.getDrawable(R.drawable.ic_gallery_details_info, activity.theme))
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
+            background = RippleDrawable(ColorStateList.valueOf(0x44FFFFFF),
+                GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xB3000000.toInt()) },
+                GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) })
+            backgroundTintList = null
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(7), dp(7), dp(7), dp(7))
         }
-        decor.addView(button, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.TOP or Gravity.END
-        ).apply {
-            topMargin = dp(72)
-            marginEnd = dp(12)
-        })
+        val lp = FrameLayout.LayoutParams(dp(32), dp(32), Gravity.BOTTOM or Gravity.LEFT).apply {
+            leftMargin = dp(16)
+            bottomMargin = dp(96)
+        }
+        decor.addView(button, lp)
+        @Suppress("DEPRECATION")
+        fun updateInsets(insets: WindowInsets) {
+            val bottom = if (Build.VERSION.SDK_INT >= 30) {
+                insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()).bottom
+            } else insets.systemWindowInsetBottom
+            val left = if (Build.VERSION.SDK_INT >= 30) {
+                insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()).left
+            } else insets.systemWindowInsetLeft
+            (button.layoutParams as? FrameLayout.LayoutParams)?.let {
+                it.leftMargin = maxOf(dp(16), left)
+                it.bottomMargin = bottom + dp(96)
+                button.layoutParams = it
+            }
+        }
+        button.setOnApplyWindowInsetsListener { _, insets -> updateInsets(insets); insets }
+        decor.rootWindowInsets?.let { updateInsets(it) }
+        button.requestApplyInsets()
         button.setOnClickListener {
-            if (!isEnabled()) {
-                button.visibility = View.GONE
-                return@setOnClickListener
-            }
+            if (!isEnabled()) { button.visibility = View.GONE; return@setOnClickListener }
             val photo = readPhoto(activity)
-            if (photo == null) {
-                Toast.makeText(activity, "照片信息不可用", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            if (photo == null) { Toast.makeText(activity, "照片信息不可用", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
             button.isEnabled = false
             val activityRef = WeakReference(activity)
             val buttonRef = WeakReference(button)
             val context = activity.applicationContext
-            runCatching {
-                executor.execute {
-                    val details = runCatching { readDetails(context, photo) }
-                        .getOrElse {
-                            logW("Gallery details: metadata unavailable", it)
-                            "无法读取完整信息（文件不存在、无权限或格式不支持）。\n路径：${photo.path ?: UNKNOWN}"
-                        }
-                    mainHandler.post {
-                        val owner = activityRef.get() ?: return@post
-                        if (owner.isFinishing || owner.isDestroyed) return@post
-                        buttonRef.get()?.isEnabled = true
-                        if (!isEnabled()) {
-                            buttonRef.get()?.visibility = View.GONE
-                            return@post
-                        }
-                        runCatching { showDetails(owner, details) }
-                            .onFailure { logW("Gallery details: cannot show dialog", it) }
-                    }
+            runCatching { executor.execute {
+                val details = runCatching { readDetails(context, photo) }.getOrElse {
+                    logW("Gallery details: metadata unavailable", it)
+                    Details("无法读取完整信息（文件不存在、无权限或格式不支持）。\n路径：${photo.path ?: UNKNOWN}", null, null, photo.mime)
                 }
-            }.onFailure {
-                button.isEnabled = true
-                logW("Gallery details: cannot schedule metadata read", it)
-            }
+                mainHandler.post {
+                    val owner = activityRef.get() ?: return@post
+                    if (owner.isFinishing || owner.isDestroyed) return@post
+                    buttonRef.get()?.isEnabled = true
+                    if (!isEnabled()) { buttonRef.get()?.visibility = View.GONE; return@post }
+                    runCatching { showDetails(owner, details, buttonRef) }.onFailure { logW("Gallery details: cannot show dialog", it) }
+                }
+            } }.onFailure { button.isEnabled = true; logW("Gallery details: cannot schedule metadata read", it) }
         }
     }
+
 
     @Suppress("DEPRECATION")
     private fun readPhoto(activity: Activity): Photo? = runCatching {
@@ -126,7 +142,7 @@ class MiuiGalleryPhotoDetails : DynHook() {
         null
     }
 
-    private fun readDetails(context: Context, photo: Photo): String {
+    private fun readDetails(context: Context, photo: Photo): Details {
         val values = linkedMapOf<String, String>()
         val notes = linkedSetOf<String>()
         val path = photo.path
@@ -143,6 +159,7 @@ class MiuiGalleryPhotoDetails : DynHook() {
         var created = photo.created?.takeIf { it > 0 }
         var modified: Long? = null
         var mediaId: Long? = null
+        var editUri: Uri? = uri?.takeIf { it.scheme == "content" }
         var width = 0
         var height = 0
         runCatching {
@@ -170,6 +187,9 @@ class MiuiGalleryPhotoDetails : DynHook() {
                             return if (index >= 0 && !cursor.isNull(index)) cursor.getString(index) else null
                         }
                         mediaId = text("_id")?.toLongOrNull()
+                        if (contentUri == null) {
+                            editUri = mediaId?.let { ContentUris.withAppendedId(queryUri, it) }
+                        }
                         name = text("_display_name") ?: name
                         mime = mime ?: text("mime_type")
                         size = size ?: text("_size")?.toLongOrNull()?.takeIf { it > 0 }
@@ -247,32 +267,122 @@ class MiuiGalleryPhotoDetails : DynHook() {
         values["修改时间"] = date(modified)
         values["Media ID"] = mediaId?.toString() ?: UNKNOWN
         if (path == null) notes.add("启动参数没有路径，仅显示已有信息")
-        return values.entries.joinToString("\n\n") { "${it.key}：${it.value}" } +
-            "\n\n注：启动照片的信息；滑动切换后不保证对应当前照片。" +
+        val text = values.entries.joinToString("\n") { "${it.key}：${it.value}" } +
+            "\n注：启动照片的信息；滑动切换后不保证对应当前照片。" +
             if (notes.isEmpty()) "" else "\n" + notes.joinToString("\n")
+        return Details(text, mediaId, editUri, mime)
     }
 
-    private fun showDetails(activity: Activity, details: String) {
-        val padding = (20 * activity.resources.displayMetrics.density).toInt()
+    private fun showDetails(activity: Activity, details: Details, trigger: WeakReference<ImageButton>) {
+        val metrics = activity.resources.displayMetrics
+        fun dp(value: Int) = (value * metrics.density + 0.5f).toInt()
+        val dark = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val foreground = if (dark) 0xFFF1F1F1.toInt() else 0xFF222222.toInt()
+        val surface = if (dark) 0xDE242424.toInt() else 0xDEFFFFFF.toInt()
+        val dialog = Dialog(activity)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val panel = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(18), dp(18), dp(12))
+            background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(surface) }
+        }
+        val header = TextView(activity).apply {
+            text = "id: ${details.mediaId ?: UNKNOWN}"
+            textSize = 17f
+            setTextColor(foreground)
+            compoundDrawablePadding = dp(10)
+            val icon = Entry.moduleRes.getDrawable(R.drawable.ic_gallery_details_info, activity.theme).mutate()
+            icon.setTint(foreground)
+            icon.setBounds(0, 0, dp(20), dp(20))
+            setCompoundDrawables(icon, null, null, null)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(12))
+        }
+        panel.addView(header)
         val textView = TextView(activity).apply {
-            text = details
-            textSize = 15f
-            setPadding(padding, padding, padding, padding)
+            text = details.text
+            textSize = 13f
+            setTextColor(foreground)
+            setLineSpacing(dp(2).toFloat(), 1f)
             setTextIsSelectable(true)
         }
-        val scrollView = ScrollView(activity).apply { addView(textView) }
-        AlertDialog.Builder(activity)
-            .setTitle("照片详情")
-            .setView(scrollView)
-            .setPositiveButton("关闭", null)
-            .setNeutralButton("复制全部") { _, _ ->
-                runCatching {
-                    (activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
-                        ?.setPrimaryClip(ClipData.newPlainText("照片详情", details))
-                }.onFailure { logW("Gallery details: clipboard unavailable", it) }
+        val scroll = object : ScrollView(activity) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val limit = (metrics.heightPixels * 0.55f).toInt()
+                val requested = View.MeasureSpec.getSize(heightMeasureSpec)
+                val capped = if (View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED) limit else minOf(limit, requested)
+                super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(capped, View.MeasureSpec.AT_MOST))
             }
-            .show()
+        }.apply { addView(textView) }
+        panel.addView(scroll, LinearLayout.LayoutParams(-1, -2))
+        val actions = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(12), 0, 0) }
+        fun action(label: String, onClick: () -> Unit) {
+            val button = Button(activity).apply {
+                text = label
+                textSize = 14f
+                isAllCaps = false
+                setTextColor(foreground)
+                minWidth = 0
+                minimumWidth = 0
+                minHeight = dp(40)
+                minimumHeight = dp(40)
+                setPadding(dp(4), 0, dp(4), 0)
+                background = RippleDrawable(ColorStateList.valueOf(if (dark) 0x33FFFFFF else 0x22000000),
+                    GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.TRANSPARENT) }, null)
+                setOnClickListener { onClick() }
+            }
+            actions.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        action("隐藏") { trigger.get()?.visibility = View.GONE; dialog.dismiss() }
+        action("编辑") {
+            val uri = details.editUri?.takeIf { it.scheme == "content" }
+            if (uri == null) {
+                Toast.makeText(activity, "没有可编辑的内容 URI", Toast.LENGTH_SHORT).show()
+            } else {
+                runCatching {
+                    activity.startActivity(Intent(Intent.ACTION_EDIT).apply {
+                        setDataAndType(uri, details.mime ?: "image/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        clipData = ClipData.newRawUri("照片", uri)
+                    })
+                    dialog.dismiss()
+                }.onFailure {
+                    logW("Gallery details: editor unavailable", it)
+                    Toast.makeText(activity, "无法打开编辑器（无权限或没有可用应用）", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        action("复制") {
+            runCatching {
+                val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    ?: error("Clipboard service unavailable")
+                clipboard.setPrimaryClip(ClipData.newPlainText("照片详情", details.text))
+                Toast.makeText(activity, "已复制全部照片详情", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                logW("Gallery details: clipboard unavailable", it)
+                Toast.makeText(activity, "复制失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+        panel.addView(actions)
+        dialog.setContentView(panel)
+        dialog.setCanceledOnTouchOutside(true)
+        val window = dialog.window ?: return
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.attributes = window.attributes.apply { dimAmount = 0.22f }
+        if (Build.VERSION.SDK_INT >= 31) {
+            // Some devices disable cross-window blur; the translucent surface remains usable.
+            runCatching {
+                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                window.attributes = window.attributes.apply { blurBehindRadius = 48 }
+            }.onFailure { logW("Gallery details: window blur unavailable", it) }
+        }
+        dialog.show()
+        window.setGravity(Gravity.CENTER)
+        window.setLayout(minOf((metrics.widthPixels * 0.86f).toInt(), dp(440)), WindowManager.LayoutParams.WRAP_CONTENT)
     }
+
+    private data class Details(val text: String, val mediaId: Long?, val editUri: Uri?, val mime: String?)
 
     private data class Photo(
         val path: String?, val mime: String?, val location: String?,
