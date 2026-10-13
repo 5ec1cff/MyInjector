@@ -27,8 +27,6 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -65,39 +63,62 @@ class MiuiGalleryPhotoDetails : DynHook() {
         if (decor.findViewWithTag<View>(BUTTON_TAG) != null) return
         val density = activity.resources.displayMetrics.density
         fun dp(value: Int) = (value * density + 0.5f).toInt()
-        val button = ImageButton(activity).apply {
+        // Only the 20 x 10dp pill is visible; the transparent 44dp hit area stays easy to tap.
+        val button = FrameLayout(activity).apply {
             tag = BUTTON_TAG
             contentDescription = "显示启动照片的详细信息"
-            setImageDrawable(Entry.moduleRes.getDrawable(R.drawable.ic_gallery_details_info, activity.theme))
-            imageTintList = ColorStateList.valueOf(Color.WHITE)
-            background = RippleDrawable(ColorStateList.valueOf(0x44FFFFFF),
-                GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xB3000000.toInt()) },
-                GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) })
-            backgroundTintList = null
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setPadding(dp(7), dp(7), dp(7), dp(7))
+            isFocusable = true
+            background = RippleDrawable(ColorStateList.valueOf(0x226F7775), null,
+                GradientDrawable().apply { cornerRadius = dp(22).toFloat(); setColor(Color.WHITE) })
+            addView(View(activity).apply {
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(5).toFloat()
+                    setColor(0xBFD0D5D2.toInt())
+                }
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, FrameLayout.LayoutParams(dp(20), dp(10), Gravity.CENTER))
         }
-        val lp = FrameLayout.LayoutParams(dp(32), dp(32), Gravity.BOTTOM or Gravity.LEFT).apply {
-            leftMargin = dp(16)
-            bottomMargin = dp(96)
+        val lp = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.BOTTOM or Gravity.LEFT).apply {
+            bottomMargin = dp(72)
         }
         decor.addView(button, lp)
+        var safeLeft = 0
+        var safeRight = 0
+        fun updateHorizontalPosition() {
+            val availableWidth = (decor.width - safeLeft - safeRight).coerceAtLeast(0)
+            if (availableWidth == 0) return
+            (button.layoutParams as? FrameLayout.LayoutParams)?.let {
+                // The screenshot places the pill center at about 28% of the preview width.
+                val margin = safeLeft + (availableWidth * 0.28f).toInt() - dp(22)
+                if (it.leftMargin != margin) {
+                    it.leftMargin = margin.coerceAtLeast(safeLeft)
+                    button.layoutParams = it
+                }
+            }
+        }
+        decor.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateHorizontalPosition() }
         @Suppress("DEPRECATION")
         fun updateInsets(insets: WindowInsets) {
-            val bottom = if (Build.VERSION.SDK_INT >= 30) {
-                insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()).bottom
-            } else insets.systemWindowInsetBottom
-            val left = if (Build.VERSION.SDK_INT >= 30) {
-                insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()).left
-            } else insets.systemWindowInsetLeft
+            val bottom: Int
+            if (Build.VERSION.SDK_INT >= 30) {
+                val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                bottom = safe.bottom
+                safeLeft = safe.left
+                safeRight = safe.right
+            } else {
+                bottom = insets.systemWindowInsetBottom
+                safeLeft = insets.systemWindowInsetLeft
+                safeRight = insets.systemWindowInsetRight
+            }
             (button.layoutParams as? FrameLayout.LayoutParams)?.let {
-                it.leftMargin = maxOf(dp(16), left)
-                it.bottomMargin = bottom + dp(96)
+                it.bottomMargin = bottom + dp(72)
                 button.layoutParams = it
             }
+            updateHorizontalPosition()
         }
         button.setOnApplyWindowInsetsListener { _, insets -> updateInsets(insets); insets }
         decor.rootWindowInsets?.let { updateInsets(it) }
+        button.post { updateHorizontalPosition() }
         button.requestApplyInsets()
         button.setOnClickListener {
             if (!isEnabled()) { button.visibility = View.GONE; return@setOnClickListener }
@@ -273,7 +294,7 @@ class MiuiGalleryPhotoDetails : DynHook() {
         return Details(text, mediaId, editUri, mime)
     }
 
-    private fun showDetails(activity: Activity, details: Details, trigger: WeakReference<ImageButton>) {
+    private fun showDetails(activity: Activity, details: Details, trigger: WeakReference<FrameLayout>) {
         val metrics = activity.resources.displayMetrics
         fun dp(value: Int) = (value * metrics.density + 0.5f).toInt()
         val dark = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
