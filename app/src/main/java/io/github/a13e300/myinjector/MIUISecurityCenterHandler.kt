@@ -29,6 +29,7 @@ import kotlin.concurrent.thread
 class MIUISecurityCenterHandler : IHook() {
     companion object {
         private val URI = Uri.parse("content://com.lbe.security.miui.permmgr/active")
+        private val PERM_MGR_URI = Uri.parse("content://com.lbe.security.miui.permmgr")
         private const val PERM_AUTO_START = 16384
     }
 
@@ -47,19 +48,79 @@ class MIUISecurityCenterHandler : IHook() {
         return 0
     }
 
+    // HyperOS 3 (permission manager 1.9.2) removed the legacy "active" table below; the
+    // keep-autostart flag moved into the service's private AUTO_START_WHITE_LIST storage.
+    // LbeHandler exposes it through two module-only permmgr provider call() methods.
+    // Older versions answer null here and fall back to the old table.
+    private fun queryKeepAutostart(
+        contentResolver: ContentResolver,
+        packageName: String
+    ): Boolean? {
+        val result = runCatching {
+            contentResolver.call(PERM_MGR_URI, LbeHandler.METHOD_GET_KEEP_AUTOSTART, packageName, null)
+        }.onFailure {
+            logW("keep-autostart extension GET $packageName failed", it)
+        }.getOrNull()
+        if (result == null) {
+            logI("keep-autostart extension answered nothing for $packageName (old version or scope missing)")
+            return null
+        }
+        val keep = result.getBoolean("keep")
+        logI("keep-autostart extension GET $packageName -> $keep")
+        return keep
+    }
+
+    private fun setKeepAutostart(
+        contentResolver: ContentResolver,
+        packageName: String,
+        stable: Boolean
+    ): Boolean? {
+        val result = runCatching {
+            contentResolver.call(
+                PERM_MGR_URI,
+                LbeHandler.METHOD_SET_KEEP_AUTOSTART,
+                null,
+                Bundle().apply {
+                    putString("pkg", packageName)
+                    putBoolean("enable", stable)
+                }
+            )
+        }.onFailure {
+            logW("keep-autostart extension SET $packageName failed", it)
+        }.getOrNull()
+        if (result == null) {
+            logI("keep-autostart extension answered nothing for $packageName (old version or scope missing)")
+            return null
+        }
+        if (!result.getBoolean("ok")) {
+            logW("keep-autostart extension SET $packageName rejected")
+            error("permission manager failed to update the whitelist")
+        }
+        logI("keep-autostart extension SET $packageName ok")
+        return true
+    }
+
+    private fun isAutoStartStable(contentResolver: ContentResolver, packageName: String): Boolean {
+        queryKeepAutostart(contentResolver, packageName)?.let { return it }
+        return getPermissionFlags(contentResolver, packageName).and(PERM_AUTO_START) != 0
+    }
+
     private fun setAutoStartStable(
         contentResolver: ContentResolver,
         packageName: String,
         stable: Boolean
     ) {
+        if (setKeepAutostart(contentResolver, packageName, stable) != null) return
+        // Legacy path (pre-HyperOS 3): the keep bit is a column of the permmgr "active" table.
         val oldPermissionFlags = getPermissionFlags(contentResolver, packageName)
         val newFlags = if (stable)
             oldPermissionFlags.or(PERM_AUTO_START)
         else
             oldPermissionFlags.and(PERM_AUTO_START.inv())
-        contentResolver.update(URI, ContentValues().apply {
+        val updated = contentResolver.update(URI, ContentValues().apply {
             put("suggestAccept", newFlags)
         }, "pkgName=?", arrayOf(packageName))
+        if (updated <= 0) error("permission manager rejected the legacy update")
     }
 
     @SuppressLint("DiscouragedApi")
@@ -108,11 +169,13 @@ class MIUISecurityCenterHandler : IHook() {
 
     @SuppressLint("DiscouragedApi")
     private fun hookAddKeepAutoStart() = runCatching {
+        // HyperOS 3 (安全服务 12.8.1): the activity only hosts the fragment and has no
+        // initView; tolerate the class disappearing so the fragment path keeps working.
         val classAppDetailsActivity =
-            findClass(
+            findClassOrNull(
                 "com.miui.appmanager.ApplicationsDetailsActivity"
             )
-        val initView = classAppDetailsActivity.declaredMethods.find { it.name == "initView" }
+        val initView = classAppDetailsActivity?.declaredMethods?.find { it.name == "initView" }
         if (initView == null) {
             logI("hook new!!!")
             val classAppDetailsFragment =
@@ -124,20 +187,24 @@ class MIUISecurityCenterHandler : IHook() {
 
             classAppDetailsFragment.hookAllAfter("onCreatePreferences") { param ->
                 logI("onCreatePreferences")
-                val ctx = param.thisObject.call("getActivity") as Activity
-                val currentPkgName = ctx.intent.getStringExtra("package_name")!!
-                val ps = param.thisObject.call("getPreferenceScreen")
+                // 12.8.1 finishes the activity inside onCreatePreferences when the
+                // package extra is unusable (F3() failed), yet this after-callback
+                // still runs on the dying page: skip injection instead of tripping on !!.
+                val ctx = param.thisObject.call("getActivity") as? Activity ?: return@hookAllAfter
+                val currentPkgName = ctx.intent.getStringExtra("package_name")
+                    ?: return@hookAllAfter
+                val ps = param.thisObject.call("getPreferenceScreen") ?: return@hookAllAfter
                 val cat = ps.call("findPreference", "app_detail_perm_category")
+                    ?: return@hookAllAfter
                 val pref = miuixCheckBoxPref.newInst(ctx)
                 pref.call("setKey", "keep_autostart")
                 pref.call("setTitle", "保持自启动")
                 cat.call("addPreference", pref)
+                logI("keep-autostart switch injected for $currentPkgName")
                 fun updateStatus() {
                     kotlin.runCatching {
                         val checked =
-                            getPermissionFlags(ctx.contentResolver, currentPkgName).and(
-                                PERM_AUTO_START
-                            ) != 0
+                            isAutoStartStable(ctx.contentResolver, currentPkgName)
                         ctx.runOnUiThread {
                             pref.call(
                                 "setChecked",
@@ -214,7 +281,7 @@ class MIUISecurityCenterHandler : IHook() {
             val viewAmDetailAs = ctx.findViewById<View>(idAmDetailAs)
             val container = viewAmDetailAs.parent as? LinearLayout ?: return@hookAfter
             val idx = container.indexOfChild(viewAmDetailAs)
-            val currentPkgName = ctx.intent.getStringExtra("package_name")!!
+            val currentPkgName = ctx.intent.getStringExtra("package_name") ?: return@hookAfter
             classAppDetailCheckBoxView.newInstAs<LinearLayout>(ctx, null).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 orientation = LinearLayout.HORIZONTAL
@@ -232,9 +299,7 @@ class MIUISecurityCenterHandler : IHook() {
                 fun updateStatus() {
                     kotlin.runCatching {
                         val checked =
-                            getPermissionFlags(ctx.contentResolver, currentPkgName).and(
-                                PERM_AUTO_START
-                            ) != 0
+                            isAutoStartStable(ctx.contentResolver, currentPkgName)
                         ctx.runOnUiThread {
                             call(
                                 "setSlideButtonChecked",
