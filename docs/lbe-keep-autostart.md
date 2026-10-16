@@ -21,7 +21,17 @@
 
 flag 语义与官方 OTA 迁移一致：迁移代码就是"旧 suggestAccept 位 → AUTO_START_WHITE_LIST 条目"的转换，因此行为与升级前官方认定的状态等价。
 
+## 安全服务（手机管家）12.8.1 UI 兼容性核对
+
+反编译 `安全服务_12.8.1-260816.0.1.apk`（`com.miui.securitycenter`）逐项核对了开关注入的全部依赖，均在位，UI 注入逻辑无需功能性修改：
+
+- `ApplicationsDetailsActivity` 仍注册于 manifest、由 `ManageFragment` 启动，已无 `initView`（正常走 Fragment 路径）
+- `ApplicationsDetailsFragment.onCreatePreferences` 仍调用 `addPreferencesFromResource(R.xml.am_applications_detils_settings)`；包名仍从 Activity intent 的 `package_name` 读取（`F3()`），与 hook 一致
+- `app_detail_perm_category`、`miuix.preference.CheckBoxPreference(Context)` 均存在；后续 Loader 回调只按特定引用移除原生条目，不会清掉注入的开关
+
+因此「按钮显示但打不开」完全由数据路径（旧 `active` 表在权限管理服务 1.9.2 中被删除）解释，见上文修复方案。本次仅加固边界：Activity intent 无有效包名或分类缺失时跳过注入（12.8.1 的 `onCreatePreferences` 在 `F3()` 失败时会 `finish()` 并提前返回，after-hook 仍会在垂死页面上执行，原先的 `!!` 会抛 NPE）；`ApplicationsDetailsActivity` 类缺失时不再让整个 hook 失败。
+
 ## 验证限制
 
-- 证据来源：`权限管理服务_1.9.2.apk`（jadx 反编译，4 个错误，相关类完整可读）。没有安全中心 APK，按钮所在 Fragment 类名沿用现有 hook，用户确认 UI 仍显示。
+- 证据来源：`权限管理服务_1.9.2.apk` 与 `安全服务_12.8.1-260816.0.1.apk`（jadx 反编译，分别 4/65 个错误，相关类完整可读）。
 - 无已连接设备，CI 编译通过不代表真机验证。需验证：开关状态回显与切换、写入后 `permission_config_sharePref` 中出现对应包名、模块关闭后自启动在 30 天未使用场景下仍保持、云端 `AutoStartRevokeWhiteList` 推送是否影响该条目（`CloudUpdater` 存在移除逻辑）、旧版本设备上回退路径无回归。

@@ -148,11 +148,13 @@ class MIUISecurityCenterHandler : IHook() {
 
     @SuppressLint("DiscouragedApi")
     private fun hookAddKeepAutoStart() = runCatching {
+        // HyperOS 3 (安全服务 12.8.1): the activity only hosts the fragment and has no
+        // initView; tolerate the class disappearing so the fragment path keeps working.
         val classAppDetailsActivity =
-            findClass(
+            findClassOrNull(
                 "com.miui.appmanager.ApplicationsDetailsActivity"
             )
-        val initView = classAppDetailsActivity.declaredMethods.find { it.name == "initView" }
+        val initView = classAppDetailsActivity?.declaredMethods?.find { it.name == "initView" }
         if (initView == null) {
             logI("hook new!!!")
             val classAppDetailsFragment =
@@ -164,10 +166,15 @@ class MIUISecurityCenterHandler : IHook() {
 
             classAppDetailsFragment.hookAllAfter("onCreatePreferences") { param ->
                 logI("onCreatePreferences")
-                val ctx = param.thisObject.call("getActivity") as Activity
-                val currentPkgName = ctx.intent.getStringExtra("package_name")!!
-                val ps = param.thisObject.call("getPreferenceScreen")
+                // 12.8.1 finishes the activity inside onCreatePreferences when the
+                // package extra is unusable (F3() failed), yet this after-callback
+                // still runs on the dying page: skip injection instead of tripping on !!.
+                val ctx = param.thisObject.call("getActivity") as? Activity ?: return@hookAllAfter
+                val currentPkgName = ctx.intent.getStringExtra("package_name")
+                    ?: return@hookAllAfter
+                val ps = param.thisObject.call("getPreferenceScreen") ?: return@hookAllAfter
                 val cat = ps.call("findPreference", "app_detail_perm_category")
+                    ?: return@hookAllAfter
                 val pref = miuixCheckBoxPref.newInst(ctx)
                 pref.call("setKey", "keep_autostart")
                 pref.call("setTitle", "保持自启动")
@@ -252,7 +259,7 @@ class MIUISecurityCenterHandler : IHook() {
             val viewAmDetailAs = ctx.findViewById<View>(idAmDetailAs)
             val container = viewAmDetailAs.parent as? LinearLayout ?: return@hookAfter
             val idx = container.indexOfChild(viewAmDetailAs)
-            val currentPkgName = ctx.intent.getStringExtra("package_name")!!
+            val currentPkgName = ctx.intent.getStringExtra("package_name") ?: return@hookAfter
             classAppDetailCheckBoxView.newInstAs<LinearLayout>(ctx, null).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 orientation = LinearLayout.HORIZONTAL
