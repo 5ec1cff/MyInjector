@@ -3,7 +3,7 @@ name: Build
 on:
   workflow_dispatch:
   push:
-    branches: [ master ]
+    branches: [ master, compat/exteragram-224, meizucustom, lbe ]
     tags: [ v* ]
   pull_request:
   merge_group:
@@ -31,7 +31,7 @@ jobs:
             echo '${{ secrets.KEY_STORE }}' | base64 --decode > key.jks
           fi
 
-      - name: Setup Java
+      - name: Setup Java 17 for DexKit
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,6 +46,12 @@ jobs:
           cd DexKit
           chmod +x gradlew
           ./gradlew :dexkit-android:publishToMavenLocal
+
+      - name: Setup Java 21 for MyInjector
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Build with Gradle
         run: |

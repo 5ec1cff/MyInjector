@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package io.github.a13e300.myinjector;
+option java_package = "io.github.a13e300.myinjector";
+option java_multiple_files = true;
+option optimize_for = LITE_RUNTIME;
+
+message MiuiGallerySettings {
+  optional bool photoDetails = 1;
+}
