@@ -361,17 +361,6 @@ class MiuiGalleryPhotoDetails : DynHook() {
             }
             actions.addView(button, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         }
-        action("复制") {
-            runCatching {
-                val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    ?: error("Clipboard service unavailable")
-                clipboard.setPrimaryClip(ClipData.newPlainText("照片详情", details.text))
-                Toast.makeText(activity, "已复制全部照片详情", Toast.LENGTH_SHORT).show()
-            }.onFailure {
-                logW("Gallery details: clipboard unavailable", it)
-                Toast.makeText(activity, "复制失败", Toast.LENGTH_SHORT).show()
-            }
-        }
         action("编辑") {
             val uri = details.editUri?.takeIf { it.scheme == "content" }
             if (uri == null) {
@@ -388,6 +377,17 @@ class MiuiGalleryPhotoDetails : DynHook() {
                     logW("Gallery details: editor unavailable", it)
                     Toast.makeText(activity, "无法打开编辑器（无权限或没有可用应用）", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+        action("复制") {
+            runCatching {
+                val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    ?: error("Clipboard service unavailable")
+                clipboard.setPrimaryClip(ClipData.newPlainText("照片详情", details.text))
+                Toast.makeText(activity, "已复制全部照片详情", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                logW("Gallery details: clipboard unavailable", it)
+                Toast.makeText(activity, "复制失败", Toast.LENGTH_SHORT).show()
             }
         }
         panel.addView(actions)
