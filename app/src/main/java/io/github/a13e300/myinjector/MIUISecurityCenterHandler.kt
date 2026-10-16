@@ -55,9 +55,20 @@ class MIUISecurityCenterHandler : IHook() {
     private fun queryKeepAutostart(
         contentResolver: ContentResolver,
         packageName: String
-    ): Boolean? = runCatching {
-        contentResolver.call(PERM_MGR_URI, LbeHandler.METHOD_GET_KEEP_AUTOSTART, packageName, null)
-    }.getOrNull()?.getBoolean("keep")
+    ): Boolean? {
+        val result = runCatching {
+            contentResolver.call(PERM_MGR_URI, LbeHandler.METHOD_GET_KEEP_AUTOSTART, packageName, null)
+        }.onFailure {
+            logW("keep-autostart extension GET $packageName failed", it)
+        }.getOrNull()
+        if (result == null) {
+            logI("keep-autostart extension answered nothing for $packageName (old version or scope missing)")
+            return null
+        }
+        val keep = result.getBoolean("keep")
+        logI("keep-autostart extension GET $packageName -> $keep")
+        return keep
+    }
 
     private fun setKeepAutostart(
         contentResolver: ContentResolver,
@@ -74,8 +85,18 @@ class MIUISecurityCenterHandler : IHook() {
                     putBoolean("enable", stable)
                 }
             )
-        }.getOrNull() ?: return null // extension absent: old version or missing scope
-        if (!result.getBoolean("ok")) error("permission manager failed to update the whitelist")
+        }.onFailure {
+            logW("keep-autostart extension SET $packageName failed", it)
+        }.getOrNull()
+        if (result == null) {
+            logI("keep-autostart extension answered nothing for $packageName (old version or scope missing)")
+            return null
+        }
+        if (!result.getBoolean("ok")) {
+            logW("keep-autostart extension SET $packageName rejected")
+            error("permission manager failed to update the whitelist")
+        }
+        logI("keep-autostart extension SET $packageName ok")
         return true
     }
 
@@ -179,6 +200,7 @@ class MIUISecurityCenterHandler : IHook() {
                 pref.call("setKey", "keep_autostart")
                 pref.call("setTitle", "保持自启动")
                 cat.call("addPreference", pref)
+                logI("keep-autostart switch injected for $currentPkgName")
                 fun updateStatus() {
                     kotlin.runCatching {
                         val checked =

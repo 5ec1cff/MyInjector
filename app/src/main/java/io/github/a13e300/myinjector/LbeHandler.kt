@@ -26,22 +26,36 @@ class LbeHandler : IHook() {
             .hookAllNop("lambda\$startScheduleASCheck\$1")
         // HyperOS 3+ flag storage; older versions keep using the legacy table and the
         // switch falls back automatically when these methods answer nothing.
-        val flagManager = findClassOrNull("com.lbe.security.utility.PermissionConfigSharePref") ?: return
-        val provider =
-            findClassOrNull("com.lbe.security.service.provider.PermissionManagerProvider") ?: return
+        val flagManager = findClassOrNull("com.lbe.security.utility.PermissionConfigSharePref")
+        if (flagManager == null) {
+            logI("keep-autostart: PermissionConfigSharePref missing, provider extension NOT installed")
+            return
+        }
+        val provider = findClassOrNull("com.lbe.security.service.provider.PermissionManagerProvider")
+        if (provider == null) {
+            logI("keep-autostart: PermissionManagerProvider missing, provider extension NOT installed")
+            return
+        }
         provider.hookBefore("call", String::class.java, String::class.java, Bundle::class.java) { param ->
             when (param.args[0] as? String) {
                 METHOD_GET_KEEP_AUTOSTART -> {
                     val pkg = param.args[1] as? String
                     if (!pkg.isNullOrBlank()) {
                         param.result = Bundle().apply {
-                            putBoolean("keep", flagManager.callS("isAutoStartWhiteList", pkg) as Boolean)
+                            runCatching {
+                                val keep = flagManager.callS("isAutoStartWhiteList", pkg) as Boolean
+                                logI("keep-autostart GET $pkg -> $keep")
+                                putBoolean("keep", keep)
+                            }.onFailure {
+                                logE("keep-autostart GET $pkg failed", it)
+                                putBoolean("keep", false)
+                            }
                         }
                     }
                 }
                 METHOD_SET_KEEP_AUTOSTART -> {
-                    val extras = param.args[2] as? Bundle
-                    val pkg = extras?.getString("pkg")
+                    val extras = param.args[2] as? Bundle ?: return@hookBefore
+                    val pkg = extras.getString("pkg")
                     if (!pkg.isNullOrBlank()) {
                         val enable = extras.getBoolean("enable")
                         param.result = Bundle().apply {
@@ -50,9 +64,10 @@ class LbeHandler : IHook() {
                                     if (enable) "addAutoStartWhiteList" else "removeAutoStartWhiteList",
                                     pkg
                                 )
+                                logI("keep-autostart SET $pkg enable=$enable ok")
                                 putBoolean("ok", true)
                             }.onFailure {
-                                logE("set keep autostart failed", it)
+                                logE("keep-autostart SET $pkg failed", it)
                                 putBoolean("ok", false)
                             }
                         }
@@ -60,6 +75,7 @@ class LbeHandler : IHook() {
                 }
             }
         }
+        logI("keep-autostart provider extension installed")
     }
 
     companion object {
