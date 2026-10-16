@@ -138,7 +138,7 @@ class MiuiGalleryPhotoDetails : DynHook() {
                     if (owner.isFinishing || owner.isDestroyed) return@post
                     buttonRef.get()?.isEnabled = true
                     if (!isEnabled()) { buttonRef.get()?.visibility = View.GONE; return@post }
-                    runCatching { showDetails(owner, details, buttonRef) }.onFailure { logW("Gallery details: cannot show dialog", it) }
+                    runCatching { showDetails(owner, details) }.onFailure { logW("Gallery details: cannot show dialog", it) }
                 }
             } }.onFailure { button.isEnabled = true; logW("Gallery details: cannot schedule metadata read", it) }
         }
@@ -270,7 +270,7 @@ class MiuiGalleryPhotoDetails : DynHook() {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(it))
         } ?: UNKNOWN
         values["名称"] = name ?: UNKNOWN
-        values["MIME"] = mime ?: UNKNOWN
+        values["类型"] = mime ?: UNKNOWN
         values["路径"] = path ?: UNKNOWN
         values["大小"] = size?.let { "${Formatter.formatFileSize(context, it)} ($it bytes)" } ?: UNKNOWN
         values["ISO"] = attribute("PhotographicSensitivity") ?: attribute("ISOSpeedRatings") ?: UNKNOWN
@@ -292,7 +292,7 @@ class MiuiGalleryPhotoDetails : DynHook() {
         return Details(text, mediaId, editUri, mime)
     }
 
-    private fun showDetails(activity: Activity, details: Details, trigger: WeakReference<FrameLayout>) {
+    private fun showDetails(activity: Activity, details: Details) {
         val metrics = activity.resources.displayMetrics
         fun dp(value: Int) = (value * metrics.density + 0.5f).toInt()
         val dark = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -308,15 +308,16 @@ class MiuiGalleryPhotoDetails : DynHook() {
         }
         val header = TextView(activity).apply {
             text = "id: ${details.mediaId ?: UNKNOWN}"
-            textSize = 17f
+            textSize = 22f
             setTextColor(foreground)
             compoundDrawablePadding = dp(10)
-            val icon = Entry.moduleRes.getDrawable(R.drawable.ic_gallery_details_info, activity.theme).mutate()
+            // HyperOS logo mark: shape only, the text paths of the source vector were removed.
+            val icon = Entry.moduleRes.getDrawable(R.drawable.ic_hyperos_logo, activity.theme).mutate()
             icon.setTint(foreground)
-            icon.setBounds(0, 0, dp(20), dp(20))
+            icon.setBounds(0, 0, dp(26), dp(26))
             setCompoundDrawables(icon, null, null, null)
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, dp(12))
+            setPadding(0, 0, 0, dp(14))
         }
         panel.addView(header)
         val textView = TextView(activity).apply {
@@ -328,14 +329,18 @@ class MiuiGalleryPhotoDetails : DynHook() {
         }
         val scroll = object : ScrollView(activity) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                val limit = (metrics.heightPixels * 0.55f).toInt()
+                val limit = (metrics.heightPixels * 0.62f).toInt()
                 val requested = View.MeasureSpec.getSize(heightMeasureSpec)
                 val capped = if (View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED) limit else minOf(limit, requested)
                 super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(capped, View.MeasureSpec.AT_MOST))
             }
         }.apply { addView(textView) }
         panel.addView(scroll, LinearLayout.LayoutParams(-1, -2))
-        val actions = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(12), 0, 0) }
+        val actions = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, 0)
+        }
         fun action(label: String, onClick: () -> Unit) {
             val button = Button(activity).apply {
                 text = label
@@ -344,16 +349,29 @@ class MiuiGalleryPhotoDetails : DynHook() {
                 setTextColor(foreground)
                 minWidth = 0
                 minimumWidth = 0
-                minHeight = dp(40)
-                minimumHeight = dp(40)
-                setPadding(dp(4), 0, dp(4), 0)
+                minHeight = dp(44)
+                minimumHeight = dp(44)
+                // Text-style action that samples the panel background: no fill, no elevation shadow.
+                stateListAnimator = null
+                elevation = 0f
+                setPadding(dp(16), 0, dp(16), 0)
                 background = RippleDrawable(ColorStateList.valueOf(if (dark) 0x33FFFFFF else 0x22000000),
                     GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.TRANSPARENT) }, null)
                 setOnClickListener { onClick() }
             }
-            actions.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(button, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         }
-        action("隐藏") { trigger.get()?.visibility = View.GONE; dialog.dismiss() }
+        action("复制") {
+            runCatching {
+                val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    ?: error("Clipboard service unavailable")
+                clipboard.setPrimaryClip(ClipData.newPlainText("照片详情", details.text))
+                Toast.makeText(activity, "已复制全部照片详情", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                logW("Gallery details: clipboard unavailable", it)
+                Toast.makeText(activity, "复制失败", Toast.LENGTH_SHORT).show()
+            }
+        }
         action("编辑") {
             val uri = details.editUri?.takeIf { it.scheme == "content" }
             if (uri == null) {
@@ -372,17 +390,6 @@ class MiuiGalleryPhotoDetails : DynHook() {
                 }
             }
         }
-        action("复制") {
-            runCatching {
-                val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    ?: error("Clipboard service unavailable")
-                clipboard.setPrimaryClip(ClipData.newPlainText("照片详情", details.text))
-                Toast.makeText(activity, "已复制全部照片详情", Toast.LENGTH_SHORT).show()
-            }.onFailure {
-                logW("Gallery details: clipboard unavailable", it)
-                Toast.makeText(activity, "复制失败", Toast.LENGTH_SHORT).show()
-            }
-        }
         panel.addView(actions)
         dialog.setContentView(panel)
         dialog.setCanceledOnTouchOutside(true)
@@ -399,7 +406,8 @@ class MiuiGalleryPhotoDetails : DynHook() {
         }
         dialog.show()
         window.setGravity(Gravity.CENTER)
-        window.setLayout(minOf((metrics.widthPixels * 0.86f).toInt(), dp(440)), WindowManager.LayoutParams.WRAP_CONTENT)
+        // Narrow portrait rectangle: the panel wraps a longer text column instead of a near-square sheet.
+        window.setLayout(minOf((metrics.widthPixels * 0.70f).toInt(), dp(320)), WindowManager.LayoutParams.WRAP_CONTENT)
     }
 
     private data class Details(val text: String, val mediaId: Long?, val editUri: Uri?, val mime: String?)

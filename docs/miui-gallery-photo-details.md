@@ -24,13 +24,13 @@
 1. 在 LSPosed 中将 MyInjector 作用域勾选“小米相册 / com.miui.gallery”。
 2. 重启相册，打开 MyInjector 设置 → Apps → 打开相册设置。
 3. 开启“照片预览页显示更多详情”，重新进入照片预览页。
-4. 点击页面左下角的小型信息图标查看详情，可隐藏入口、编辑或复制全部。
+4. 点击页面左下角的小药丸入口查看详情，可复制全部或直接编辑。
 
 ## UI 资源与交互
 
-已读取 Yuki 的 `float_button.xml`（25dp 容器、固定 top/start 偏移）、`button_drawable.xml`（半透明白色、20dp 圆角）及 `BlurDialog`（居中、模糊半径48、隐藏/编辑/复制操作）。MyInjector 不沿用固定 775dp 顶部偏移，而是将32dp信息图标锚定左下角，并按系统安全区留出底栏空间。模块新增自己的 vector 信息图标，不复用 Yuki 品牌图片。
+已读取 Yuki 的 `float_button.xml`（25dp 容器、固定 top/start 偏移）、`button_drawable.xml`（半透明白色、20dp 圆角）及 `BlurDialog`（居中、模糊半径48、隐藏/编辑/复制操作）。MyInjector 不沿用固定 775dp 顶部偏移，而是将小型药丸入口锚定左下角，并按系统安全区留出底栏空间。标题行图标使用用户提供的 HyperOS 标志矢量图（仅保留标志形状，已剔除其中的文字轮廓），不复用 Yuki 品牌图片。
 
-详情弹窗使用原生控件重建圆角半透明面板，紧凑排版，标题显示实际 Media ID。Android 12+ 尝试系统背景模糊，不支持或被系统关闭时正常回退。隐藏只隐藏当前预览页面的入口；编辑使用标准 `ACTION_EDIT` 和可授权的 content URI，不执行 root shell，不通过 file URI 绕过权限。无法取得媒体 URI 或找不到编辑器时提示原因。
+详情弹窗为窄高圆角半透明面板（约 70% 屏宽、上限 320dp），标题行以放大字号显示实际 Media ID，MIME 字段显示为“类型”。操作为右下角“复制/编辑”两个与背景同色的纯文字按钮（无描边、无阴影）。Android 12+ 尝试系统背景模糊，不支持或被系统关闭时正常回退。编辑使用标准 `ACTION_EDIT` 和可授权的 content URI，不执行 root shell，不通过 file URI 绕过权限。无法取得媒体 URI 或找不到编辑器时提示原因。
 
 
 ## 验证限制与设备回归
