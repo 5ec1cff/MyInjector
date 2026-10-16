@@ -3,7 +3,7 @@ name: Build
 on:
   workflow_dispatch:
   push:
-    branches: [ master, compat/exteragram-224, meizucustom ]
+    branches: [ master, compat/exteragram-224, meizucustom, lbe ]
     tags: [ v* ]
   pull_request:
   merge_group:
