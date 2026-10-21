@@ -11,6 +11,7 @@ import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNop
+import io.github.a13e300.myinjector.arch.hookConstant
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import org.luckypray.dexkit.DexKitBridge
 
@@ -65,6 +66,14 @@ class BiliHandler : IHook() {
         }
     }
 
+    private fun hookPauseAd() = runCatching {
+        // Disable the pause-ad flow before it requests an ad or starts the countdown.
+        findClass("com.bilibili.adcommon.config.DDConfig")
+            .hookConstant("getPausePageEnable", constant = false)
+    }.onFailure {
+        logE("hookPauseAd", it)
+    }
+
     private fun locateSplashAd(bridge: DexKitBridge, obfsTable: MutableObfsTable) = runCatching {
         val method = bridge.findMethod {
             matcher {
@@ -98,6 +107,7 @@ class BiliHandler : IHook() {
 
     override fun onHook() {
         hookShare()
+        hookPauseAd()
         val tbl = createObfsTable("bili", 1) { bridge ->
             val res = mutableMapOf<String, ObfsInfo>()
 
