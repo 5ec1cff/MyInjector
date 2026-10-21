@@ -8,11 +8,14 @@ import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.MutableObfsTable
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.ObfsTable
+import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNop
+import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookConstant
 import io.github.a13e300.myinjector.arch.toObfsInfo
+import org.json.JSONObject
 import org.luckypray.dexkit.DexKitBridge
 
 class BiliHandler : IHook() {
@@ -74,6 +77,29 @@ class BiliHandler : IHook() {
         logE("hookPauseAd", it)
     }
 
+    private fun hookCloudTvOverlay() = runCatching {
+        val replyClass = findClass("com.bapis.bilibili.community.service.dm.v1.DmViewReply")
+        findClass("tv.danmaku.biliplayerv2.service.interact.biz.InteractLayerService")
+            .hookBefore("setDmViewReply", replyClass) { param ->
+                runCatching {
+                    val reply = param.args[0] ?: return@hookBefore
+                    val metas = reply.call("getActivityMetaList") as? List<*>
+                        ?: return@hookBefore
+                    val kept = metas.filterNot { raw ->
+                        raw is String && runCatching {
+                            JSONObject(raw).optInt("id") == 10011
+                        }.getOrDefault(false)
+                    }
+                    if (kept.size == metas.size) return@hookBefore
+                    // Chronos receives protobuf bytes, so replace the response before serialization.
+                    val builder = reply.call("toBuilder") ?: return@hookBefore
+                    builder.call("clearActivityMeta")
+                    builder.call("addAllActivityMeta", kept)
+                    param.args[0] = builder.call("build") ?: reply
+                }.onFailure { logE("filterCloudTvOverlay", it) }
+            }
+    }.onFailure { logE("hookCloudTvOverlay", it) }
+
     private fun locateSplashAd(bridge: DexKitBridge, obfsTable: MutableObfsTable) = runCatching {
         val method = bridge.findMethod {
             matcher {
@@ -108,6 +134,7 @@ class BiliHandler : IHook() {
     override fun onHook() {
         hookShare()
         hookPauseAd()
+        hookCloudTvOverlay()
         val tbl = createObfsTable("bili", 1) { bridge ->
             val res = mutableMapOf<String, ObfsInfo>()
 
