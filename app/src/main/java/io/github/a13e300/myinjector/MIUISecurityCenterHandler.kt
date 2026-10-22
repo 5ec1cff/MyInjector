@@ -2,8 +2,9 @@ package io.github.a13e300.myinjector
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ContentResolver
 import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemProperties
@@ -29,21 +30,68 @@ import kotlin.concurrent.thread
 class MIUISecurityCenterHandler : IHook() {
     companion object {
         private val URI = Uri.parse("content://com.lbe.security.miui.permmgr/active")
-        private val PERM_MGR_URI = Uri.parse("content://com.lbe.security.miui.permmgr")
+        private val PERM_MGR_FALLBACK_URIS = listOf(
+            Uri.parse("content://com.lbe.security.miui.permmgr"),
+            Uri.parse("content://com.hyperos.security.miui.permmgr")
+        )
         private const val PERM_AUTO_START = 16384
     }
 
-    private fun getPermissionFlags(contentResolver: ContentResolver, packageName: String): Int {
-        contentResolver.query(
-            URI,
-            arrayOf("suggestAccept"),
-            "pkgName=?",
-            arrayOf(packageName),
-            null
-        )?.use { c ->
-            if (c.moveToNext()) {
-                return c.getInt(0)
+    // Android 17 device builds renamed the permmgr provider authority: the 4.0.0 APK
+    // still ships com.lbe.security.miui.permmgr, but newer builds answer
+    // "Unknown authority" for it. Resolve the real authority from the service's
+    // provider list (matching the PermissionManagerProvider class name) instead of
+    // hardcoding it; the known entries stay as fallbacks and are tried in order.
+    private var permmgrUris: List<Uri>? = null
+
+    private fun resolvePermmgrUris(ctx: Context): List<Uri> {
+        permmgrUris?.let { return it }
+        val resolved = runCatching {
+            ctx.packageManager
+                .getPackageInfo("com.lbe.security.miui", PackageManager.GET_PROVIDERS)
+                .providers
+                .orEmpty()
+                .filter { it.name?.endsWith("PermissionManagerProvider") == true }
+                .flatMap { it.authority.orEmpty().split(';') }
+                .mapNotNull { it.trim().takeIf(String::isNotBlank) }
+                .map { Uri.parse("content://$it") }
+                .distinct()
+        }.onFailure {
+            logW("keep-autostart: failed to resolve permmgr provider authority", it)
+        }.getOrDefault(emptyList())
+        val uris = resolved + PERM_MGR_FALLBACK_URIS.filter { it !in resolved }
+        permmgrUris = uris
+        logI("keep-autostart: permmgr uris = ${uris.joinToString()}")
+        return uris
+    }
+
+    private fun callPermmgr(ctx: Context, method: String, arg: String?, extras: Bundle?): Bundle? {
+        for (uri in resolvePermmgrUris(ctx)) {
+            try {
+                return ctx.contentResolver.call(uri, method, arg, extras)
+            } catch (_: IllegalArgumentException) {
+                // unknown authority - try the next candidate
+                logI("keep-autostart: authority ${uri.authority} unknown for $method, trying next")
             }
+        }
+        return null
+    }
+
+    private fun getPermissionFlags(ctx: Context, packageName: String): Int {
+        runCatching {
+            ctx.contentResolver.query(
+                URI,
+                arrayOf("suggestAccept"),
+                "pkgName=?",
+                arrayOf(packageName),
+                null
+            )?.use { c ->
+                if (c.moveToNext()) {
+                    return c.getInt(0)
+                }
+            }
+        }.onFailure {
+            logW("keep-autostart: legacy active table query failed (expected on new versions)", it)
         }
         return 0
     }
@@ -53,11 +101,11 @@ class MIUISecurityCenterHandler : IHook() {
     // LbeHandler exposes it through two module-only permmgr provider call() methods.
     // Older versions answer null here and fall back to the old table.
     private fun queryKeepAutostart(
-        contentResolver: ContentResolver,
+        ctx: Context,
         packageName: String
     ): Boolean? {
         val result = runCatching {
-            contentResolver.call(PERM_MGR_URI, LbeHandler.METHOD_GET_KEEP_AUTOSTART, packageName, null)
+            callPermmgr(ctx, LbeHandler.METHOD_GET_KEEP_AUTOSTART, packageName, null)
         }.onFailure {
             logW("keep-autostart extension GET $packageName failed", it)
         }.getOrNull()
@@ -71,13 +119,13 @@ class MIUISecurityCenterHandler : IHook() {
     }
 
     private fun setKeepAutostart(
-        contentResolver: ContentResolver,
+        ctx: Context,
         packageName: String,
         stable: Boolean
     ): Boolean? {
         val result = runCatching {
-            contentResolver.call(
-                PERM_MGR_URI,
+            callPermmgr(
+                ctx,
                 LbeHandler.METHOD_SET_KEEP_AUTOSTART,
                 null,
                 Bundle().apply {
@@ -100,24 +148,24 @@ class MIUISecurityCenterHandler : IHook() {
         return true
     }
 
-    private fun isAutoStartStable(contentResolver: ContentResolver, packageName: String): Boolean {
-        queryKeepAutostart(contentResolver, packageName)?.let { return it }
-        return getPermissionFlags(contentResolver, packageName).and(PERM_AUTO_START) != 0
+    private fun isAutoStartStable(ctx: Context, packageName: String): Boolean {
+        queryKeepAutostart(ctx, packageName)?.let { return it }
+        return getPermissionFlags(ctx, packageName).and(PERM_AUTO_START) != 0
     }
 
     private fun setAutoStartStable(
-        contentResolver: ContentResolver,
+        ctx: Context,
         packageName: String,
         stable: Boolean
     ) {
-        if (setKeepAutostart(contentResolver, packageName, stable) != null) return
+        if (setKeepAutostart(ctx, packageName, stable) != null) return
         // Legacy path (pre-HyperOS 3): the keep bit is a column of the permmgr "active" table.
-        val oldPermissionFlags = getPermissionFlags(contentResolver, packageName)
+        val oldPermissionFlags = getPermissionFlags(ctx, packageName)
         val newFlags = if (stable)
             oldPermissionFlags.or(PERM_AUTO_START)
         else
             oldPermissionFlags.and(PERM_AUTO_START.inv())
-        val updated = contentResolver.update(URI, ContentValues().apply {
+        val updated = ctx.contentResolver.update(URI, ContentValues().apply {
             put("suggestAccept", newFlags)
         }, "pkgName=?", arrayOf(packageName))
         if (updated <= 0) error("permission manager rejected the legacy update")
@@ -130,6 +178,12 @@ class MIUISecurityCenterHandler : IHook() {
             hookAddKeepAutoStart()
         }
     }
+
+    // NOTE: an earlier Android 17 build also hooked the framework PermissionManager
+    // inside the security center process (to catch the osbot direct-call path). That
+    // hook was removed: it ran on every permission toggle the UI makes, and the perm
+    // service watchdog in LbeHandler already re-grants anything that slips past the
+    // service-side veto, so the extra hook surface is not worth the risk.
 
     private fun hookSkipWarning() = runCatching {
         val activityClass = findClass(
@@ -204,7 +258,7 @@ class MIUISecurityCenterHandler : IHook() {
                 fun updateStatus() {
                     kotlin.runCatching {
                         val checked =
-                            isAutoStartStable(ctx.contentResolver, currentPkgName)
+                            isAutoStartStable(ctx, currentPkgName)
                         ctx.runOnUiThread {
                             pref.call(
                                 "setChecked",
@@ -225,7 +279,7 @@ class MIUISecurityCenterHandler : IHook() {
 
                 fun modifyStatus(enabled: Boolean) {
                     kotlin.runCatching {
-                        setAutoStartStable(ctx.contentResolver, currentPkgName, enabled)
+                        setAutoStartStable(ctx, currentPkgName, enabled)
                     }.onSuccess {
                         updateStatus()
                     }.onFailure {
@@ -299,7 +353,7 @@ class MIUISecurityCenterHandler : IHook() {
                 fun updateStatus() {
                     kotlin.runCatching {
                         val checked =
-                            isAutoStartStable(ctx.contentResolver, currentPkgName)
+                            isAutoStartStable(ctx, currentPkgName)
                         ctx.runOnUiThread {
                             call(
                                 "setSlideButtonChecked",
@@ -320,7 +374,7 @@ class MIUISecurityCenterHandler : IHook() {
 
                 fun modifyStatus(enabled: Boolean) {
                     kotlin.runCatching {
-                        setAutoStartStable(ctx.contentResolver, currentPkgName, enabled)
+                        setAutoStartStable(ctx, currentPkgName, enabled)
                     }.onSuccess {
                         updateStatus()
                     }.onFailure {
