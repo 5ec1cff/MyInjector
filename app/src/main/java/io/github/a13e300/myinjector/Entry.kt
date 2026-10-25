@@ -59,7 +59,12 @@ class Entry : XposedModule() {
                 "com.zhihu.android" -> ZhihuXposedHandler()
                 "com.android.chrome", "com.kiwibrowser.browser" -> ChromeHandler
                 "com.baidu.input" -> BaiduIMEHandler()
-                "com.miui.home" -> MiuiHomeHandler()
+                "com.miui.home" -> {
+                    // HYOS packages have no DEX/Application lifecycle. Their hooks are
+                    // loaded independently through META-INF/xposed/native_init.list.
+                    if (info == null || info.flags and ApplicationInfo.FLAG_HAS_CODE == 0) return
+                    MiuiHomeHandler()
+                }
                 "com.android.settings" -> SettingsHandler()
                 "app.landrop.landrop_flutter" -> LanDropHandler()
                 "com.android.intentresolver" -> IntentResolverHandler()

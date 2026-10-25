@@ -48,6 +48,7 @@ val gitCommitHash = "git rev-parse --verify --short HEAD".execute()
 
 android {
     compileSdk = 37
+    ndkVersion = "29.0.14206865"
     signingConfigs {
         if (keystoreProperties != null) {
             create("release") {
@@ -70,6 +71,17 @@ android {
         ndk {
             //noinspection ChromeOsAbiSupport
             abiFilters += "arm64-v8a"
+        }
+        externalNativeBuild {
+            cmake {
+                targets += "myinjector_miuihome"
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/miuihome/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
     buildFeatures {

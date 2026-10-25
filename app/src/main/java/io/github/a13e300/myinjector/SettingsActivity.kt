@@ -94,6 +94,8 @@ class SettingsActivity : Activity() {
         }
         App.addServiceStateListener(listener = xposedServiceListener!!)
         buildContent()
+        // Also migrate already-enabled launcher options to the new HYOS bridge.
+        commitMiuiHome()
     }
 
     override fun onDestroy() {
@@ -1194,7 +1196,8 @@ class SettingsActivity : Activity() {
             .build()
         intent.putExtra("EXTRA_CREDENTIAL", pendingIntent)
         intent.putExtra("EXTRA_CONFIG", config.toByteArray())
-        sendBroadcast(intent)
+        sendBroadcast(Intent(intent).setPackage("com.miui.home"))
+        sendBroadcast(Intent(intent).setPackage("android"))
     }
 
     @SuppressLint("SetTextI18n", "XposedNewApi")

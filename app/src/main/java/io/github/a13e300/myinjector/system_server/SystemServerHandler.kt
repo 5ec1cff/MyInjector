@@ -72,6 +72,7 @@ class SystemServerHandler : IHook() {
 
     private lateinit var config: SystemServerConfig
     private lateinit var broadcastManager: BroadcastManager
+    private val miuiHomeRuntime = MiuiHomeRuntime()
 
 
     override fun onHook() {
@@ -90,9 +91,11 @@ class SystemServerHandler : IHook() {
         hookHyperOSAvoidMoveToFront()
         broadcastManager = BroadcastManager("MyInjector-SystemServer")
         runConfigListener()
+        subHook(miuiHomeRuntime)
     }
 
     override fun onUnhook(): Boolean {
+        miuiHomeRuntime.onUnhook()
         broadcastManager.unregister(receiver)
         broadcastManager.stop()
         setXSpace(false)
