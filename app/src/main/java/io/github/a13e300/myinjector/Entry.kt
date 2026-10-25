@@ -7,6 +7,7 @@ import io.github.a13e300.myinjector.arch.newModuleResource
 import io.github.a13e300.myinjector.bridge.LoadPackageParam
 import io.github.a13e300.myinjector.system_server.SystemServerHandler
 import io.github.a13e300.myinjector.telegram.TelegramHandler
+import io.github.a13e300.myinjector.xhs.XhsHandler
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
