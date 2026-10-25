@@ -166,7 +166,11 @@ androidComponents.onVariants { variant ->
 }
 
 dependencies {
-    implementation(libs.dexkit)
+    // prebuilt fork of dexkit
+    // https://github.com/5ec1cff/DexKit/commit/494cf312b09ae2f4e2f6924e7d2b12e224a3ff15
+    implementation(files("dexkit-android-release.aar"))
+    // transitive dependency of dexkit
+    implementation("com.google.flatbuffers:flatbuffers-java:23.5.26")
     compileOnly(libs.androidx.annotation)
     compileOnly(project(":hidden-api"))
     implementation(libs.protobuf.kotlin)

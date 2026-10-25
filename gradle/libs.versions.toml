@@ -1,5 +1,4 @@
 [versions]
-dexkit = "2.2.0-1"
 agp = "9.3.3"
 annotation = "1.11.0"
 protobuf = "4.36.2"
@@ -8,7 +7,6 @@ xposed-api = "102.0.0"
 xposed-service = "102.0.0"
 
 [libraries]
-dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
 protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin-lite", version.ref = "protobuf" }
 protobuf-java = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
