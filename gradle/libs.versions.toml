@@ -1,9 +1,9 @@
 [versions]
 dexkit = "2.2.0-1"
-kotlin = "2.3.10"
-agp = "8.10.1"
-annotation = "1.9.1"
-protobuf = "4.31.1"
+agp = "9.3.3"
+annotation = "1.11.0"
+protobuf = "4.36.2"
+protobuf-plugin = "0.10.0"
 xposed-api = "102.0.0"
 xposed-service = "102.0.0"
 
@@ -20,5 +20,4 @@ libxposed-service = { group = "io.github.libxposed", name = "service", version.r
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-protobuf = { id = "com.google.protobuf", version = "0.9.5" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
