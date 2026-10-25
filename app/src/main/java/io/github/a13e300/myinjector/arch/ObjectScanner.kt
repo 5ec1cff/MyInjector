@@ -90,6 +90,7 @@ data class FindObjectConfiguration(
     val targetObj: Any? = null,
     val targetClz: Class<*>? = null,
     val first: Boolean = true,
+    val fieldsOnly: Boolean = false,
 )
 
 fun findPathToObject(start: Any, conf: FindObjectConfiguration): List<Edge> {
@@ -143,7 +144,7 @@ fun findPathToObject(start: Any, conf: FindObjectConfiguration): List<Edge> {
             break
         }
 
-        if (o is Array<*>) {
+        if (o is Array<*> && !conf.fieldsOnly) {
             for (i in 0 until o.size) {
                 val newObj = o[i] ?: continue
                 if (matches(newObj)) {
@@ -156,7 +157,7 @@ fun findPathToObject(start: Any, conf: FindObjectConfiguration): List<Edge> {
                     visited[newObj] = java.lang.Boolean.TRUE
                 }
             }
-        } else if (o is WeakReference<*>) {
+        } else if (o is WeakReference<*> && !conf.fieldsOnly) {
             o.get()?.let { newObj ->
                 if (matches(newObj)) {
                     result.add(Edge.WeakRefEdge(newObj, edge))

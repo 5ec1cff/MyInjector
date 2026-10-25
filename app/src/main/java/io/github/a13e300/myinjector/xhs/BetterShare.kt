@@ -6,7 +6,10 @@ import android.content.Context
 import android.net.Uri
 import android.util.AttributeSet
 import android.view.View
+import io.github.a13e300.myinjector.arch.Edge
+import io.github.a13e300.myinjector.arch.FindObjectConfiguration
 import io.github.a13e300.myinjector.arch.currentApplication
+import io.github.a13e300.myinjector.arch.findPathToObject
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAll
@@ -14,7 +17,6 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookCAfter
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
-import io.github.a13e300.myinjector.logE
 import java.lang.reflect.Field
 
 private fun toHtmlText(title: String?, desc: String?, url: String): String {
@@ -37,14 +39,11 @@ private fun toHtmlText(title: String?, desc: String?, url: String): String {
     return sb.toString()
 }
 
-
 class BetterShare : MyDynHook("betterShare") {
-    override fun isFeatureEnabled(): Boolean =
-        io.github.a13e300.myinjector.XhsHandler.settings.betterShare
+    override fun isFeatureEnabled(): Boolean = XhsHandler.settings.betterShare
 
     override fun onHook() {
-        val shareMethod =
-            io.github.a13e300.myinjector.XhsHandler.creator.create("shareMethod") { bridge ->
+        val shareMethod = XhsHandler.creator.create("shareMethod") { bridge ->
             val shareMethod = bridge.findMethod {
                 matcher {
                     usingEqStrings("TYPE_LINKED", "xhsdiscover://tagged_me")
@@ -98,7 +97,7 @@ class BetterShare : MyDynHook("betterShare") {
                 .build()
                 .toString()
             // logD("newUri=$newUri desc=$desc title=$title")
-            val html = io.github.a13e300.myinjector.toHtmlText(title, desc, newUri)
+            val html = toHtmlText(title, desc, newUri)
             var text = title
             if (text.isNullOrEmpty()) text = desc
             else text += "\n" + desc
@@ -134,10 +133,18 @@ class BetterShare : MyDynHook("betterShare") {
             }
         }
 
-        // l2b.e0#invoke 9.34.4
-        val shareMethod2 =
-            io.github.a13e300.myinjector.XhsHandler.creator.create("shareMethod2") { bridge ->
+        val shareMethod2 = XhsHandler.creator.create("shareMethod2") { bridge ->
+            // e2c.a#invoke 9.51.0
             val shareMethod = bridge.findMethod {
+                matcher {
+                    usingEqStrings(
+                        "TYPE_COPY_ONLY",
+                        "ug-share-copy-link",
+                    )
+                }
+            }.singleOrNull() ?:
+            // l2b.e0#invoke 9.34.4
+            bridge.findMethod {
                 matcher {
                     usingEqStrings(
                         "TYPE_COPY_ONLY",
@@ -174,61 +181,56 @@ class BetterShare : MyDynHook("betterShare") {
         logD("shareEntityPreField $shareEntityPreField shareEntityField2=$shareEntityField2")
 
         var typeField: Field? = null
-        var anotherFieldContainNoteItemInPreField: Field? = null
-        var theFieldAnotherFieldContainNoteItemInPreField: Field? = null
+        var noteItemBeanFieldsPath: List<Field>? = null
+        val noteItemBeanClass = findClass("com.xingin.entities.NoteItemBean")
 
         shareClass2.hookAll(shareMethod2.memberName, cond = ::isEnabled, before = { param ->
             val arg0 = param.args[0]
-            logD("arg0 $arg0")
-            if (typeField == null) {
-                val field =
-                    arg0.javaClass.declaredFields.singleOrNull { it.type == String::class.java }
-                        ?.also { it.isAccessible = true }
-                logD("field $field arg0.<field>=${field?.get(arg0)}")
-                if (field != null && field.get(arg0) == "TYPE_LINKED") {
-                    logD("found type field $field")
-                    typeField = field
-                }
+            logD("ShareClass arg0 $arg0")
+            var currentTypeField: Field? = typeField
+            if (currentTypeField == null) {
+                currentTypeField =
+                    arg0.javaClass.declaredFields.singleOrNull {
+                        it.isAccessible = true
+                        it.type == String::class.java && it.get(arg0)
+                            .let { it == "TYPE_LINKED" || it == "TYPE_COPY_ONLY" }
+                    }
+                typeField = currentTypeField
+                logD("got type field $currentTypeField")
             }
-            if (typeField == null) return@hookAll
-            if (typeField.get(arg0) == "TYPE_LINKED") {
+            if (currentTypeField == null) return@hookAll
+            if (currentTypeField.get(arg0).let { it == "TYPE_LINKED" || it == "TYPE_COPY_ONLY" }) {
                 val preFieldV = shareEntityPreField.get(param.thisObject)
-                val shareEntity = shareEntityField2.get(preFieldV)
-                if (anotherFieldContainNoteItemInPreField == null) {
-                    var foundField: Field? = null
-                    var foundParentField: Field? = null
-                    runCatching {
-                        for (f1 in preFieldV.javaClass.declaredFields) {
-                            f1.isAccessible = true
-                            val obj = f1.get(preFieldV)
-                            if (obj != null) {
-                                for (f2 in obj.javaClass.declaredFields) {
-                                    if (f2.type.name.endsWith("NoteItemBean")) {
-                                        logD("found NoteItemBean field $f2")
-                                        foundField = f2
-                                        break
-                                    }
-                                }
-                                if (foundField != null) {
-                                    logD("found field contains NoteItemBean field: $f1")
-                                    foundParentField = f1
-                                    break
-                                }
-                            }
-                        }
-                    }.onFailure {
-                        logE("find noteitembean: ", it)
+                val shareEntity = shareEntityField2.get(preFieldV)!!
+                logD("shareEntity $shareEntity")
+                if (noteItemBeanFieldsPath == null) {
+                    val path = findPathToObject(
+                        param.thisObject, FindObjectConfiguration(
+                            targetClz = noteItemBeanClass,
+                            maxDepth = 3,
+                            maxTries = 10000,
+                            fieldsOnly = true,
+                            first = true
+                        )
+                    ).single()
+                    logD("search done: $path")
+                    val pathList = mutableListOf<Field>()
+                    var p: Edge? = path
+                    while (p != null && p !is Edge.StartEdge) {
+                        p as Edge.FieldEdge
+                        pathList.add(0, p.field)
+                        p = p.prev
                     }
-                    if (foundField != null) {
-                        // .d.s
-                        anotherFieldContainNoteItemInPreField = foundParentField
-                        // .d.s.d
-                        theFieldAnotherFieldContainNoteItemInPreField = foundField
-                    }
+                    logD("path: ${pathList.joinToString(".") { it.name }}")
+                    noteItemBeanFieldsPath = pathList
                 }
-                val noteItem = theFieldAnotherFieldContainNoteItemInPreField!!.get(
-                    anotherFieldContainNoteItemInPreField!!.get(preFieldV)
-                )
+
+                var noteItem: Any = param.thisObject
+                for (f in noteItemBeanFieldsPath) {
+                    noteItem = f.get(noteItem)!!
+                }
+
+                logD("noteItem path: $noteItem")
 
                 shareCommon(shareEntity, noteItem)
 
