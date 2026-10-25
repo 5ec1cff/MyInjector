@@ -1,5 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.view.View
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
@@ -40,7 +41,17 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
     private val inputUser = loader.loadClass("org.telegram.messenger.MessagesController")
         .getDeclaredMethod("getInputUser", java.lang.Long.TYPE)
 
-    fun action(chat: Any, message: Any): MessageMenuAction {
+    private fun canSend(chat: Any): Boolean {
+        // Telegram already folds channel/group/topic rights, blocked users and
+        // secret-chat state into the composer and its restriction overlay.
+        // canSendMessage() alone misses group bans and rejects all secret chats.
+        val input = fields.getValue("input").get(chat) as? View ?: return false
+        val restriction = fields.getValue("restrictionOverlay").get(chat) as? View
+        return input.visibility == View.VISIBLE && restriction?.visibility != View.VISIBLE
+    }
+
+    fun action(chat: Any, message: Any): MessageMenuAction? {
+        if (!canSend(chat)) return null
         // Snapshot the album before dismissing the menu clears selectedObjectGroup.
         val group = fields.getValue("group").get(chat)
         val messages = ArrayList<Any>()
@@ -51,6 +62,11 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
             messages.sortBy { it.call("getId") as Int }
         }
         return MessageMenuAction(click = click@ { view ->
+            // Rights can change while the menu is open.
+            if (!canSend(chat)) {
+                MessageMenuHook.dismiss(chat)
+                return@click
+            }
             val controller = chat.call("getMessagesController")!!
             val dialogId = fields.getValue("dialog").getLong(chat)
             val thread = fields.getValue("thread").get(chat)
@@ -130,7 +146,7 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
     }
 }
 
-private val repeatFields = listOf("dialog", "thread", "suggestion", "group", "currentChat")
+private val repeatFields = listOf("dialog", "thread", "suggestion", "group", "currentChat", "input", "restrictionOverlay")
 private val repeatKeys = repeatFields + listOf("forward", "slowMode", "monoPeer", "chatArgs",
     "sendSticker", "sendText", "textParams", "chatNoForwards", "userNoForwards")
 
@@ -181,7 +197,25 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
     fun restriction(name: String, argument: String) = bridge.findMethod { matcher {
         declaredClass(controller); name(name); paramTypes(argument); returnType("boolean")
     } }.single().descriptor
+    // updateSecretStatus owns the full-send restriction overlay, separate from
+    // the composer hidden by updateBottomOverlay for read-only destinations.
+    val status = bridge.findMethod { matcher {
+        declaredClass(chat); paramTypes(); returnType("void")
+        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("EncryptionProcessing") }
+        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SendMessageRestrictedForever") }
+    } }.single()
+    val input = status.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
+        it.className == chat && (it.typeName == "org.telegram.ui.Components.ChatActivityEnterView" ||
+            it.type.superClass?.name == "org.telegram.ui.Components.ChatActivityEnterView")
+    }
+    val statusCalls = scanTelegramDex(bridge, status).calls
+    val processing = statusCalls.first { it.args.any { arg -> arg?.resource == "EncryptionProcessing" } }
+    val overlay = statusCalls.first { it.offset > processing.offset && it.method.name == "setVisibility" }
+        .receiver!!.field!!
+    check(overlay.className == chat && overlay.type.superClass?.name == "android.widget.FrameLayout")
     return mapOf(
+        "input" to input.descriptor,
+        "restrictionOverlay" to overlay.descriptor,
         "forward" to forward.descriptor,
         "slowMode" to invoked("boolean"),
         "monoPeer" to bridge.findMethod { matcher {
