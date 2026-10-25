@@ -47,6 +47,12 @@ jobs:
           chmod +x gradlew
           ./gradlew :dexkit-android:publishToMavenLocal
 
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Build with Gradle
         run: |
           ./gradlew assembleRelease
