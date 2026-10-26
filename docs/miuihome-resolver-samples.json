@@ -1,0 +1,197 @@
+[
+  {
+    "apk": "MiuiHome-rs.apk",
+    "apk_sha256": "f4fe410efcd72ae30550bf6beac9a991d06d1ce82f0d51b51f644b11658e7cc8",
+    "libapp.so": {
+      "sha256": "451c79322ddcb1e3d3bd48657bda591a4370b1d8843967573f8601c7ee64695c",
+      "size": 29448568,
+      "resolved": {
+        "targets": {
+          "drag_start": "0x11ad39c",
+          "drag_end_vertical": "0x11aabf4",
+          "drag_end_horizontal": "0x11ac694",
+          "pointer": "0x190a258",
+          "commit": "0xdf4804",
+          "menu_down": "0x1234eb8",
+          "menu_up": "0x1234de4",
+          "menu_click": "0x1238838"
+        },
+        "fields": {
+          "controller_task": "0x21b",
+          "model_info": "0xf",
+          "info_key": "0x7",
+          "task_id": "0x7",
+          "user_id": "0x23",
+          "key_intent": "0x1f",
+          "intent_component": "0x1f",
+          "intent_package": "0x23",
+          "component_package": "0x7",
+          "info_top_activity": "0x7f",
+          "pointer_delta": "0x33"
+        },
+        "cids": {
+          "menu_state": "0x1b05",
+          "down_transformed": "0x16e5",
+          "down_raw": "0x19c6",
+          "up_transformed": "0x16e1",
+          "up_raw": "0x19c2",
+          "move_transformed": "0x16e3",
+          "move_raw": "0x19c4",
+          "cancel_transformed": "0x16cf",
+          "cancel_raw": "0x19ba"
+        },
+        "snapshot_hash": "5d85d85296400e9b3992193deed317c9",
+        "mini_symbol_count": 78505
+      }
+    },
+    "libapp_launcher.so": {
+      "sha256": "89302282d70e3b40126ccce05fef94560529c0543ff6e05107724dade0d104a7",
+      "size": 16220456,
+      "resolved": {
+        "runtime_slot": "0xf21058",
+        "runtime_state": "0xf21060",
+        "runtime_confirmations": 3,
+        "receiver_vtable": "0xe139b0",
+        "box_vtable": "0xe3ca98",
+        "mutex_vtable": "0xeb76b8",
+        "arc_vtable": "0xe995f0",
+        "arc_candidates": 4,
+        "receiver_owners": [
+          "0x647298"
+        ],
+        "string_vtable": "0xeb6f50",
+        "mini_symbol_count": 22921
+      }
+    }
+  },
+  {
+    "apk": "系统桌面_RELEASE-8.01.02.8584-260918-10231931-R.apk",
+    "apk_sha256": "4b1210faa591485a60fce85783e9ffe689a724685588adb13bdc868c159259bf",
+    "libapp.so": {
+      "sha256": "93e511989202a70d38b8231c3133167b830ca7609b61ba6ad133898737d0e0ef",
+      "size": 29980112,
+      "resolved": {
+        "targets": {
+          "drag_start": "0x11fd574",
+          "drag_end_vertical": "0x11fae68",
+          "drag_end_horizontal": "0x11fc938",
+          "pointer": "0x197aebc",
+          "commit": "0xe50880",
+          "menu_down": "0x1285394",
+          "menu_up": "0x12852c0",
+          "menu_click": "0x1288d84"
+        },
+        "fields": {
+          "controller_task": "0x21f",
+          "model_info": "0xf",
+          "info_key": "0x7",
+          "task_id": "0x7",
+          "user_id": "0x23",
+          "key_intent": "0x1f",
+          "intent_component": "0x1f",
+          "intent_package": "0x23",
+          "component_package": "0x7",
+          "info_top_activity": "0x7f",
+          "pointer_delta": "0x33"
+        },
+        "cids": {
+          "menu_state": "0x1ba3",
+          "down_transformed": "0x1779",
+          "down_raw": "0x1a5d",
+          "up_transformed": "0x1775",
+          "up_raw": "0x1a59",
+          "move_transformed": "0x1777",
+          "move_raw": "0x1a5b",
+          "cancel_transformed": "0x1763",
+          "cancel_raw": "0x1a51"
+        },
+        "snapshot_hash": "5d85d85296400e9b3992193deed317c9",
+        "mini_symbol_count": 79679
+      }
+    },
+    "libapp_launcher.so": {
+      "sha256": "f70a2d15505abc83bbc2f03cbe9e90b635a8add6d89ae0fef764100aea1c6d8b",
+      "size": 16242592,
+      "resolved": {
+        "runtime_slot": "0xf26258",
+        "runtime_state": "0xf26260",
+        "runtime_confirmations": 3,
+        "receiver_vtable": "0xe18fe8",
+        "box_vtable": "0xe3dc20",
+        "mutex_vtable": "0xebcc28",
+        "arc_vtable": "0xe9eb58",
+        "arc_candidates": 4,
+        "receiver_owners": [
+          "0x64d260"
+        ],
+        "string_vtable": "0xebc4c0",
+        "mini_symbol_count": 22982
+      }
+    }
+  },
+  {
+    "apk": "系统桌面_RELEASE-8.01.02.8593-260918-10241550-R.apk",
+    "apk_sha256": "a53ab31d3ca08ff16267385972d8c208176537964034256592dae132848b810c",
+    "libapp.so": {
+      "sha256": "68f62bbd0a73ae0096c27a4cb4bf1789a4452220510a05c658a3968fa38f470d",
+      "size": 29983800,
+      "resolved": {
+        "targets": {
+          "drag_start": "0x11f6aa8",
+          "drag_end_vertical": "0x11f439c",
+          "drag_end_horizontal": "0x11f5e6c",
+          "pointer": "0x197aaa0",
+          "commit": "0xe34ecc",
+          "menu_down": "0x127e8c4",
+          "menu_up": "0x127e7f0",
+          "menu_click": "0x12822b4"
+        },
+        "fields": {
+          "controller_task": "0x21f",
+          "model_info": "0xf",
+          "info_key": "0x7",
+          "task_id": "0x7",
+          "user_id": "0x23",
+          "key_intent": "0x1f",
+          "intent_component": "0x1f",
+          "intent_package": "0x23",
+          "component_package": "0x7",
+          "info_top_activity": "0x7f",
+          "pointer_delta": "0x33"
+        },
+        "cids": {
+          "menu_state": "0x1ba3",
+          "down_transformed": "0x1779",
+          "down_raw": "0x1a5d",
+          "up_transformed": "0x1775",
+          "up_raw": "0x1a59",
+          "move_transformed": "0x1777",
+          "move_raw": "0x1a5b",
+          "cancel_transformed": "0x1763",
+          "cancel_raw": "0x1a51"
+        },
+        "snapshot_hash": "5d85d85296400e9b3992193deed317c9",
+        "mini_symbol_count": 79682
+      }
+    },
+    "libapp_launcher.so": {
+      "sha256": "fba7ff80c3c1f2bcae819989bcd1a3d24eff0067ebeb21de622b657ecb20cfbf",
+      "size": 16245792,
+      "resolved": {
+        "runtime_slot": "0xf26dd8",
+        "runtime_state": "0xf26de0",
+        "runtime_confirmations": 3,
+        "receiver_vtable": "0xe19a48",
+        "box_vtable": "0xe3e680",
+        "mutex_vtable": "0xebd730",
+        "arc_vtable": "0xe9f660",
+        "arc_candidates": 4,
+        "receiver_owners": [
+          "0x64d3f4"
+        ],
+        "string_vtable": "0xebcfc8",
+        "mini_symbol_count": 22987
+      }
+    }
+  }
+]

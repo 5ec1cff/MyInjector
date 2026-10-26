@@ -9,6 +9,9 @@
 Runtime、Arc、Mutex 和虚表布局也限定于这个版本。未知桌面版本不安装 native hook。
 旧 Java 桌面继续使用 `MiuiHomeHandler`。
 
+7751、8584、8593 的动态定位可行性、离线原型和实现边界见
+[动态解析分析](miuihome-dynamic-resolver.md)；该原型尚未接入模块。
+
 ## 功能与实现
 
 - **禁用预启动**：在 system_server 拦截来自桌面 UID 的
