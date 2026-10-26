@@ -2,7 +2,8 @@
 """离线验证 MiuiHome 动态定位方案；读取 APK，不连接设备，也不生成可直接注入的 profile。
 
 需要 Python 的 lzma 标准库和 capstone 模块。主要地址由 .gnu_debugdata、调用关系及
-重定位取得，不依赖 7751 的 RVA 或 APK 摘要白名单。尚未代替模块中的版本校验。
+重定位取得，不依赖 7751 的 RVA 或 APK 摘要白名单。模块使用同规则的 C++ 实现；
+本脚本保留用于离线分析对照。
 """
 import argparse
 import hashlib

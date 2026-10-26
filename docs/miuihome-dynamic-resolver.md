@@ -1,13 +1,15 @@
-# Rust 桌面动态解析可行性
+# Rust 桌面动态解析实现
 
 结论：7751、8584、8593 三份 APK 可以采用同一套规则定位现有 hook 的主要依赖，
-不需要为每个版本填写 RVA。已实现并运行离线原型
+不需要为每个版本填写 RVA。动态解析已接入模块，C++ 实现在
+[`runtime_profile.cpp`](../app/src/main/cpp/miuihome/runtime_profile.cpp) 和
+[`resolver_elf.cpp`](../app/src/main/cpp/miuihome/resolver_elf.cpp)。最初的离线原型保留在
 [`probe_miuihome_resolver.py`](../scripts/probe_miuihome_resolver.py)，完整输出见
 [`miuihome-resolver-samples.json`](miuihome-resolver-samples.json)。摘要用于标识样本，
 不参与定位或白名单判断。
 
-这次完成的是静态分析和离线原型。模块仍使用 7751 的固定 profile，尚未接入动态
-解析器，也没有对这两份其他设备的桌面完成真机注入验证。
+模块已移除固定 `profile_7751.h` 和桌面完整文件摘要白名单。三份样本均通过主机上的
+同一份 C++ 解析器及模拟加载检查；尚未完成真机注入和交互验证。
 
 ## 可用的信息源
 
@@ -16,8 +18,10 @@
 2.3 万个 Rust 符号。先前只查看外层 `.dynsym`，遗漏了这个信息源；业务函数虽不能
 用 `dlsym` 取得，仍可以从 APK 文件解析出名称、地址和长度。
 
-`.gnu_debugdata` 不在普通 `PT_LOAD` 映射中，正式实现需要读取对应 APK/ELF
-文件并解压。原型校验 ELF 架构、文件边界和可执行段范围，并限制解压输出大小。
+`.gnu_debugdata` 不在普通 `PT_LOAD` 映射中，模块读取对应 APK/ELF 文件并解压。
+读取支持独立 ELF 或 `APK!/lib/arm64-v8a/*.so` 的 STORED 条目，校验 ZIP/ELF
+边界、架构、函数范围和候选唯一性。内置 XZ Embedded，解压输出限制为 16MiB，
+校验 CRC32/CRC64；未知压缩方式、损坏内容或超出限制均拒绝解析。
 
 定位时结合以下关系：
 
@@ -54,7 +58,7 @@
 | Mutex 虚表 | `0xeb76b8` | `0xebcc28` | `0xebd730` |
 | Arc 虚表 | `0xe995f0` | `0xe9eb58` | `0xe9f660` |
 
-7751 的八处 hook 和六个 Rust 地址全部复现现有 `profile_7751.h`。新样本的具名
+7751 的八处 hook 和六个 Rust 地址全部复现原固定 profile。新样本的具名
 方法入口也与 IDA 的结果交叉核对。Runtime/RString 的定位另用参考项目
 [MiuiBackGestureHook 的解析器](https://github.com/wxxsfxyzm/MiuiBackGestureHook/blob/b6e582fc32f83bda3d153b12e3ded2d411acf7f3/miui-home-hyos-native/runtime_profile_resolver.cpp) 在
 主机上构造 ELF 内存映像验证，三份均得到相同结果。
@@ -75,7 +79,9 @@
 | 转换后 Cancel CID | `0x16cf` | `0x1763` | 同上 |
 
 任务身份相关的 `model.info`、`info.key`、taskId、userId、Intent/Component 路径和
-指针 delta 字段在三份中一致，原型仍从具名 getter 等代码提取。三个样本的 VM
+指针 delta 字段在三份中一致，解析器仍从具名 getter 等代码提取。State 到 widget、
+按钮到 onPressed、闭包上下文及 transformed 事件的 delegate 路径也从指令中提取。
+三个样本的 VM
 snapshot 版本哈希均为 `5d85d85296400e9b3992193deed317c9`；这说明 snapshot
 格式版本一致，不能据此推断业务 CID 或全部运行时 ABI 相同。
 
@@ -85,15 +91,21 @@ snapshot 版本哈希均为 `5d85d85296400e9b3992193deed317c9`；这说明 snaps
 
 ## 接入模块的方式与边界
 
-正式实现可在 native 初始化线程中读取文件，以有大小限制的 XZ 解码器解出符号表，
-按上述关系构造不可变的 RuntimeProfile，再让 hook 和广播代码读取该 profile。
-对象字段、CID 和闭包地址也一起放入 profile，替换 `native_hook.cpp` 中对应常量。
-文件读取、解压和扫描均在安装 hook 前完成，不放入 Dart 观察回调。
+worker 在安装 hook 前读取文件、解压符号表并构造不可变的 `RuntimeProfile`，
+`native_hook.cpp` 和 `native_broadcast.cpp` 共用其中的地址、字段和 CID。
+每个桌面进程解析一次，不持久缓存结果；应用更新后，新的进程重新解析。
+文件读取、解压和扫描均不放入 Dart 观察回调。
 
-APK/ELF 摘要可以保留为解析缓存键，应用更新后重新解析；无需继续要求摘要属于
-某个桌面版本白名单。仍要校验支持的 Dart VM ABI、入口寄存器约定、对象读取路径、
-Rust 返回值及 Arc/Mutex 布局，并在设备上确认广播接收器和手势链。当前离线原型
-尚未完整验证这些运行时条件，不能直接拿输出解除模块限制。
+安装前还将文件的 `PT_LOAD` 与实际加载段逐项比较，计算两侧可执行段的 SHA-256，
+并核对八处入口字节与五组虚表的实际重定位结果。这里的摘要只用于比较文件和内存，
+没有预设某个桌面文件的正确摘要，防止应用更新后拿新文件去修改旧映像。
+
+目前支持上文列出的 VM snapshot 格式和 arm64 compressed pointers；对象头、
+字符串、闭包入口及坐标对象的 VM/框架基本布局沿用已分析 ABI。业务字段和 CID
+单独解析，不能用 snapshot 版本代替它们。入口参数约定、接收器构造代码、Arc 的
+16 字节计数头及后续 40 字节 MutexReceiver 都须通过指令校验；接收器注册前再次
+检查虚表。原生 API 的 C 调用声明仍对应已分析 ABI，需要真机确认完整的调用链，
+不能把主机解析成功视为其他设备系统库已经兼容。
 
 后续若移除 `.gnu_debugdata`、重命名方法或改变编译结构，需要新的解析规则；
 现有证据只覆盖这三份样本。缺少信息、候选不唯一或布局校验失败时，应记录具体
@@ -101,7 +113,22 @@ Rust 返回值及 Arc/Mutex 布局，并在设备上确认广播接收器和手�
 
 ## 重现
 
-需要 Python 3.8 或更新版本、`lzma` 标准库和 `capstone` Python 包。
+用模块自身的 C++ 实现检查三份样本（需要 Clang、CMake 和 Python 标准库）：
+
+```sh
+python3 scripts/check_miuihome_native.py \
+  --launcher /path/to/MiuiHome-rs.apk \
+  --launcher /path/to/系统桌面_RELEASE-8.01.02.8584-260918-10231931-R.apk \
+  --launcher /path/to/系统桌面_RELEASE-8.01.02.8593-260918-10241550-R.apk
+```
+
+检查会对比已复核样本结果、构造 `PT_LOAD` 和 RELATIVE 重定位，验证正常映像通过、
+代码或虚表变化被拒绝，并检查缺少/损坏调试节、未知 VM ABI、入口参数约定变化、
+Arc 布局变化、同名函数歧义及 ZIP 错误。ASan/UBSan 构建可通过 `--resolver`
+指定同一 CMake 目标 `miuihome_resolver_cli`。
+
+初始 Python 原型用于分析对照，需要 Python 3.8 或更新版本、`lzma` 标准库和
+`capstone` Python 包：
 
 ```sh
 python3 scripts/probe_miuihome_resolver.py \

@@ -1,6 +1,5 @@
 #include "native_broadcast.h"
 #include "config_snapshot.h"
-#include "profile_7751.h"
 #include <android/log.h>
 #include <atomic>
 #include <dlfcn.h>
@@ -60,8 +59,8 @@ struct Api {
 std::atomic<void (*)(uint32_t)> notify{nullptr};
 void *runtime = nullptr;
 
-// 以下布局由 7751 的 register_receiver 调用方、Arc 析构和 receiver
-// 分派交叉确认。 复用同一 ELF 的 Arc/Mutex 实现，复制 receiver/RBox
+// 解析器通过实际 register_receiver 构造代码、Arc 计数头及虚表关系验证以下布局。
+// 复用同一 ELF 的 Arc/Mutex 实现，复制 receiver/RBox
 // 虚表后替换回调和析构。 不把本模块的 C++ 对象交给桌面原来的 Receiver/Tokio
 // 析构函数。
 struct Receiver {
@@ -152,27 +151,35 @@ void *cloneReceiver() {
     __atomic_fetch_add(&owner->strong, uint64_t{1}, __ATOMIC_RELAXED);
     return &owner->value;
 }
+template<size_t N> bool tableMatches(uintptr_t base, uintptr_t rva, const uintptr_t (&expected)[N]) {
+    const auto *words = reinterpret_cast<const uintptr_t *>(base+rva);
+    for (size_t i = 0; i < N; ++i)
+        if (words[i] != expected[i]+(i ? base : 0)) return false;
+    return true;
+}
 } // namespace
 
-ReceiverStatus StartConfigReceiver(void *handle, uintptr_t base, void (*changed)(uint32_t)) {
+ReceiverStatus StartConfigReceiver(void *handle, uintptr_t base, const RustLayout &layout, void (*changed)(uint32_t)) {
     if (owner)
         return ReceiverStatus::Ready;
-    auto *state = reinterpret_cast<const uint32_t *>(base + kRuntimeSlot + 8);
+    auto *state = reinterpret_cast<const uint32_t *>(base + layout.runtimeState);
     if (__atomic_load_n(state, __ATOMIC_ACQUIRE) != 0)
         return ReceiverStatus::WaitingForRuntime;
-    auto *slot = reinterpret_cast<void *const *>(base + kRuntimeSlot);
+    auto *slot = reinterpret_cast<void *const *>(base + layout.runtimeSlot);
     void *current = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
     if (!current)
         return ReceiverStatus::WaitingForRuntime;
     if (!resolveApi(handle))
         return ReceiverStatus::Failed;
-    auto *sourceReceiver = reinterpret_cast<const uintptr_t *>(base + kReceiverVtable);
-    auto *sourceBox = reinterpret_cast<const uintptr_t *>(base + kReceiverBoxVtable);
-    arcVtable = reinterpret_cast<const uintptr_t *>(base + kReceiverArcVtable);
-    auto *mutexVtable = reinterpret_cast<const uintptr_t *>(base + kReceiverMutexVtable);
-    if (sourceReceiver[0] != 0x1f || sourceBox[0] != 7 || arcVtable[0] != 0x7f ||
-        mutexVtable[0] != 0xf || sourceReceiver[3] != base + 0x7300b8 ||
-        sourceBox[3] != base + 0x5b4b48 || arcVtable[3] != base + 0xb1a5fc)
+    auto *sourceReceiver = reinterpret_cast<const uintptr_t *>(base + layout.receiverVtable);
+    auto *sourceBox = reinterpret_cast<const uintptr_t *>(base + layout.boxVtable);
+    arcVtable = reinterpret_cast<const uintptr_t *>(base + layout.arcVtable);
+    auto *mutexVtable = reinterpret_cast<const uintptr_t *>(base + layout.mutexVtable);
+    if (!tableMatches(base, layout.receiverVtable, layout.receiverWords) ||
+        !tableMatches(base, layout.boxVtable, layout.boxWords) ||
+        !tableMatches(base, layout.arcVtable, layout.arcWords) ||
+        !tableMatches(base, layout.mutexVtable, layout.mutexWords) ||
+        !tableMatches(base, layout.stringVtable, layout.stringWords))
         return ReceiverStatus::Failed;
     memcpy(receiverVtable, sourceReceiver, sizeof(receiverVtable));
     memcpy(boxVtable, sourceBox, sizeof(boxVtable));
@@ -197,7 +204,7 @@ ReceiverStatus StartConfigReceiver(void *handle, uintptr_t base, void (*changed)
     }
     memcpy(action, kAction, sizeof(kAction) - 1);
     RBytes text{action, sizeof(kAction) - 1, sizeof(kAction) - 1,
-                reinterpret_cast<const uintptr_t *>(base + kStringVtable)};
+                reinterpret_cast<const uintptr_t *>(base + layout.stringVtable)};
     api.filterAddAction(filter, &text); // 消费拥有型 RString。
     box->strong = box->weak = 1;
     box->value = {0, receiverVtable, receiver, boxVtable, mutexVtable};

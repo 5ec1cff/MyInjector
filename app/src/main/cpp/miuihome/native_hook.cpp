@@ -1,8 +1,7 @@
 #include "gesture_state.h"
 #include "lsposed_hook_backend.h"
 #include "native_broadcast.h"
-#include "profile_7751.h"
-#include "sha256.h"
+#include "runtime_profile.h"
 #include <android/log.h>
 #include <atomic>
 #include <dlfcn.h>
@@ -46,6 +45,7 @@ uintptr_t ownerHeap = 0; // only accessed by the one owning Dart thread
 uintptr_t dartBase = 0, launcherBase = 0;
 std::atomic<void *> launcherHandle{nullptr};
 bool installed = false;
+RuntimeProfile profile{}; // 安装前写入；配置发布后只读。
 
 uint64_t nowNs() {
     timespec ts{};
@@ -103,83 +103,6 @@ int scanImage(dl_phdr_info *info, size_t, void *opaque) {
     }
     return 0;
 }
-bool executable(const Image &image, uintptr_t rva, size_t size) {
-    for (size_t i = 0; i < image.phnum; ++i) {
-        const auto &p = image.phdr[i];
-        if (p.p_type == PT_LOAD && (p.p_flags & PF_X) && rva >= p.p_vaddr && rva + size >= rva &&
-            rva + size <= p.p_vaddr + p.p_memsz)
-            return true;
-    }
-    return false;
-}
-
-// maps contains APK offsets, while dlpi_addr is an ELF load bias. Recover the
-// ZIP entry's offset from a PT_LOAD mapping rather than guessing the APK base.
-bool fileIdentity(const Image &image, size_t size, const char *expected) {
-    char path[sizeof(image.path)]{};
-    strcpy(path, image.path);
-    uint64_t offset = 0;
-    if (char *archive = strstr(path, "!/")) {
-        *archive = 0;
-        FILE *maps = fopen("/proc/self/maps", "re");
-        if (!maps)
-            return false;
-        char line[1536];
-        bool found = false;
-        while (fgets(line, sizeof(line), maps)) {
-            unsigned long long begin, end, fileOffset;
-            int pathStart = 0;
-            if (sscanf(line, "%llx-%llx %*s %llx %*s %*s %n", &begin, &end, &fileOffset,
-                       &pathStart) != 3)
-                continue;
-            if (!pathStart)
-                continue;
-            char *mapped = line + pathStart;
-            mapped[strcspn(mapped, "\r\n")] = 0;
-            if (strcmp(mapped, path) != 0)
-                continue;
-            for (size_t i = 0; i < image.phnum; ++i) {
-                const auto &p = image.phdr[i];
-                uintptr_t address = image.base + p.p_vaddr;
-                if (p.p_type == PT_LOAD && p.p_filesz && address >= begin && address < end &&
-                    fileOffset + address - begin >= p.p_offset) {
-                    uint64_t candidate = fileOffset + address - begin - p.p_offset;
-                    if (found && candidate != offset) {
-                        fclose(maps);
-                        return false;
-                    }
-                    offset = candidate;
-                    found = true;
-                }
-            }
-        }
-        fclose(maps);
-        if (!found)
-            return false;
-    }
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
-        return false;
-    Sha256 hash;
-    uint8_t buffer[16384];
-    size_t done = 0;
-    while (done < size) {
-        size_t count = size - done;
-        if (count > sizeof(buffer))
-            count = sizeof(buffer);
-        ssize_t got = pread(fd, buffer, count, off_t(offset + done));
-        if (got <= 0) {
-            close(fd);
-            return false;
-        }
-        hash.update(buffer, size_t(got));
-        done += size_t(got);
-    }
-    close(fd);
-    char digest[65];
-    hash.finish(digest);
-    return strcmp(digest, expected) == 0;
-}
 
 struct RString {
     char *data;
@@ -235,7 +158,7 @@ bool owned(const char *text, RString &output) {
     if (!data)
         return false;
     memcpy(data, text, size);
-    output = {data, size, size, reinterpret_cast<void *>(launcherBase + kStringVtable)};
+    output = {data, size, size, reinterpret_cast<void *>(launcherBase + profile.rust.stringVtable)};
     return true;
 }
 bool addI32(void *bundle, const char *key, int32_t value) {
@@ -318,6 +241,7 @@ uint64_t nextGeneration = 0, pointerUp = 0;
 std::atomic<uint64_t> firedMenu{0};
 
 // These unaligned reads only happen synchronously on the owning Dart thread.
+// 对象头、字符串及闭包入口使用受 snapshot ABI 校验保护的 VM 布局；业务字段来自 profile。
 template <typename T> T load(uintptr_t at) {
     T value{};
     memcpy(&value, reinterpret_cast<void *>(at), sizeof(value));
@@ -357,18 +281,18 @@ struct Dart {
         return true;
     }
     bool task(uintptr_t model, Task &out) const {
-        uintptr_t info = field(model, 0xf), key = field(info, 7);
+        uintptr_t info = field(model, profile.dart.modelInfo), key = field(info, profile.dart.infoKey);
         if (!object(key))
             return false;
-        int64_t id = load<int64_t>(key + 7), user = load<int64_t>(key + 0x23);
+        int64_t id = load<int64_t>(key + profile.dart.taskId), user = load<int64_t>(key + profile.dart.userId);
         if (id < 0 || id > INT32_MAX || user < 0 || user > 10000)
             return false;
-        uintptr_t intent = field(key, 0x1f), component = field(intent, 0x1f);
-        uintptr_t name = field(component, 7);
+        uintptr_t intent = field(key, profile.dart.keyIntent), component = field(intent, profile.dart.intentComponent);
+        uintptr_t name = field(component, profile.dart.componentPackage);
         if (!string(name, out.package)) {
-            uintptr_t top = field(info, 0x7f);
-            name = field(top, 7);
-            if (!string(name, out.package) && !string(field(intent, 0x23), out.package))
+            uintptr_t top = field(info, profile.dart.infoTopActivity);
+            name = field(top, profile.dart.topPackage);
+            if (!string(name, out.package) && !string(field(intent, profile.dart.intentPackage), out.package))
                 return false;
         }
         out.id = int32_t(id);
@@ -376,14 +300,14 @@ struct Dart {
         return true;
     }
     bool infoClosure(uintptr_t closure) const {
-        return object(closure) && load<uintptr_t>(closure + 0x1f) == dartBase + kInfoCallback;
+        return object(closure) && load<uintptr_t>(closure + 0x1f) == dartBase + profile.targets[MenuClick].rva;
     }
     bool menuTask(uintptr_t closure, Task &out) const {
         if (!infoClosure(closure))
             return false;
-        uintptr_t state = field(field(closure, 0x17), 0xf);
-        uintptr_t controller = field(state, 0x17);
-        return task(field(controller, 0x21b), out);
+        uintptr_t state = field(field(closure, profile.dart.closureContext), profile.dart.contextState);
+        uintptr_t controller = field(state, profile.dart.stateController);
+        return task(field(controller, profile.dart.controllerTask), out);
     }
 };
 
@@ -441,22 +365,17 @@ void cancelUi(uint64_t now) {
 }
 
 bool install(const Images &images) {
-    if (!fileIdentity(images.launcher, 16220456,
-                      "89302282d70e3b40126ccce05fef94560529c0543ff6e05107724dade0d104a7") ||
-        !fileIdentity(images.dart, 29448568,
-                      "451c79322ddcb1e3d3bd48657bda591a4370b1d8843967573f8601c7ee64695c")) {
-        __android_log_print(ANDROID_LOG_ERROR, kTag, "unsupported launcher image; hooks disabled");
+    RuntimeProfile candidate{};
+    ResolverError error{};
+    if (!ResolveRuntimeProfile(images.dart.path, images.launcher.path, candidate, error) ||
+        !ValidateLoadedProfile(candidate,
+                               {images.dart.base, images.dart.phdr, images.dart.phnum},
+                               {images.launcher.base, images.launcher.phdr, images.launcher.phnum}, error)) {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "profile resolution failed: %s; hooks disabled",
+                            error.message);
         return false;
     }
-    for (const auto &target : kTargets) {
-        if (!executable(images.dart, target.rva, sizeof(target.prefix)) ||
-            memcmp(reinterpret_cast<void *>(images.dart.base + target.rva), target.prefix,
-                   sizeof(target.prefix))) {
-            __android_log_print(ANDROID_LOG_ERROR, kTag, "Dart hook fingerprint mismatch at %#lx",
-                                static_cast<unsigned long>(target.rva));
-            return false;
-        }
-    }
+    profile = candidate;
     launcherBase = images.launcher.base;
     dartBase = images.dart.base;
     void *handle = launcherHandle.load(std::memory_order_acquire);
@@ -473,7 +392,7 @@ bool install(const Images &images) {
                                 MyInjectorMenuClick,         MyInjectorPointer};
     unsigned count = 0;
     for (; count < 8; ++count) {
-        if (InstallInlineHook(reinterpret_cast<void *>(dartBase + kTargets[count].rva),
+        if (InstallInlineHook(reinterpret_cast<void *>(dartBase + profile.targets[count].rva),
                               reinterpret_cast<void *>(replacements[count]),
                               &myinjector_dart_original[count]) != kHookSuccess)
             break;
@@ -482,11 +401,12 @@ bool install(const Images &images) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "Dart hook installation failed at index %u",
                             count);
         while (count)
-            RemoveInlineHook(reinterpret_cast<void *>(dartBase + kTargets[--count].rva));
+            RemoveInlineHook(reinterpret_cast<void *>(dartBase + profile.targets[--count].rva));
         return false;
     }
-    __android_log_print(ANDROID_LOG_INFO, kTag, "7751 native hooks ready: dart=%p launcher=%p",
-                        reinterpret_cast<void *>(dartBase), reinterpret_cast<void *>(launcherBase));
+    __android_log_print(ANDROID_LOG_INFO, kTag, "dynamic native hooks ready: dart=%p launcher=%p controller.task=%#x menu.cid=%#x",
+                        reinterpret_cast<void *>(dartBase), reinterpret_cast<void *>(launcherBase),
+                        profile.dart.controllerTask, profile.dart.menuStateCid);
     return true;
 }
 
@@ -516,7 +436,7 @@ void *worker(void *) {
     eventFd.store(fd);
     ReceiverStatus receiver = ReceiverStatus::WaitingForRuntime;
     for (unsigned attempt = 0; attempt < 600; ++attempt) {
-        receiver = StartConfigReceiver(api.handle, launcherBase, receivedConfig);
+        receiver = StartConfigReceiver(api.handle, launcherBase, profile.rust, receivedConfig);
         if (receiver != ReceiverStatus::WaitingForRuntime)
             break;
         timespec pause{0, 50000000};
@@ -670,12 +590,12 @@ MyInjectorObserveDart(const uint64_t *registers, unsigned kind) {
         Task target{};
         if (kind == 0) {
             uintptr_t state = load<uintptr_t>(registers[29] - 8);
-            if (!candidate.task(candidate.field(candidate.field(state, 0xb), 0xb), target))
+            if (!candidate.task(candidate.field(candidate.field(state, profile.dart.stateWidget), profile.dart.widgetTask), target))
                 return 0;
         } else if (kind == 4) {
             uintptr_t state = registers[1];
-            if (candidate.cid(state) != 0x1b05 ||
-                !candidate.menuTask(candidate.field(candidate.field(state, 0xb), 0xb), target))
+            if (candidate.cid(state) != profile.dart.menuStateCid ||
+                !candidate.menuTask(candidate.field(candidate.field(state, profile.dart.menuWidget), profile.dart.menuOnPressed), target))
                 return 0;
         }
     }
@@ -693,7 +613,7 @@ MyInjectorObserveDart(const uint64_t *registers, unsigned kind) {
     }
     if (kind == 0 && (mask & kDrag)) {
         uintptr_t state = load<uintptr_t>(registers[29] - 8);
-        if (dart.task(dart.field(dart.field(state, 0xb), 0xb), task)) {
+        if (dart.task(dart.field(dart.field(state, profile.dart.stateWidget), profile.dart.widgetTask), task)) {
             uiDrag.begin(task, ++nextGeneration, now);
             pointerUp = 0;
             enqueue({Kind::Begin, task, uiDrag.generation, now, 0, 0});
@@ -709,16 +629,16 @@ MyInjectorObserveDart(const uint64_t *registers, unsigned kind) {
             enqueue({Kind::Command, task, generation, now, duration, 1});
     } else if (kind == 4 && (mask & kSettings)) {
         uintptr_t state = registers[1];
-        // CID 0x1b05 is _MenuItemButtonState in the pinned AOT image.
-        uintptr_t closure = dart.field(dart.field(state, 0xb), 0xb);
-        if (dart.cid(state) == 0x1b05 && dart.menuTask(closure, task)) {
+        // State CID 与按钮闭包身份均由本次解析结果校验。
+        uintptr_t closure = dart.field(dart.field(state, profile.dart.menuWidget), profile.dart.menuOnPressed);
+        if (dart.cid(state) == profile.dart.menuStateCid && dart.menuTask(closure, task)) {
             uiMenu.begin(task, ++nextGeneration, now);
             enqueue({Kind::MenuBegin, task, uiMenu.generation, now, 0, 0});
         }
     } else if (kind == 5 && uiMenu.tracking) {
         uintptr_t state = registers[1];
-        if (dart.cid(state) == 0x1b05 &&
-            dart.menuTask(dart.field(dart.field(state, 0xb), 0xb), task) && task == uiMenu.task) {
+        if (dart.cid(state) == profile.dart.menuStateCid &&
+            dart.menuTask(dart.field(dart.field(state, profile.dart.menuWidget), profile.dart.menuOnPressed), task) && task == uiMenu.task) {
             uiMenu.finish(now);
             enqueue({Kind::MenuEnd, {}, uiMenu.generation, now, 0, 0});
         }
@@ -734,21 +654,21 @@ MyInjectorObserveDart(const uint64_t *registers, unsigned kind) {
         }
     } else if (kind == 7) {
         uint32_t cid = dart.cid(registers[2]);
-        if (cid == 0x19ba || cid == 0x16cf)
+        if (cid == profile.dart.pointerCids[3][0] || cid == profile.dart.pointerCids[3][1])
             cancelUi(now); // PointerCancelEvent
-        else if (cid == 0x19c6 || cid == 0x16e5) {
+        else if (cid == profile.dart.pointerCids[0][0] || cid == profile.dart.pointerCids[0][1]) {
             cancelUi(now);
             pointerUp = 0;
         } // PointerDownEvent
-        else if (cid == 0x19c2 || cid == 0x16e1) {
+        else if (cid == profile.dart.pointerCids[1][0] || cid == profile.dart.pointerCids[1][1]) {
             pointerUp = now;
             if (uiMenu.tracking) {
                 uiMenu.finish(now);
                 enqueue({Kind::MenuEnd, {}, uiMenu.generation, now, 0, 0});
             }
-        } else if ((cid == 0x19c4 || cid == 0x16e3) && uiMenu.tracking) {
-            uintptr_t event = cid == 0x16e3 ? dart.field(registers[2], 0xf) : registers[2];
-            uintptr_t delta = dart.field(event, 0x33);
+        } else if ((cid == profile.dart.pointerCids[2][0] || cid == profile.dart.pointerCids[2][1]) && uiMenu.tracking) {
+            uintptr_t event = cid == profile.dart.pointerCids[2][1] ? dart.field(registers[2], profile.dart.pointerDelegate) : registers[2];
+            uintptr_t delta = dart.field(event, profile.dart.pointerDelta);
             if (dart.object(delta))
                 uiMenu.move(load<double>(delta + 7), load<double>(delta + 0xf));
             else

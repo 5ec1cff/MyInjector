@@ -4,13 +4,13 @@
 同时启用**系统框架**和 **com.miui.home** 作用域，然后重启设备。升级后打开一次
 模块设置，把已有桌面开关同步给 system_server；之后仍使用原来的三个开关。
 
-当前适配 `RELEASE-8.01.02.7751-260904-10100945-R`。安装 hook 前校验
-`libapp_launcher.so`、`libapp.so` 的 SHA-256 和八处 Dart 指令指纹；广播接收器的
-Runtime、Arc、Mutex 和虚表布局也限定于这个版本。未知桌面版本不安装 native hook。
-旧 Java 桌面继续使用 `MiuiHomeHandler`。
-
-7751、8584、8593 的动态定位可行性、离线原型和实现边界见
-[动态解析分析](miuihome-dynamic-resolver.md)；该原型尚未接入模块。
+模块在安装 hook 前解析 `libapp.so`、`libapp_launcher.so` 的 `.gnu_debugdata`、
+指令结构和重定位，动态取得八处 hook、对象字段、事件 CID、Runtime 和广播虚表。
+已用同一份 C++ 解析器验证 7751、8584、8593 三份 APK；不按桌面版本号或完整文件
+SHA 白名单放行。支持的 Dart VM ABI、入口参数和 Arc/Mutex 布局仍须通过校验，
+信息缺失、候选有歧义或布局变化时停用 native hook，并在日志中说明原因。
+旧 Java 桌面继续使用 `MiuiHomeHandler`。具体规则和边界见
+[动态解析实现](miuihome-dynamic-resolver.md)。
 
 ## 功能与实现
 
@@ -50,7 +50,7 @@ native 在 Dart 所在线程中复制任务身份，通过队列交给 worker；
 mask 的位 0、1、2 分别对应拖动强停、AOSP 设置、禁用预启动。native 拒绝未知协议、
 非法位和过期版本；回调只发布配置并唤醒 worker，由 worker 切换配置、撤销旧手势。
 
-接收器使用 7751 的 `RArc<RMutex<BroadcastReceiver_TO<RBox<()>>>>` 布局，复用
+接收器使用经实际构造指令校验的 `RArc<RMutex<BroadcastReceiver_TO<RBox<()>>>>` 布局，复用
 桌面的 Arc/Mutex 实现，为自身回调和析构复制虚表；持有 Runtime 引用，退出时注销并
 释放引用。Intent、RString、返回错误及 pending result 按各自 native API 的所有权释放。
 
@@ -64,11 +64,15 @@ marker 使用不存在的包名，避免桥接失效时变成对普通应用的�
 ./gradlew :app:assembleDebug
 python3 scripts/check_miuihome_native.py \
   --launcher /path/to/MiuiHome-rs.apk \
+  --launcher /path/to/系统桌面_RELEASE-8.01.02.8584-260918-10231931-R.apk \
+  --launcher /path/to/系统桌面_RELEASE-8.01.02.8593-260918-10241550-R.apk \
   --module app/build/outputs/apk/debug/MyInjector-<版本>-debug.apk
 ```
 
-离线检查覆盖配置版本与乱序、手势计时与取消、跨用户任务身份、重复提交、SHA-256、
-目标 APK 的指纹及广播布局，以及模块 native 入口和 APK/ELF 的 16KB 对齐。
+检查需要主机的 Clang、CMake 和 Python 标准库，自动编译模块的同一份 C++ 解析器。
+离线检查覆盖配置乱序、手势计时与身份、三份样本的动态解析和模拟内存映像校验，
+以及损坏调试数据、未知 VM ABI、调用约定变化、符号歧义等拒绝路径。
+同时检查模块 native 入口、导出符号及 APK/ELF 的 16KB 对齐。
 目前尚未完成这份实现的真机注入和交互验收；离线通过不能证明设备上的回调链已经跑通。
 
 native 库更新需要重新加载 HYOS 进程，仅 Java 热重载不能替换已映射的 `.so`。
