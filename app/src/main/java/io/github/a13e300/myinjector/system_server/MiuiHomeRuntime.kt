@@ -14,6 +14,7 @@ import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ServiceManager
+import android.os.SystemClock
 import android.util.AtomicFile
 import android.widget.Toast
 import io.github.a13e300.myinjector.BuildConfig
@@ -21,7 +22,6 @@ import io.github.a13e300.myinjector.MiuiHomeConfig
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
-import io.github.a13e300.myinjector.arch.deoptimize
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookBefore
@@ -36,6 +36,7 @@ class MiuiHomeRuntime : IHook() {
         const val PREFIX = "io.github.a13e300.myinjector.miuihome."
         const val COMMAND = PREFIX + "COMMAND"
         const val COMMAND_PACKAGE = PREFIX + "command"
+        const val CONFIG = PREFIX + "CONFIG"
     }
 
     @Volatile private var config = MiuiHomeConfig.getDefaultInstance()
@@ -45,6 +46,8 @@ class MiuiHomeRuntime : IHook() {
     private var worker: HandlerThread? = null
     private var handler: Handler? = null
     private val seen = LinkedHashMap<String, Unit>() // accessed only on worker
+    private val publishLock = Any()
+    private var configRevision = 0L // guarded by publishLock
     private val systemContext: Context
         get() = ActivityThread.currentActivityThread().systemContext
 
@@ -54,27 +57,10 @@ class MiuiHomeRuntime : IHook() {
         worker = HandlerThread("MyInjector-MiuiHome").also { it.start() }
         handler = Handler(worker!!.looper)
         broadcasts = BroadcastManager("MyInjector-MiuiHomeConfig").also {
-            it.register(IntentFilter("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG"), receiver)
-        }
-        // The native entry asks for three booleans through the existing PM Binder.
-        // Our private feature namespace never reaches normal device-feature logic.
-        runCatching {
-            findClass("com.android.server.pm.PackageManagerService").hookBefore(
-                "hasSystemFeature", String::class.java, Integer.TYPE
-            ) { param ->
-                val feature = param.args[0] as? String ?: return@hookBefore
-                if (!feature.startsWith(PREFIX)) return@hookBefore
-                param.result = isLauncherCaller() && when (feature.removePrefix(PREFIX)) {
-                    "v1" -> ready
-                    "dragKill" -> config.dragKill
-                    "openAospSettings" -> config.openAospSettings
-                    "disablePreLaunch" -> config.disablePreLaunch
-                    else -> false
-                }
+            it.register(IntentFilter("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG"), receiver) {
+                handler?.post { publishConfig() }
             }
-            findClassOrNull("com.android.server.pm.IPackageManagerBase")?.deoptimize("hasSystemFeature")
-            findClassOrNull("com.android.server.pm.PackageManagerNative")?.deoptimize("hasSystemFeature")
-        }.onFailure { logE("MiuiHome native config bridge", it) }
+        }
         runCatching {
             findClass("com.android.server.am.ActivityManagerService").hookBefore(
                 "preStartProcess", String::class.java, Intent::class.java, Integer.TYPE
@@ -84,18 +70,48 @@ class MiuiHomeRuntime : IHook() {
                     // Consume the marker even when its sender is rejected. If this
                     // module unloads, the marker names no installed application.
                     param.result = null
-                    if (isLauncherCaller()) {
-                        val request = readRequest(intent, Binder.getCallingPid())
-                        if (request != null) handler?.post { execute(request) }
+                    if (isLauncherCaller() && intent.getIntExtra("protocol", 0) == 1) {
+                        if (intent.getIntExtra("operation", -1) == 0) {
+                            val user = Binder.getCallingUid() / 100000
+                            handler?.post { publishConfig(user) }
+                        } else {
+                            val request = readRequest(intent, Binder.getCallingPid())
+                            if (request != null) handler?.post { execute(request) }
+                        }
                     }
                 } else if (config.disablePreLaunch && isLauncherCaller()) {
                     param.result = null
                 }
             }
             ready = true
+            handler?.post { publishConfig() }
         }.onFailure { logE("MiuiHome preStartProcess bridge", it) }
-        logI("MiuiHome HYOS system bridge ready")
+        logI("MiuiHome HYOS system bridge initialized: ready=$ready")
     }
+
+    private fun androidUser(id: Int): Any = findClass("android.os.UserHandle")
+        .getDeclaredConstructor(Integer.TYPE).newInstance(id)
+
+    private fun publishConfig(userId: Int = -1) = runCatching {
+        synchronized(publishLock) {
+            val current = config
+            val mask = if (ready) {
+                (if (current.dragKill) 1 else 0) or
+                    (if (current.openAospSettings) 2 else 0) or
+                    (if (current.disablePreLaunch) 4 else 0)
+            } else 0
+            // native receiver 要求发送者持有 BROADCAST_PACKAGE_REMOVED 系统权限。
+            // 单调版本号让启动应答、配置更新及卸载通知的乱序到达保持安全。
+            val revision = maxOf(SystemClock.elapsedRealtimeNanos(), configRevision + 1)
+                .also { configRevision = it }
+            val intent = Intent(CONFIG).setPackage(LAUNCHER)
+                .addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_RECEIVER_REGISTERED_ONLY)
+                .putExtra("protocol", 1)
+                .putExtra("mask", mask)
+                .putExtra("revision", revision)
+            systemContext.call("sendBroadcastAsUser", intent, androidUser(userId))
+        }
+    }.onFailure { logE("MiuiHome config broadcast", it) }
 
     private fun isLauncherCaller(): Boolean = runCatching {
         val uid = Binder.getCallingUid()
@@ -137,6 +153,7 @@ class MiuiHomeRuntime : IHook() {
 
     private fun execute(request: Request) = runCatching {
         // Handler execution has system_server's identity, not the launcher's Binder identity.
+        if (!ready) return@runCatching
         val key = "${request.pid}:${request.generation}:${request.operation}"
         if (seen.containsKey(key)) return@runCatching
         seen[key] = Unit
@@ -153,8 +170,7 @@ class MiuiHomeRuntime : IHook() {
             2 -> {
                 if (!config.openAospSettings || request.durationMs < 500 ||
                     !isCurrentTask(request)) return@runCatching
-                val user = findClass("android.os.UserHandle")
-                    .getDeclaredConstructor(Integer.TYPE).newInstance(request.userId)
+                val user = androidUser(request.userId)
                 val context = systemContext.call("createContextAsUser", user, 0) as Context
                 TaskStackBuilder.create(context).addNextIntentWithParentStack(
                     Intent().setComponent(ComponentName("com.android.settings", "com.android.settings.SubSettings"))
@@ -178,22 +194,28 @@ class MiuiHomeRuntime : IHook() {
                 if (credential?.creatorPackage != BuildConfig.APPLICATION_ID) return
                 val bytes = intent.getByteArrayExtra("EXTRA_CONFIG") ?: return
                 val updated = MiuiHomeConfig.parseFrom(bytes)
-                val output = configFile.startWrite()
-                try {
-                    output.write(bytes)
-                    configFile.finishWrite(output)
-                } catch (error: Throwable) {
-                    configFile.failWrite(output)
-                    throw error
+                handler?.post {
+                    runCatching {
+                        val output = configFile.startWrite()
+                        try {
+                            output.write(bytes)
+                            configFile.finishWrite(output)
+                        } catch (error: Throwable) {
+                            configFile.failWrite(output)
+                            throw error
+                        }
+                        config = updated
+                        publishConfig()
+                        logI("MiuiHome native config updated: $updated")
+                    }.onFailure { logE("MiuiHome native config persistence", it) }
                 }
-                config = updated
-                logI("MiuiHome native config updated: $updated")
             }.onFailure { logE("MiuiHome native config", it) }
         }
     }
 
     override fun onUnhook(): Boolean {
         ready = false
+        publishConfig()
         broadcasts?.unregister(receiver)
         broadcasts?.stop()
         handler?.removeCallbacksAndMessages(null)

@@ -31,7 +31,7 @@ class BroadcastManager(name: String) {
         handler = Handler(thread.looper)
     }
 
-    fun register(intentFilter: IntentFilter, receiver: BroadcastReceiver) {
+    fun register(intentFilter: IntentFilter, receiver: BroadcastReceiver, onRegistered: (() -> Unit)? = null) {
         val registerTask = object : Runnable {
             override fun run() {
                 try {
@@ -50,6 +50,9 @@ class BroadcastManager(name: String) {
                         flags
                     )
                     logI("BroadcastManager ${thread.name}: registered $receiver")
+                    runCatching { onRegistered?.invoke() }.onFailure {
+                        logE("BroadcastManager ${thread.name}: registration callback failed", it)
+                    }
                 } catch (t: Throwable) {
                     logE("BroadcastManager ${thread.name}: register $receiver failed", t)
                     handler.postDelayed(this, 1000)

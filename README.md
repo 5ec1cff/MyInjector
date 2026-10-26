@@ -178,6 +178,7 @@ com.miui.home
 Rust/Flutter 桌面通过 LSPosed 的 HYOS native 注入支持，初始适配版本为
 `RELEASE-8.01.02.7751-260904-10100945-R`。需同时启用系统框架与桌面作用域；
 700ms 的提示使用 Toast。升级后打开一次模块设置，同步现有开关到系统框架。
+配置由 system_server 通过广播下发，native 观察 Flutter 手势并把强停请求交给系统框架执行。
 版本限制、构建与验证方式见 [HYOS 桌面说明](docs/miuihome-hyos.md)。
 
 ### FV 悬浮球

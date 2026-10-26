@@ -3,7 +3,7 @@ project(myinjector_miuihome LANGUAGES CXX ASM)
 if(NOT ANDROID OR NOT ANDROID_ABI STREQUAL "arm64-v8a")
     message(FATAL_ERROR "The HYOS entry requires Android arm64-v8a")
 endif()
-add_library(myinjector_miuihome SHARED native_hook.cpp dart_hooks.S lsposed_hook_backend.cpp)
+add_library(myinjector_miuihome SHARED native_hook.cpp native_broadcast.cpp dart_hooks.S lsposed_hook_backend.cpp)
 target_compile_features(myinjector_miuihome PRIVATE cxx_std_17)
 target_compile_options(myinjector_miuihome PRIVATE
     -Wall -Wextra -Werror -fvisibility=hidden -fno-exceptions -fno-rtti

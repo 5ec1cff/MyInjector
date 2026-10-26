@@ -1,5 +1,6 @@
 #include "gesture_state.h"
 #include "lsposed_hook_backend.h"
+#include "native_broadcast.h"
 #include "profile_7751.h"
 #include "sha256.h"
 #include <android/log.h>
@@ -33,9 +34,10 @@ void MyInjectorPointer();
 namespace {
 using namespace miuihome;
 constexpr char kTag[] = "MyInjectorMiuiHome";
-constexpr char kPrefix[] = "io.github.a13e300.myinjector.miuihome.";
 constexpr uint32_t kDrag = 1, kSettings = 2;
 std::atomic<uint32_t> config{0};
+std::atomic<uint32_t> incomingConfig{0};
+std::atomic<bool> configPending{false}, configReceived{false};
 std::atomic<uint64_t> configEpoch{1};
 std::atomic<int> eventFd{-1};
 std::atomic<pid_t> workerPid{0};
@@ -43,7 +45,7 @@ std::atomic<uintptr_t> ownerThread{0};
 uintptr_t ownerHeap = 0; // only accessed by the one owning Dart thread
 uintptr_t dartBase = 0, launcherBase = 0;
 std::atomic<void *> launcherHandle{nullptr};
-bool installed = false, apiFailed = false;
+bool installed = false;
 
 uint64_t nowNs() {
     timespec ts{};
@@ -193,14 +195,8 @@ struct PrestartResult {
     uint8_t padding[7];
     RString error;
 };
-struct NativeResult {
-    uint8_t bytes[48];
-};
 static_assert(sizeof(PrestartResult) == 40 && sizeof(OptionString) == 40);
 struct Api {
-    void *(*pmDefault)();
-    void (*pmDrop)(void *);
-    NativeResult (*feature)(void *, const char *, size_t, uint32_t);
     void *(*intentDefault)();
     void (*intentDrop)(void *);
     void (*setAction)(void *, OptionString *);
@@ -211,7 +207,7 @@ struct Api {
     void (*insertI64)(void *, RString *, int64_t);
     void (*insertString)(void *, RString *, OptionString *);
     PrestartResult (*prestart)(const char *, size_t, void *, int32_t);
-    void *pm = nullptr;
+    void *handle = nullptr;
 } api{};
 
 template <typename T> bool resolve(T &target, void *handle, const char *name) {
@@ -221,34 +217,17 @@ template <typename T> bool resolve(T &target, void *handle, const char *name) {
     return target != nullptr;
 }
 bool resolveApi(void *handle) {
-    bool ok = resolve(api.pmDefault, handle, "PackageManager_default") &&
-              resolve(api.pmDrop, handle, "PackageManager_drop") &&
-              resolve(api.feature, handle, "PackageManager_has_system_feature") &&
-              resolve(api.intentDefault, handle, "Intent_default") &&
-              resolve(api.intentDrop, handle, "Intent_drop") &&
-              resolve(api.setAction, handle, "Intent_set_action") &&
-              resolve(api.setExtras, handle, "Intent_set_extras") &&
-              resolve(api.bundleDefault, handle, "Bundle_default") &&
-              resolve(api.bundleDrop, handle, "Bundle_drop") &&
-              resolve(api.insertI32, handle, "Bundle_insert_i32") &&
-              resolve(api.insertI64, handle, "Bundle_insert_i64") &&
-              resolve(api.insertString, handle, "Bundle_insert_string") &&
-              resolve(api.prestart, handle, "context_prestart_process");
-    if (ok)
-        api.pm = api.pmDefault();
-    return ok && api.pm;
-}
-bool feature(const char *suffix) {
-    char name[128];
-    snprintf(name, sizeof(name), "%s%s", kPrefix, suffix);
-    NativeResult result = api.feature(api.pm, name, strlen(name), 0);
-    if (result.bytes[0] & 1) {
-        // Stop on an ABI/service error instead of repeatedly leaking opaque
-        // foreign errors or interpreting an error payload as a boolean.
-        apiFailed = true;
-        return false;
-    }
-    return result.bytes[1] & 1;
+    api.handle = handle;
+    return resolve(api.intentDefault, handle, "Intent_default") &&
+           resolve(api.intentDrop, handle, "Intent_drop") &&
+           resolve(api.setAction, handle, "Intent_set_action") &&
+           resolve(api.setExtras, handle, "Intent_set_extras") &&
+           resolve(api.bundleDefault, handle, "Bundle_default") &&
+           resolve(api.bundleDrop, handle, "Bundle_drop") &&
+           resolve(api.insertI32, handle, "Bundle_insert_i32") &&
+           resolve(api.insertI64, handle, "Bundle_insert_i64") &&
+           resolve(api.insertString, handle, "Bundle_insert_string") &&
+           resolve(api.prestart, handle, "context_prestart_process");
 }
 bool owned(const char *text, RString &output) {
     size_t size = strlen(text);
@@ -305,6 +284,12 @@ void wakeWorker() {
         uint64_t one = 1;
         syscall(SYS_write, fd, &one, sizeof(one));
     }
+}
+void receivedConfig(uint32_t mask) {
+    incomingConfig.store(mask & (kDrag | kSettings), std::memory_order_release);
+    configReceived.store(true, std::memory_order_release);
+    configPending.store(true, std::memory_order_release);
+    wakeWorker();
 }
 bool enqueue(const Event &event) {
     unsigned write = writeIndex.load(std::memory_order_relaxed);
@@ -404,7 +389,7 @@ struct Dart {
 
 void sendCommand(const Event &event) {
     uint32_t mask = config.load(std::memory_order_acquire);
-    if (!(mask & (event.operation == 2 ? kSettings : kDrag)) || apiFailed)
+    if (event.operation != 0 && !(mask & (event.operation == 2 ? kSettings : kDrag)))
         return;
     void *intent = api.intentDefault();
     void *bundle = api.bundleDefault();
@@ -422,12 +407,12 @@ void sendCommand(const Event &event) {
         return;
     }
     api.setAction(intent, &action);
-    bool ok = addI32(bundle, "operation", event.operation) &&
-              addI64(bundle, "generation", int64_t(event.generation)) &&
-              addI32(bundle, "taskId", event.task.id) &&
-              addI32(bundle, "userId", event.task.user) &&
-              addI64(bundle, "durationMs", int64_t(event.duration)) &&
-              addString(bundle, "package", event.task.package);
+    bool ok = addI32(bundle, "operation", event.operation) && addI32(bundle, "protocol", 1);
+    if (event.operation != 0)
+        ok = ok && addI64(bundle, "generation", int64_t(event.generation)) &&
+             addI32(bundle, "taskId", event.task.id) && addI32(bundle, "userId", event.task.user) &&
+             addI64(bundle, "durationMs", int64_t(event.duration)) &&
+             addString(bundle, "package", event.task.package);
     if (!ok) {
         api.bundleDrop(bundle);
         api.intentDrop(intent);
@@ -480,9 +465,6 @@ bool install(const Images &images) {
     if (!handle || !resolveApi(handle) || !EnsureLsposedMadviseGuard()) {
         __android_log_print(ANDROID_LOG_ERROR, kTag,
                             "native API or madvise guard unavailable; hooks disabled");
-        if (api.pm)
-            api.pmDrop(api.pm);
-        api.pm = nullptr;
         return false;
     }
     void (*replacements[])() = {MyInjectorDragStart,         MyInjectorDragEndVertical,
@@ -501,9 +483,6 @@ bool install(const Images &images) {
                             count);
         while (count)
             RemoveInlineHook(reinterpret_cast<void *>(dartBase + kTargets[--count].rva));
-        if (api.pm)
-            api.pmDrop(api.pm);
-        api.pm = nullptr;
         return false;
     }
     __android_log_print(ANDROID_LOG_INFO, kTag, "7751 native hooks ready: dart=%p launcher=%p",
@@ -535,28 +514,47 @@ void *worker(void *) {
     if (fd < 0)
         return nullptr;
     eventFd.store(fd);
+    ReceiverStatus receiver = ReceiverStatus::WaitingForRuntime;
+    for (unsigned attempt = 0; attempt < 600; ++attempt) {
+        receiver = StartConfigReceiver(api.handle, launcherBase, receivedConfig);
+        if (receiver != ReceiverStatus::WaitingForRuntime)
+            break;
+        timespec pause{0, 50000000};
+        nanosleep(&pause, nullptr);
+    }
+    if (receiver != ReceiverStatus::Ready) {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "config broadcast receiver unavailable");
+        eventFd.store(-1);
+        close(fd);
+        return nullptr;
+    }
     Drag drag{};
     Task menu{};
-    uint64_t generation = 0, menuTime = 0, nextConfig = 0;
+    uint64_t generation = 0, menuTime = 0, nextRequest = 0;
+    unsigned requests = 0;
     bool menuHeld = false;
-    while (workerPid.load() == getpid() && !apiFailed) {
+    while (workerPid.load() == getpid()) {
         uint64_t now = nowNs();
-        if (now >= nextConfig) {
-            bool ready = feature("v1");
-            uint32_t mask = 0;
-            if (ready && feature("dragKill"))
-                mask |= kDrag;
-            if (ready && feature("openAospSettings"))
-                mask |= kSettings;
-            if (apiFailed)
-                mask = 0;
-            if (config.exchange(mask, std::memory_order_acq_rel) != mask) {
-                configEpoch.fetch_add(1);
-                drag.cancel();
-                menuHeld = false;
+        // 仅在首次同步之前重试握手。稳定状态完全由广播驱动，不轮询系统服务。
+        if (!configReceived.load(std::memory_order_acquire) && requests < 60 &&
+            now >= nextRequest) {
+            Event request{};
+            request.task.user = int32_t(getuid() / 100000);
+            sendCommand(request);
+            ++requests;
+            nextRequest = now + 1000000000;
+            if (requests == 60)
+                __android_log_print(ANDROID_LOG_WARN, kTag, "waiting for initial config broadcast");
+        }
+        if (configPending.exchange(false, std::memory_order_acq_rel)) {
+            uint32_t mask = incomingConfig.load(std::memory_order_acquire);
+            uint32_t previous = config.exchange(mask, std::memory_order_acq_rel);
+            // 即使关/开广播合并后 mask 相同，也不能沿用更新前的手势。
+            configEpoch.fetch_add(1);
+            drag.cancel();
+            menuHeld = false;
+            if (previous != mask)
                 __android_log_print(ANDROID_LOG_INFO, kTag, "native config mask=%u", mask);
-            }
-            nextConfig = now + 1000000000;
         }
         if (overflow.exchange(false)) {
             drag.cancel();
@@ -606,7 +604,8 @@ void *worker(void *) {
             firedMenu.store(generation, std::memory_order_release);
             menuHeld = false;
         }
-        int timeout = (drag.active || menuHeld) ? 10 : 1000;
+        bool waiting = !configReceived.load(std::memory_order_acquire) && requests < 60;
+        int timeout = (drag.active || menuHeld) ? 10 : (waiting ? 1000 : -1);
         pollfd pending{fd, POLLIN, 0};
         poll(&pending, 1, timeout);
         uint64_t notifications;
@@ -614,12 +613,9 @@ void *worker(void *) {
         }
     }
     config.store(0, std::memory_order_release);
+    StopConfigReceiver();
     eventFd.store(-1);
     close(fd);
-    if (api.pm) {
-        api.pmDrop(api.pm);
-        api.pm = nullptr;
-    }
     return nullptr;
 }
 void startWorker() {
@@ -646,6 +642,8 @@ void loaded(const char *name, void *handle) {
 void afterFork() {
     workerPid.store(0);
     config.store(0);
+    configReceived.store(false);
+    configPending.store(false);
     ownerThread.store(0);
     int fd = eventFd.exchange(-1);
     if (fd >= 0)

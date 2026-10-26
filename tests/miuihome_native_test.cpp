@@ -1,3 +1,4 @@
+#include "config_snapshot.h"
 #include "gesture_state.h"
 #include "sha256.h"
 #include <assert.h>
@@ -13,13 +14,30 @@ static Task task(int id, int user, const char *package) {
     return value;
 }
 int main() {
+    ConfigSnapshot config;
+    assert(config.mask == 0);
+    assert(!config.accept(1, 3, 0));
+    assert(!config.accept(2, 3, 1));
+    assert(!config.accept(1, -1, 1));
+    assert(!config.accept(1, 8, 1));
+    assert(config.accept(1, 7, 100));
+    assert(!config.accept(1, 0, 99)); // 旧的初始应答不能覆盖新配置。
+    assert(!config.accept(1, 0, 100));
+    assert(config.mask == 7 && config.revision == 100);
+    assert(config.accept(1, 0, 101)); // 全关/卸载通知也必须被接受。
+    assert(!config.accept(1, 7, 100));
+    assert(config.mask == 0);
+    assert(config.accept(1, 2, 102)); // 重新加载后的新快照。
+    assert(config.accept(1, 2, 103)); // 相同 mask 的新版本仍使旧手势失效。
+    assert(config.revision == 103);
     const auto first = task(42, 0, "example.first"), other = task(43, 0, "example.other");
     const auto profile = task(42, 999, "example.first");
     constexpr uint64_t t = 1000 * kMillisecond;
     Drag drag;
     drag.begin(first, 1, t);
     drag.finish(t + 400 * kMillisecond);
-    assert(!drag.commit(first, t + 1100 * kMillisecond)); // animation time cannot arm a short drag
+    assert(!drag.commit(first,
+                        t + 1100 * kMillisecond)); // animation time cannot arm a short drag
     drag.begin(first, 2, t);
     drag.finish(t + 700 * kMillisecond);
     assert(!drag.commit(profile, t + 800 * kMillisecond)); // same ID in another Android user
@@ -79,5 +97,5 @@ int main() {
         large.update(block, sizeof(block));
     large.finish(digest);
     assert(strcmp(digest, "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0") == 0);
-    puts("PASS: drag timing/cancellation/identity/generation and SHA-256 streaming");
+    puts("通过：配置版本/乱序拒绝、手势计时/取消/身份/代次、SHA-256 流式计算");
 }

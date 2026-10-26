@@ -14,4 +14,10 @@ constexpr Target kTargets[] = {
 };
 constexpr uintptr_t kStringVtable = 0xeb6f50;
 constexpr uintptr_t kInfoCallback = 0x1238838;
+// App::on_attach 初始化的 OnceLock<Shared<Runtime>>，状态位在 slot + 8。
+constexpr uintptr_t kRuntimeSlot = 0xf21058;
+constexpr uintptr_t kReceiverVtable = 0xe139b0;
+constexpr uintptr_t kReceiverBoxVtable = 0xe3ca98;
+constexpr uintptr_t kReceiverMutexVtable = 0xeb76b8;
+constexpr uintptr_t kReceiverArcVtable = 0xe995f0;
 }
