@@ -6,9 +6,12 @@ import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callOrig
+import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
+import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.setObj
 import org.luckypray.dexkit.DexKitBridge
+import org.luckypray.dexkit.result.FieldUsingType
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
 
@@ -40,14 +43,45 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
         .getDeclaredConstructor()
     private val inputUser = loader.loadClass("org.telegram.messenger.MessagesController")
         .getDeclaredMethod("getInputUser", java.lang.Long.TYPE)
+    private val chatObject = loader.loadClass("org.telegram.messenger.ChatObject")
+    private val userObject = loader.loadClass("org.telegram.messenger.UserObject")
+    private val verifyUser = userObject.getObjSAs<Long>("VERIFY")
 
     private fun canSend(chat: Any): Boolean {
-        // Telegram already folds channel/group/topic rights, blocked users and
-        // secret-chat state into the composer and its restriction overlay.
-        // canSendMessage() alone misses group bans and rejects all secret chats.
         val input = fields.getValue("input").get(chat) as? View ?: return false
         val restriction = fields.getValue("restrictionOverlay").get(chat) as? View
-        return input.visibility == View.VISIBLE && restriction?.visibility != View.VISIBLE
+        if (restriction?.visibility == View.VISIBLE) return false
+        if (!fields.getValue("searchVisible").getBoolean(chat)) return input.visibility == View.VISIBLE
+        // Search hides both the composer and channel buttons, even in writable
+        // chats. Check live rights instead of treating that layout as a ban.
+        val buttons = fields.getValue("channelButtons").get(chat) as? View
+        return buttons?.visibility != View.VISIBLE && canSendWhileSearching(chat)
+    }
+
+    private fun canSendWhileSearching(chat: Any): Boolean {
+        val user = fields.getValue("currentUser").get(chat)
+        if (user != null) {
+            val id = user.getObj("id") as Long
+            if (userObject.callS("isDeleted", user) == true || userObject.callS("isReplyUser", user) == true || id == verifyUser) return false
+            val blocked = chat.call("getMessagesController").getObj("blockePeers")
+            if ((blocked.call("indexOfKey", id) as Int) >= 0) return false
+        }
+        val currentChat = fields.getValue("currentChat").get(chat) ?: return true
+        if (chatObject.callS("canSendMessages", currentChat) != true && chatObject.callS("canSendAnyMedia", currentChat) != true) return false
+        val account = chat.call("getCurrentAccount") as Int
+        val subscriber = chatObject.callS("isMonoForum", currentChat) == true &&
+            chatObject.callS("canManageMonoForum", account, currentChat) != true
+        if (!subscriber) {
+            val notJoined = chatObject.callS("isNotInChat", currentChat) == true && userObject.callS("isBotForum", user) != true
+            val cannotWrite = chatObject.callS("canWriteToChat", currentChat) != true
+            val mustJoin = currentChat.getObj("join_to_send") == true || fields.getValue("thread").get(chat) == null ||
+                chatObject.callS("isForum", currentChat) == true
+            if ((notJoined || cannotWrite) && mustJoin) return false
+            val topic = fields.getValue("forumTopic").get(chat)
+            if (topic?.getObj("closed") == true && chatObject.callS("canManageTopic", account, currentChat, topic) != true) return false
+            if (methods.getValue("forumReplyRequired").invoke(chat) == true) return false
+        }
+        return true
     }
 
     fun action(chat: Any, message: Any): MessageMenuAction? {
@@ -146,9 +180,10 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
     }
 }
 
-private val repeatFields = listOf("dialog", "thread", "suggestion", "group", "currentChat", "input", "restrictionOverlay")
+private val repeatFields = listOf("dialog", "thread", "suggestion", "group", "currentChat", "input", "restrictionOverlay",
+    "searchVisible", "channelButtons", "currentUser", "forumTopic")
 private val repeatKeys = repeatFields + listOf("forward", "slowMode", "monoPeer", "chatArgs",
-    "sendSticker", "sendText", "textParams", "chatNoForwards", "userNoForwards")
+    "sendSticker", "sendText", "textParams", "chatNoForwards", "userNoForwards", "forumReplyRequired")
 
 private fun repeatMembers(creator: ObfsTableCreator, chat: String, menu: String, options: String): Map<String, ObfsInfo> {
     val found by lazy { findRepeatMessage(creator.bridge, chat, menu, options) }
@@ -213,9 +248,38 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
     val overlay = statusCalls.first { it.offset > processing.offset && it.method.name == "setVisibility" }
         .receiver!!.field!!
     check(overlay.className == chat && overlay.type.superClass?.name == "android.widget.FrameLayout")
+    val bottomUpdate = bridge.findMethod { matcher {
+        declaredClass(chat); paramTypes("boolean"); returnType("void")
+        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("OnlyPremiumCanMessage") }
+    } }.single()
+    val openSearch = bridge.findMethod { matcher {
+        declaredClass(chat); paramTypes("java.lang.String"); returnType("void")
+        addInvoke { declaredClass("org.telegram.messenger.MediaDataController"); name("searchMessagesInChat") }
+    } }.single()
+    val searchWrites = openSearch.usingFields.filter { it.usingType == FieldUsingType.Write }
+        .map { it.field.descriptor }.toSet()
+    val bottomFields = bottomUpdate.usingFields.map { it.field }.distinctBy { it.descriptor }
+    val searchVisible = bottomFields.single { it.className == chat && it.typeName == "boolean" && it.descriptor in searchWrites }
+    // canSendMessage reads only the encrypted chat and the channel buttons;
+    // canScheduleMessage has additional calls and must not match here.
+    val nativeCanSend = bridge.findMethod { matcher {
+        declaredClass(chat); paramTypes(); returnType("boolean")
+        addUsingField { type("org.telegram.tgnet.TLRPC\$EncryptedChat") }
+        addInvoke { name("getVisibility"); paramTypes(); returnType("int") }
+    } }.single { it.invokes.all { method -> method.name == "getVisibility" } }
+    val buttons = scanTelegramDex(bridge, nativeCanSend).calls.single().receiver!!.field!!
+    val forumReply = bottomUpdate.invokes.distinctBy { it.descriptor }.single {
+        it.className == chat && it.paramCount == 0 && it.returnTypeName == "boolean" &&
+            it.invokes.any { method -> method.className == "org.telegram.messenger.ChatObject" && method.name == "canManageTopic" }
+    }
     return mapOf(
         "input" to input.descriptor,
         "restrictionOverlay" to overlay.descriptor,
+        "searchVisible" to searchVisible.descriptor,
+        "channelButtons" to buttons.descriptor,
+        "currentUser" to bottomFields.single { it.className == chat && it.typeName == "org.telegram.tgnet.TLRPC\$User" }.descriptor,
+        "forumTopic" to bottomFields.single { it.className == chat && it.typeName == "org.telegram.tgnet.TLRPC\$TL_forumTopic" }.descriptor,
+        "forumReplyRequired" to forumReply.descriptor,
         "forward" to forward.descriptor,
         "slowMode" to invoked("boolean"),
         "monoPeer" to bridge.findMethod { matcher {
