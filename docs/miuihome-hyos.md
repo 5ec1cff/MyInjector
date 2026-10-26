@@ -25,8 +25,10 @@ Runtime、Arc、Mutex 和虚表布局也限定于这个版本。未知桌面版�
 新版桌面没有 `FORCE_STOP_PACKAGES` 权限，因此强停由 system_server 执行。
 native 在 Dart 所在线程中复制任务身份，通过队列交给 worker；不跨线程保存 Dart
 对象。汇编入口保存寄存器、浮点状态和 Dart 的 X15 栈，观察回调中不进入 VM、
-不分配对象、不执行 Binder 调用。后端保护本模块修改的页，避免 runtime 的
-`MADV_DONTNEED` 丢弃 hook；支持 16KB 页。
+不分配对象、不执行 Binder 调用。后端对本模块修改的页设置 `madvise` guard，
+防范 runtime 冷页回收路径丢弃补丁，支持 16KB 页。已静态确认本机 runtime 存在
+该路径，尚未跟踪它是否实际命中这些补丁页；来源、地址及证据边界见
+[madvise 分析](miuihome-madvise.md)。
 
 ## 配置广播
 
