@@ -6,6 +6,7 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 class SettingsHandler : IHook() {
     override fun onHook() {
         hookNotDisableNotificationSwitches()
+        subHook(SettingsWifiDetails())
         subHook(SettingsAllowOverlays())
     }
 

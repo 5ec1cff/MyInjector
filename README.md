@@ -198,6 +198,7 @@ com.android.settings
 
 - 阻止通知管理的按钮变灰（这允许禁用一些本来不可禁用的通知/渠道）
 - 允许在设置的所有 Activity 和弹窗上显示叠加层，方便使用屏幕内容提取窗口（[实现说明](docs/settings-overlays.md)）
+- WLAN 详情页优先显示 IPv4 地址，保留 IPv6 多行显示；增加当前连接的频段和频率，连接信息变化时自动刷新（[实现与限制](docs/settings-wifi-details.md)）
 
 ## LanDrop (2.8.1)
 
