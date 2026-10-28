@@ -56,3 +56,16 @@ python3 scripts/check_settings_ui.py --serial emulator-5554 --dialogs-only \
 该参数仅加载资源，不启动 Chrome，也不需要 Xposed；debug 测试 Activity 与这些测试入口仍不进入 release APK。
 
 修复后 debug、release 构建和 4 个单元测试通过。真实启用 Xposed 的小红书宿主仍需安装修复版后验证。
+
+## 首页服务连接状态刷新
+
+Navigation 3 1.1.7 按返回栈缓存 NavEntry，原首页闭包捕获了首次传入的连接布尔值。服务回调虽然触发了外层重组，缓存入口仍读取旧值。首页改用 Compose 的 `rememberUpdatedState` 读取最新连接状态，保留当前导航栈与页面状态。
+
+debug 的 `SettingsStateTestActivity` 复用实际 `SettingsApp`，通过 SINGLE_TOP Intent 模拟异步连接／断开，不重建 Activity。修复前能复现首页持续显示未连接，修复后在 Android 15 模拟器通过首页连接／断开实时刷新、二级页面接收更新后返回首页的回归：
+
+```sh
+python3 scripts/check_settings_ui.py --serial emulator-5554 --service-state-only \
+  --out app/build/reports/service-state
+```
+
+此测试验证 Compose 状态传播，不模拟 Xposed Binder 本身；测试 Activity 不进入 release。

@@ -3,6 +3,7 @@
 import argparse
 import re
 import subprocess
+import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -12,6 +13,7 @@ parser.add_argument('--serial', required=True)
 parser.add_argument('--out', type=Path, default=Path('app/build/reports/ui-smoke'))
 parser.add_argument('--resource-context-package', help='仅加载此已安装包的资源，复现无 Application 的 Context')
 parser.add_argument('--dialogs-only', action='store_true')
+parser.add_argument('--service-state-only', action='store_true', help='回归首页缓存入口的异步服务状态更新')
 args = parser.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
 package = 'io.github.a13e300.myinjector'
@@ -62,6 +64,33 @@ def start(activity):
     ) else []
     adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity, *extra)
 
+
+if args.service_state_only:
+    activity = '.ui.SettingsStateTestActivity'
+    connected = '模块服务已连接 · 按应用管理你的设置'
+    disconnected = '模块服务未连接 · 请在框架中启用模块'
+
+    def set_connected(value):
+        # SINGLE_TOP 调用同一 Activity 的 onNewIntent，不重建 Activity 或导航栈。
+        adb('shell', 'am', 'start', '-W', '-f', '0x20000000', '-n', package + '/' + activity,
+            '--ez', 'connected', str(value).lower())
+
+    start(activity)
+    locate(disconnected)
+    set_connected(True)
+    locate(connected)
+    set_connected(False)
+    locate(disconnected)
+    tap('系统框架')
+    set_connected(True)
+    locate('禁用 MIUI wake path')
+    tap('返回首页')
+    locate(connected)
+    set_connected(False)
+    locate(disconnected)
+    capture('service-state')
+    print('PASS: 首页连接／断开实时刷新；二级页面更新状态后返回显示最新值', flush=True)
+    sys.exit(0)
 
 if not args.dialogs_only:
     start('.SettingsActivity')

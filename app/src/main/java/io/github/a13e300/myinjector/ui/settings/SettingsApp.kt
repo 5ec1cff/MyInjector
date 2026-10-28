@@ -49,6 +49,8 @@ internal fun SettingsApp(
     onClose: () -> Unit,
 ) {
     val sections = remember { moduleSettingsSections() }
+    // Navigation 3 按返回栈缓存 NavEntry；页面必须读取 State，避免捕获首次连接值。
+    val currentServiceConnected by rememberUpdatedState(serviceConnected)
     var routes by rememberSaveable { mutableStateOf(listOf("home")) }
     val apps by produceState<List<AppSettingsDestination>?>(null) {
         value = withContext(Dispatchers.IO) { loadApps() }
@@ -83,7 +85,7 @@ internal fun SettingsApp(
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                         if (section == null) {
                             HomePage(
-                                sections, apps, serviceConnected,
+                                sections, apps, currentServiceConnected,
                                 onOpenSection = { routes = routes + it },
                                 onOpenApp = openApp,
                                 onUpdate = { onAction(sections.first { it.key == "hotreload" }.items.single() as SettingsItemSpec.Action) },
