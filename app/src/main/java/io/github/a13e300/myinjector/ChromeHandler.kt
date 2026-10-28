@@ -1,9 +1,7 @@
 package io.github.a13e300.myinjector
 
+import io.github.a13e300.myinjector.ui.settings.*
 import android.content.Context
-import android.preference.Preference
-import android.preference.PreferenceScreen
-import android.preference.SwitchPreference
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
@@ -14,7 +12,6 @@ import io.github.a13e300.myinjector.arch.findClass
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
-import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import java.io.InputStream
 import java.io.OutputStream
@@ -133,14 +130,14 @@ object ChromeHandler : DynHookManager<ChromeSettings>() {
     override fun defaultSettings(): ChromeSettings = ChromeSettings.getDefaultInstance()
 }
 
-@Suppress("deprecation")
 class ChromeSettingsDialog(ctx: Context) : SettingDialog(ctx) {
-    override fun onPrefChanged(
-        preference: Preference,
+    override val dialogTitle = "浏览器设置"
+    override fun onSettingChanged(
+        setting: SettingItem,
         newValue: Any?
     ): Boolean {
         val settings = ChromeHandler.settings.toBuilder()
-        when (preference.key) {
+        when (setting.key) {
             "disableSwipeRefresh" -> {
                 settings.disableSwipeRefresh = newValue as Boolean
             }
@@ -155,28 +152,28 @@ class ChromeSettingsDialog(ctx: Context) : SettingDialog(ctx) {
         return true
     }
 
-    override fun onPrefClicked(preference: Preference): Boolean {
+    override fun onSettingClicked(setting: SettingItem): Boolean {
         return false
     }
 
-    override fun onRetrievePref(preference: Preference) {
-        when (preference.key) {
+    override fun loadSetting(setting: SettingItem) {
+        when (setting.key) {
             "disableSwipeRefresh" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     ChromeHandler.settings.disableSwipeRefresh
             }
 
             "disableWindowObscureDetection" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     ChromeHandler.settings.disableWindowObscureDetection
             }
         }
     }
 
-    override fun onCreatePref(prefScreen: PreferenceScreen) {
-        prefScreen.run {
-            switchPreference("禁用下拉刷新", "disableSwipeRefresh")
-            switchPreference("禁用窗口遮挡检测", "disableWindowObscureDetection")
+    override fun createSettings(settingGroup: SettingsGroup) {
+        settingGroup.run {
+            toggle("禁用下拉刷新", "disableSwipeRefresh")
+            toggle("禁用窗口遮挡检测", "disableWindowObscureDetection")
         }
     }
 

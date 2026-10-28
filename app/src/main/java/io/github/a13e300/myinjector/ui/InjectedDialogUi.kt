@@ -14,7 +14,6 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -23,130 +22,111 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.ComponentDialog
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import kotlin.math.min
 
+// onClick 保持为最后一个参数，兼容所有现有调用处的尾随 lambda。
 data class ModernInjectedDialogAction(
     val title: CharSequence,
     val dismissAfterClick: Boolean = true,
+    val emphasized: Boolean = false,
+    val onClickWithResult: (() -> Boolean)? = null,
     val onClick: (() -> Unit)? = null,
 )
 
+/** ComponentDialog 为普通宿主 Activity 提供 Compose 所需的生命周期和保存状态 owner。 */
+@OptIn(ExperimentalLayoutApi::class)
+internal fun showInjectorComposeDialog(
+    context: Context,
+    title: CharSequence,
+    actions: List<ModernInjectedDialogAction> = emptyList(),
+    content: @Composable () -> Unit,
+): Dialog {
+    val dialog = ComponentDialog(context)
+    val compose = ComposeView(context).apply {
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        setContent {
+            InjectorTheme {
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.88f)
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Text(title.toString(), style = MaterialTheme.typography.headlineSmall)
+                        Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { content() }
+                        if (actions.isNotEmpty()) {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, androidx.compose.ui.Alignment.End),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                actions.forEach { action ->
+                                    val click = {
+                                        val accepted = action.onClickWithResult?.invoke() ?: run {
+                                            action.onClick?.invoke()
+                                            true
+                                        }
+                                        if (accepted && action.dismissAfterClick) dialog.dismiss()
+                                    }
+                                    if (action.emphasized) Button(onClick = click) { Text(action.title.toString()) }
+                                    else TextButton(onClick = click) { Text(action.title.toString()) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    dialog.setContentView(compose)
+    dialog.window?.apply {
+        setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        setDimAmount(0.4f)
+        setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+    }
+    dialog.show()
+    dialog.window?.setLayout(
+        min(context.resources.displayMetrics.widthPixels - context.dp(32), context.dp(560)),
+        WindowManager.LayoutParams.WRAP_CONTENT,
+    )
+    return dialog
+}
+
+/** 对规则编辑器、应用选择器等既有 View 使用官方 AndroidView 互操作。 */
 internal fun showModernInjectedDialog(
     context: Context,
     title: CharSequence,
     content: View,
     actions: List<ModernInjectedDialogAction> = emptyList(),
-): Dialog {
-    val palette = ModernSettingsPalette.from(context)
-    val dialog = Dialog(context)
-    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-    dialog.window?.apply {
-        setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        setDimAmount(0.45f)
-        setGravity(Gravity.CENTER)
-        setWindowAnimations(0)
-        attributes = attributes.apply {
-            width = WindowManager.LayoutParams.MATCH_PARENT
-            height = WindowManager.LayoutParams.WRAP_CONTENT
-            gravity = Gravity.CENTER
-            dimAmount = 0.45f
-        }
-    }
-
-    val card = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        background = injectedRounded(palette.background, context.dp(30))
-        setPadding(context.dp(24), context.dp(22), context.dp(24), context.dp(24))
-    }
-
-    card.addView(
-        TextView(context).apply {
-            text = title
-            setTextColor(palette.title)
-            setTextSizeDp(18f)
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            includeFontPadding = true
-        },
-        LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            bottomMargin = context.dp(16)
-        },
+): Dialog = showInjectorComposeDialog(context, title, actions) {
+    AndroidView(
+        factory = { content },
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
     )
-
-    card.addView(
-        content,
-        (content.layoutParams as? LinearLayout.LayoutParams ?: LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            1f
-        )).apply {
-            if (actions.isNotEmpty()) bottomMargin = context.dp(18)
-        },
-    )
-
-    if (actions.isNotEmpty()) {
-        val actionBar = LinearLayout(context).apply {
-            orientation = if (actions.size <= 2) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-        }
-        actions.forEachIndexed { index, action ->
-            val button = modernInjectedButton(context, palette, action.title).apply {
-                setOnClickListener {
-                    action.onClick?.invoke()
-                    if (action.dismissAfterClick) dialog.dismiss()
-                }
-            }
-            val lp = if (actions.size <= 2) {
-                LinearLayout.LayoutParams(0, context.dp(46), 1f).apply {
-                    if (index > 0) marginStart = context.dp(10)
-                }
-            } else {
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    context.dp(46),
-                ).apply {
-                    if (index < actions.lastIndex) bottomMargin = context.dp(8)
-                }
-            }
-            actionBar.addView(button, lp)
-        }
-        card.addView(
-            actionBar,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                0f
-            ),
-        )
-    }
-
-    val outer = FrameLayout(context).apply {
-        minimumWidth = resources.displayMetrics.widthPixels
-        setPadding(context.dp(24), 0, context.dp(24), 0)
-        addView(
-            card,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER,
-            ),
-        )
-    }
-
-    dialog.setContentView(
-        outer,
-        ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            (context.resources.displayMetrics.heightPixels * 0.9).toInt(),
-        ),
-    )
-    dialog.show()
-    dialog.window?.setLayout(
-        WindowManager.LayoutParams.MATCH_PARENT,
-        WindowManager.LayoutParams.WRAP_CONTENT,
-    )
-    return dialog
 }
 
 internal fun showModernInjectedTextInputDialog(
@@ -156,52 +136,26 @@ internal fun showModernInjectedTextInputDialog(
     hint: CharSequence? = null,
     onSubmit: (String) -> Unit,
 ) {
-    val palette = ModernSettingsPalette.from(context)
-    val input = EditText(context).apply {
-        setText(initialText)
-        setSelection(text.length)
-        this.hint = hint
-        setSingleLine(true)
-        imeOptions = EditorInfo.IME_ACTION_DONE
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        setTextColor(palette.title)
-        setHintTextColor(palette.summary)
-        setTextSizeDp(14f)
-        background = modernInputBackground(context, palette, false)
-        setPadding(context.dp(16), 0, context.dp(16), 0)
-        setOnFocusChangeListener { v, hasFocus ->
-            v.background = modernInputBackground(context, palette, hasFocus)
-        }
-    }
-    val holder = FrameLayout(context).apply {
-        addView(
-            input,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                context.dp(48),
-            ),
-        )
-    }
-    val dialog = showModernInjectedDialog(
-        context,
-        title,
-        holder,
+    var text by mutableStateOf(initialText.toString())
+    lateinit var dialog: Dialog
+    fun submit() { onSubmit(text); dialog.dismiss() }
+    dialog = showInjectorComposeDialog(
+        context, title,
         listOf(
             ModernInjectedDialogAction("取消"),
-            ModernInjectedDialogAction("确定") {
-                onSubmit(input.text.toString())
-            },
+            ModernInjectedDialogAction("确定", emphasized = true) { onSubmit(text) },
         ),
-    )
-    input.post {
-        input.requestFocus()
-        context.getSystemService(InputMethodManager::class.java)?.showSoftInput(input, 0)
-    }
-    dialog.setOnDismissListener {
-        context.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(
-            input.windowToken,
-            0,
+    ) {
+        val requester = remember { FocusRequester() }
+        val keyboard = LocalSoftwareKeyboardController.current
+        OutlinedTextField(
+            value = text, onValueChange = { text = it },
+            modifier = Modifier.fillMaxWidth().focusRequester(requester),
+            singleLine = true, placeholder = hint?.let { { Text(it.toString()) } },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
         )
+        LaunchedEffect(Unit) { requester.requestFocus(); keyboard?.show() }
     }
 }
 

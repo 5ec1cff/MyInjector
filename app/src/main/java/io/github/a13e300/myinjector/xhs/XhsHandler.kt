@@ -1,15 +1,11 @@
 package io.github.a13e300.myinjector.xhs
 
-import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
-import android.preference.Preference
-import android.preference.PreferenceScreen
-import android.preference.SwitchPreference
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
@@ -19,6 +15,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
 import io.github.a13e300.myinjector.SettingDialog
+import io.github.a13e300.myinjector.ui.settings.*
 import io.github.a13e300.myinjector.addSettingsIntentInterceptor
 import io.github.a13e300.myinjector.arch.DynHook
 import io.github.a13e300.myinjector.arch.DynHookManager
@@ -33,9 +30,7 @@ import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.newInst
 import io.github.a13e300.myinjector.arch.newInstAs
-import io.github.a13e300.myinjector.arch.preference
 import io.github.a13e300.myinjector.arch.setObj
-import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
@@ -92,14 +87,14 @@ abstract class MyDynHook(private val name: String) : DynHook() {
     }
 }
 
-@Suppress("deprecation")
 class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
-    override fun onPrefChanged(
-        preference: Preference,
+    override val dialogTitle = "小红书设置"
+    override fun onSettingChanged(
+        setting: SettingItem,
         newValue: Any?
     ): Boolean {
         val settings = XhsHandler.settings
-        val newSettings = when (preference.key) {
+        val newSettings = when (setting.key) {
             "saveOriginalImage" -> {
                 settings.copy(saveOriginalImage = newValue as Boolean)
             }
@@ -126,8 +121,8 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
         return true
     }
 
-    override fun onPrefClicked(preference: Preference): Boolean {
-        if (preference.key == "checkHotPatch") {
+    override fun onSettingClicked(setting: SettingItem): Boolean {
+        if (setting.key == "checkHotPatch") {
 
             val activity = activityCtx.findBaseActivity()
 
@@ -190,7 +185,7 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 }
             }
             return true
-        } else if (preference.key == "clearHotPatch") {
+        } else if (setting.key == "clearHotPatch") {
             runCatching {
                 XhsHandler.clearHotPatch()
                 Toast.makeText(activityCtx, "清理成功", Toast.LENGTH_SHORT).show()
@@ -202,63 +197,63 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
         return false
     }
 
-    override fun onRetrievePref(preference: Preference) {
-        when (preference.key) {
+    override fun loadSetting(setting: SettingItem) {
+        when (setting.key) {
             "saveOriginalImage" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.saveOriginalImage
             }
 
             "forceSaveImage" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.forceSaveImage
             }
 
             "openStickerAsImage" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.openStickerAsImage
             }
 
             "betterShare" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.betterShare
             }
 
             "extractVideoLink" -> {
-                (preference as SwitchPreference).isChecked =
+                (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.extractVideoLink
             }
         }
 
-        if (preference.key in XhsHandler.hookErrors) {
-            val newSummary = SpannableStringBuilder(preference.summary ?: "")
+        if (setting.key in XhsHandler.hookErrors) {
+            val newSummary = SpannableStringBuilder(setting.summary ?: "")
                 .apply { if (isNotEmpty()) append("\n") }
                 .append(
                     "存在问题",
                     ForegroundColorSpan(Color.RED),
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
-            preference.summary = newSummary
+            setting.summary = newSummary
         }
     }
 
-    override fun onCreatePref(prefScreen: PreferenceScreen) {
-        prefScreen.run {
-            switchPreference("保存原图", "saveOriginalImage")
-            switchPreference("移除保存图片限制", "forceSaveImage")
-            switchPreference("用打开图片方式打开表情", "openStickerAsImage")
-            switchPreference("增强分享", "betterShare")
-            switchPreference(
+    override fun createSettings(settingGroup: SettingsGroup) {
+        settingGroup.run {
+            toggle("保存原图", "saveOriginalImage")
+            toggle("移除保存图片限制", "forceSaveImage")
+            toggle("用打开图片方式打开表情", "openStickerAsImage")
+            toggle("增强分享", "betterShare")
+            toggle(
                 "提取视频链接",
                 "extractVideoLink",
                 summary = "在视频页面显示悬浮按钮，点击可提取视频链接"
             )
-            preference(
+            action(
                 "检查热补丁",
                 "checkHotPatch",
                 summary = "检查应用内置热补丁是否与 hook 冲突"
             )
-            preference(
+            action(
                 "清理热补丁",
                 "clearHotPatch",
                 summary = "临时清理热补丁，重启恢复"
@@ -330,65 +325,6 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
         )
     }
 
-    override fun onConfigureDialog(builder: AlertDialog.Builder) {
-        if (XhsHandler.hookErrors.isNotEmpty()) {
-            val errors = XhsHandler.hookErrors.map {
-                "${it.key}:\n${it.value}"
-            }.joinToString("\n")
-            builder.setNeutralButton("查看错误") { _, _ ->
-                AlertDialog.Builder(context)
-                    .setTitle("错误详情")
-                    .setMessage(errors)
-                    .setPositiveButton("分享") { _, _ ->
-                        thread {
-                            runCatching {
-                                val f = File(context.filesDir, "myinjector-error.txt")
-                                f.writeText(errors)
-                                logD("wrote file $f")
-                                // we should use getUriForFile, otherwise it will freeze forever.
-                                val uri = XhsHandler.fileProviderClass.callS(
-                                    "getUriForFile",
-                                    context,
-                                    "com.xingin.xhs.provider",
-                                    f
-                                ) as Uri
-                                logD("uri $uri")
-                                context.startActivity(
-                                    Intent.createChooser(
-                                        Intent(Intent.ACTION_SEND)
-                                            .putExtra(
-                                                Intent.EXTRA_STREAM,
-                                                uri
-                                            )
-                                            .setType("text/plain"),
-                                        ""
-                                    )
-                                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                )
-                            }.onFailure { t ->
-                                logE("share failed: ", t)
-                                runCatching {
-                                    activityCtx.findBaseActivity().runOnUiThread {
-                                        Toast.makeText(
-                                            context,
-                                            "分享失败，请尝试复制",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .setNeutralButton("复制") { _, _ ->
-                        context.getSystemService(ClipboardManager::class.java)
-                            .setPrimaryClip(
-                                ClipData.newPlainText("", errors)
-                            )
-                    }
-                    .show()
-            }
-        }
-    }
 
 }
 

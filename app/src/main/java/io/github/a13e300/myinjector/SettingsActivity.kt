@@ -56,9 +56,10 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import io.github.a13e300.myinjector.ui.showModernInjectedDialog
+import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
 import io.github.a13e300.myinjector.ui.ModernActionButton
 import io.github.a13e300.myinjector.ui.ModernInjectedSearchBar
-import io.github.a13e300.myinjector.ui.ModernSettingsCard
 import io.github.a13e300.myinjector.ui.ModernSettingsPalette
 import io.github.a13e300.myinjector.ui.dp
 import io.github.a13e300.myinjector.ui.setTextSizeDp
@@ -1119,95 +1120,16 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
         content: View,
         actions: List<ModernDialogAction>,
     ) {
-        val dialog = Dialog(this)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            setDimAmount(0.44f)
-            setGravity(Gravity.CENTER)
-            setWindowAnimations(0)
-            attributes = attributes.apply {
-                width = WindowManager.LayoutParams.MATCH_PARENT
-                height = WindowManager.LayoutParams.WRAP_CONTENT
-                gravity = Gravity.CENTER
-                dimAmount = 0.44f
-            }
-        }
-
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = palette.cardBackground(this@SettingsActivity)
-            setPadding(dp(24), dp(22), dp(24), dp(24))
-        }
-
-        card.addView(
-            TextView(this).apply {
-                text = title
-                setTextColor(palette.title)
-                setTextSizeDp(16f)
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                includeFontPadding = true
-            },
-            matchWidthLayoutParams(bottom = 16),
-        )
-
-        card.addView(content, matchWidthLayoutParams(bottom = 18))
-
-        val actionBar = LinearLayout(this).apply {
-            orientation = if (actions.size <= 2) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-        }
-        actions.forEachIndexed { index, action ->
-            val button = modernDialogButton(action.title, action.emphasized) {
-                if (action.onClickWithRes != null) {
-                    if (action.onClickWithRes.invoke()) {
-                        dialog.dismiss()
-                    }
-                } else {
-                    action.onClick?.invoke()
-                    dialog.dismiss()
-                }
-            }
-            val lp = if (actions.size <= 2) {
-                LinearLayout.LayoutParams(0, dp(46), 1f).apply {
-                    if (index > 0) marginStart = dp(10)
-                }
-            } else {
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(46),
-                ).apply {
-                    if (index < actions.lastIndex) bottomMargin = dp(8)
-                }
-            }
-            actionBar.addView(button, lp)
-        }
-        card.addView(actionBar, matchWidthLayoutParams())
-
-        val outer = FrameLayout(this).apply {
-            minimumWidth = resources.displayMetrics.widthPixels
-            setPadding(dp(24), 0, dp(24), 0)
-            addView(
-                card,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    Gravity.CENTER,
+        showModernInjectedDialog(
+            this, title, content,
+            actions.map { action ->
+                ModernInjectedDialogAction(
+                    action.title,
+                    emphasized = action.emphasized,
+                    onClickWithResult = action.onClickWithRes,
+                    onClick = action.onClick,
                 )
-            )
-        }
-
-        dialog.setContentView(
-            outer,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ),
-        )
-        dialog.show()
-        dialog.window?.setLayout(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            },
         )
     }
 

@@ -1,33 +1,27 @@
-@file:Suppress("DEPRECATION")
 package io.github.a13e300.myinjector.telegram
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
-import android.preference.Preference
-import android.preference.PreferenceScreen
-import android.preference.SwitchPreference
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.view.View
 import io.github.a13e300.myinjector.SettingDialog
+import io.github.a13e300.myinjector.ui.settings.*
 import io.github.a13e300.myinjector.addSettingsIntentInterceptor
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
-import io.github.a13e300.myinjector.arch.category
 import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.newInst
-import io.github.a13e300.myinjector.arch.preference
 import io.github.a13e300.myinjector.arch.setObj
-import io.github.a13e300.myinjector.arch.switchPreference
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logE
 import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
@@ -38,10 +32,11 @@ import org.luckypray.dexkit.query.enums.StringMatchType
 import java.lang.reflect.Modifier
 
 class TgSettingsDialog(context: Context) : SettingDialog(context) {
-    override fun onPrefChanged(preference: Preference, newValue: Any?): Boolean {
+    override val dialogTitle = "Telegram 设置"
+    override fun onSettingChanged(setting: SettingItem, newValue: Any?): Boolean {
         val settings = TelegramHandler.settings.toBuilder()
         val v = newValue as Boolean
-        when (preference.key) {
+        when (setting.key) {
             "enabled" -> settings.disabled = !v
 
             "showMsgId" ->
@@ -130,7 +125,7 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "hidePhoneNumber" -> {
                 settings.hidePhoneNumber = v
-                prefScreen.findPreference("hidePhoneNumberForSelfOnly").isEnabled = v
+                settingGroup.find("hidePhoneNumberForSelfOnly").isEnabled = v
             }
 
             "hidePhoneNumberForSelfOnly" ->
@@ -162,7 +157,7 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "disableProfileAvatarBlur" -> {
                 settings.disableProfileAvatarBlur = v
-                prefScreen.findPreference("disableProfileAvatarBlurExtendAvatar").isEnabled = v
+                settingGroup.find("disableProfileAvatarBlurExtendAvatar").isEnabled = v
             }
 
             "disableProfileAvatarBlurExtendAvatar" ->
@@ -172,228 +167,228 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
         return true
     }
 
-    override fun onPrefClicked(preference: Preference): Boolean {
-        if (preference.key == "customEmojiMappingConfig") {
+    override fun onSettingClicked(setting: SettingItem): Boolean {
+        if (setting.key == "customEmojiMappingConfig") {
             CustomEmojiMapping.importEmojiMap(activityCtx)
             return true
         }
         return false
     }
 
-    override fun onCreatePref(prefScreen: PreferenceScreen) {
-        prefScreen.run {
-            switchPreference("总开关", "enabled") {
-                setDefaultValue(true)
+    override fun createSettings(settingGroup: SettingsGroup) {
+        settingGroup.run {
+            toggle("总开关", "enabled") {
+                isChecked = true
             }
 
-            category("聊天") {
-                switchPreference(
+            group("聊天") {
+                toggle(
                     "查看发送者历史消息",
                     "historicalNewsOption",
                     "在消息菜单增加「查看历史消息」，按发送者筛选当前聊天；长按菜单项复制发送者 ID"
                 )
-                switchPreference(
+                toggle(
                     "复读消息",
                     "repeatMessage",
                     "在消息菜单增加「复读」，发送到当前聊天；禁止转发或话题内仅支持重发文字、贴纸"
                 )
-                switchPreference(
+                toggle(
                     "显示消息 ID",
                     "showMsgId",
                     "在消息时间处显示消息 ID 、管理员头衔"
                 )
-                switchPreference(
+                toggle(
                     "反反复制",
                     "antiAntiCopy",
                     "允许在禁止复制的群聊复制和保存内容，并仍然阻止转发（因为不可能成功）"
                 )
-                switchPreference(
+                toggle(
                     "阻止切换频道",
                     "prohibitChannelSwitching",
                     "阻止在频道底部上拉时切换到其他频道"
                 )
-                switchPreference(
+                toggle(
                     "消息编辑框禁用语音或相机按钮",
                     "disableVoiceOrCameraButton",
                 )
-                switchPreference(
+                toggle(
                     "at 列表长按使用无用户名 at",
                     "longClickMention",
                     "at 列表中，长按某人以使用无用户名的方式 at 此人"
                 )
-                switchPreference(
+                toggle(
                     "保存私密媒体",
                     "saveSecretMedia"
                 )
             }
 
-            category("更改默认行为") {
-                switchPreference(
+            group("更改默认行为") {
+                toggle(
                     "自动勾选删除",
                     "autoCheckDeleteMessageOption",
                     "在私聊中删除消息时自动勾选为对方删除消息"
                 )
-                switchPreference(
+                toggle(
                     "自动取消分享手机号",
                     "autoUncheckSharePhoneNumber",
                     "添加联系人自动取消勾选分享手机号"
                 )
-                switchPreference(
+                toggle(
                     "头像列表默认当前头像",
                     "avatarPageScrollToCurrent",
                     "个人资料头像如果存在多个且当前头像非第一个时，下拉展示完整头像列表时自动切到当前头像（原行为是总是切到第一个）"
                 )
-                switchPreference(
+                toggle(
                     "hashtag 总是搜索本频道",
                     "defaultSearchTab",
                 )
-                switchPreference(
+                toggle(
                     "默认发送高清晰度图像",
                     "sendImageWithHighQualityByDefault",
                     "需要 11.12.0 (5997) 或更高版本，并移除图片预览左下角的高清标志"
                 )
-                switchPreference(
+                toggle(
                     "总是允许保存动态图片",
                     "alwaysShowStorySaveIcon"
                 )
-                switchPreference(
+                toggle(
                     "总是显示下载管理器",
                     "alwaysShowDownloadManager"
                 )
             }
 
-            category("隐私") {
-                switchPreference(
+            group("隐私") {
+                toggle(
                     "默认隐藏电话号码",
                     "hidePhoneNumber",
                     "隐藏主页抽屉的电话号码，点按文本切换显示状态；隐藏资料页面的电话号码，点按右侧按钮切换显示状态"
                 )
-                switchPreference(
+                toggle(
                     "默认只隐藏自己的隐藏电话号码",
                     "hidePhoneNumberForSelfOnly",
                     "其他人的电话号码默认显示（如有），也可隐藏，需启用「默认隐藏电话号码」"
                 )
             }
 
-            category("忽略权限") {
-                switchPreference(
+            group("忽略权限") {
+                toggle(
                     "忽略联系人权限",
                     "contactPermission",
                     "打开联系人页面不再请求联系人权限"
                 )
-                switchPreference(
+                toggle(
                     "打开 apk 无需请求权限",
                     "fakeInstallPermission",
                     "打开 apk 时不检查是否有 REQUEST_INSTALL_PACKAGE 权限，这并不会实际给予权限"
                 )
-                switchPreference(
+                toggle(
                     "无需谷歌地图",
                     "noGoogleMaps",
                     "不再提示安装谷歌地图"
                 )
             }
 
-            category("Emoji 和 Sticker") {
-                switchPreference(
+            group("Emoji 和 Sticker") {
+                toggle(
                     "自定义 emoji 映射",
                     "customEmojiMapping",
                 )
-                preference(
+                action(
                     "自定义 emoji 映射配置",
                     "customEmojiMappingConfig",
                 )
-                switchPreference(
+                toggle(
                     "查看 Emoji 和 Sticker Pack 创建者",
                     "emojiStickerMenu",
                     "在 Emoji 和 Sticker Pack 列表对话框的菜单增加查看创建者"
                 )
-                switchPreference(
+                toggle(
                     "使用系统 emoji",
                     "useSystemEmoji",
                 )
             }
 
-            category("链接优化") {
-                switchPreference(
+            group("链接优化") {
+                toggle(
                     "阻止重复打开链接",
                     "fixHasAppToOpen",
                 )
-                switchPreference(
+                toggle(
                     "修复链接的意外字符",
                     "openLinkDialog",
                     "如果打开的链接包含意外字符（比如可能链接和后面的文字无空格），则总是弹出对话框，并可以点击fix按钮打开去除这些意外字符的链接"
                 )
-                switchPreference(
+                toggle(
                     "打开 tg 用户链接",
                     "openTgUserLink",
                     "将 tg://user?id=xxx 转换成 tg://openmessage?user_id=xxx 并打开"
                 )
-                switchPreference(
+                toggle(
                     "在私聊中复制消息链接",
                     "copyPrivateChatLink",
                     "链接仅对自己有效，tg://openmessage?user_id=xxx&message_id=yyy"
                 )
             }
 
-            category("其他") {
-                switchPreference(
+            group("其他") {
+                toggle(
                     "打开关联频道",
                     "addSubItemChannel",
                     "在关联讨论群的资料页菜单增加「打开频道」；重新打开资料页生效"
                 )
-                switchPreference(
+                toggle(
                     "群信息查询",
                     "addInfoContainer",
                     "显示群信息入口，允许非管理员查询可获取的管理员、成员和群权限；重新打开资料页生效"
                 )
-                switchPreference(
+                toggle(
                     "资料页显示 ID",
                     "showIdInProfile",
                     "显示用户、群组、频道或话题 ID，点击复制；重新打开资料页生效"
                 )
-                switchPreference(
+                toggle(
                     "资料页显示 DC",
                     "showDCInProfile",
                     "根据头像显示数据中心，点击复制；无头像或资料未加载时显示未知，重新打开资料页生效"
                 )
-                switchPreference(
+                toggle(
                     "最后上线时间精确到秒",
                     "showExactLastSeenTime",
                 )
-                switchPreference(
+                toggle(
                     "频道显示准确关注人数",
                     "channelDetailNumbers",
                 )
-                switchPreference(
+                toggle(
                     "地图自定义经纬度",
                     "customMapPosition",
                     "长按定位按钮打开对话框"
                 )
-                switchPreference(
+                toggle(
                     "标记双向联系人",
                     "mutualContact",
                     "在联系人列表标记你的双向联系人（↑↓）"
                 )
-                switchPreference(
+                toggle(
                     "移除下拉归档",
                     "removeArchiveFolder"
                 )
-                switchPreference(
+                toggle(
                     "移除主页浮动按钮",
                     "hideFloatFab"
                 )
                 if (DisableMiuiVarFont.needsDisableMiuiVarFonts) {
-                    switchPreference(
+                    toggle(
                         "禁用 MiuiVarFonts",
                         "disableMiuiVarFonts",
                         "修复一些 UI 显示问题（重启生效）"
                     )
                 }
-                switchPreference(
+                toggle(
                     "禁用资料头像模糊",
                     "disableProfileAvatarBlur"
                 )
-                switchPreference(
+                toggle(
                     "扩展头像显示范围到操作按钮下",
                     "disableProfileAvatarBlurExtendAvatar",
                     "需要同时开启「禁用资料头像模糊」才能生效"
@@ -402,150 +397,150 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
         }
     }
 
-    override fun onRetrievePref(preference: Preference) {
+    override fun loadSetting(setting: SettingItem) {
 
-        when (preference.key) {
-            "enabled" -> (preference as SwitchPreference).isChecked =
+        when (setting.key) {
+            "enabled" -> (setting as ToggleSetting).isChecked =
                 !TelegramHandler.settings.disabled
 
-            "antiAntiCopy" -> (preference as SwitchPreference).isChecked =
+            "antiAntiCopy" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.antiAntiCopy
 
-            "showMsgId" -> (preference as SwitchPreference).isChecked =
+            "showMsgId" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.showMsgId
 
-            "showIdInProfile" -> (preference as SwitchPreference).isChecked =
+            "showIdInProfile" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.showIdInProfile
 
-            "showDCInProfile" -> (preference as SwitchPreference).isChecked =
+            "showDCInProfile" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.showDCInProfile
 
-            "historicalNewsOption" -> (preference as SwitchPreference).isChecked =
+            "historicalNewsOption" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.historicalNewsOption
 
-            "repeatMessage" -> (preference as SwitchPreference).isChecked =
+            "repeatMessage" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.repeatMessage
 
-            "addSubItemChannel" -> (preference as SwitchPreference).isChecked =
+            "addSubItemChannel" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.addSubItemChannel
 
-            "addInfoContainer" -> (preference as SwitchPreference).isChecked =
+            "addInfoContainer" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.addInfoContainer
 
-            "prohibitChannelSwitching" -> (preference as SwitchPreference).isChecked =
+            "prohibitChannelSwitching" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.prohibitChannelSwitching
 
-            "autoCheckDeleteMessageOption" -> (preference as SwitchPreference).isChecked =
+            "autoCheckDeleteMessageOption" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.autoCheckDeleteMessageOption
 
-            "autoUncheckSharePhoneNumber" -> (preference as SwitchPreference).isChecked =
+            "autoUncheckSharePhoneNumber" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.autoUncheckSharePhoneNumber
 
-            "avatarPageScrollToCurrent" -> (preference as SwitchPreference).isChecked =
+            "avatarPageScrollToCurrent" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.avatarPageScrollToCurrent
 
-            "contactPermission" -> (preference as SwitchPreference).isChecked =
+            "contactPermission" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.contactPermission
 
-            "customEmojiMapping" -> (preference as SwitchPreference).isChecked =
+            "customEmojiMapping" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.customEmojiMapping
 
-            "customEmojiMappingConfig" -> preference.summary =
+            "customEmojiMappingConfig" -> setting.summary =
                 "加载了${CustomEmojiMapping.emotionMap.map.size}条映射规则"
 
-            "showExactLastSeenTime" -> (preference as SwitchPreference).isChecked =
+            "showExactLastSeenTime" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.showExactLastSeenTime
 
-            "channelDetailNumbers" -> (preference as SwitchPreference).isChecked =
+            "channelDetailNumbers" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.channelDetailNumbers
 
-            "customMapPosition" -> (preference as SwitchPreference).isChecked =
+            "customMapPosition" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.customMapPosition
 
-            "defaultSearchTab" -> (preference as SwitchPreference).isChecked =
+            "defaultSearchTab" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.defaultSearchTab
 
-            "disableVoiceOrCameraButton" -> (preference as SwitchPreference).isChecked =
+            "disableVoiceOrCameraButton" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.disableVoiceOrCameraButton
 
-            "emojiStickerMenu" -> (preference as SwitchPreference).isChecked =
+            "emojiStickerMenu" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.emojiStickerMenu
 
-            "useSystemEmoji" -> (preference as SwitchPreference).isChecked =
+            "useSystemEmoji" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.useSystemEmoji
 
-            "fakeInstallPermission" -> (preference as SwitchPreference).isChecked =
+            "fakeInstallPermission" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.fakeInstallPermission
 
-            "fixHasAppToOpen" -> (preference as SwitchPreference).isChecked =
+            "fixHasAppToOpen" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.fixHasAppToOpen
 
-            "longClickMention" -> (preference as SwitchPreference).isChecked =
+            "longClickMention" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.longClickMention
 
-            "mutualContact" -> (preference as SwitchPreference).isChecked =
+            "mutualContact" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.mutualContact
 
-            "noGoogleMaps" -> (preference as SwitchPreference).isChecked =
+            "noGoogleMaps" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.noGoogleMaps
 
-            "openLinkDialog" -> (preference as SwitchPreference).isChecked =
+            "openLinkDialog" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.openLinkDialog
 
-            "sendImageWithHighQualityByDefault" -> (preference as SwitchPreference).isChecked =
+            "sendImageWithHighQualityByDefault" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.sendImageWithHighQualityByDefault
 
-            "alwaysShowStorySaveIcon" -> (preference as SwitchPreference).isChecked =
+            "alwaysShowStorySaveIcon" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.alwaysShowStorySaveIcon
 
-            "removeArchiveFolder" -> (preference as SwitchPreference).isChecked =
+            "removeArchiveFolder" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.removeArchiveFolder
 
-            "alwaysShowDownloadManager" -> (preference as SwitchPreference).isChecked =
+            "alwaysShowDownloadManager" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.alwaysShowDownloadManager
 
-            "hidePhoneNumber" -> (preference as SwitchPreference).isChecked =
+            "hidePhoneNumber" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.hidePhoneNumber
 
-            "hidePhoneNumberForSelfOnly" -> (preference as SwitchPreference).apply {
+            "hidePhoneNumberForSelfOnly" -> (setting as ToggleSetting).apply {
                 isChecked =
                     TelegramHandler.settings.hidePhoneNumberForSelfOnly
                 isEnabled = TelegramHandler.settings.hidePhoneNumber
             }
 
-            "hideFloatFab" -> (preference as SwitchPreference).isChecked =
+            "hideFloatFab" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.hideFloatFab
 
-            "openTgUserLink" -> (preference as SwitchPreference).isChecked =
+            "openTgUserLink" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.openTgUserLink
 
-            "copyPrivateChatLink" -> (preference as SwitchPreference).isChecked =
+            "copyPrivateChatLink" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.copyPrivateChatLink
 
-            "saveSecretMedia" -> (preference as SwitchPreference).isChecked =
+            "saveSecretMedia" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.saveSecretMedia
 
-            "disableMiuiVarFonts" -> (preference as SwitchPreference).isChecked =
+            "disableMiuiVarFonts" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.disableMiuiVarFonts
 
-            "disableProfileAvatarBlur" -> (preference as SwitchPreference).isChecked =
+            "disableProfileAvatarBlur" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.disableProfileAvatarBlur
 
-            "disableProfileAvatarBlurExtendAvatar" -> (preference as SwitchPreference).apply {
+            "disableProfileAvatarBlurExtendAvatar" -> (setting as ToggleSetting).apply {
                 isChecked = TelegramHandler.settings.disableProfileAvatarBlurExtendAvatar
                 isEnabled = TelegramHandler.settings.disableProfileAvatarBlur
             }
         }
 
-        if (preference.key in TelegramHandler.hookErrors) {
-            val newSummary = SpannableStringBuilder(preference.summary ?: "")
+        if (setting.key in TelegramHandler.hookErrors) {
+            val newSummary = SpannableStringBuilder(setting.summary ?: "")
                 .apply { if (isNotEmpty()) append("\n") }
                 .append(
                     "存在问题",
                     ForegroundColorSpan(Color.RED),
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
-            preference.summary = newSummary
+            setting.summary = newSummary
         }
     }
 
