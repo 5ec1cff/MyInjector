@@ -26,6 +26,7 @@ import android.widget.Checkable
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -35,7 +36,7 @@ internal fun Context.dp(value: Float): Int =
     (value * resources.displayMetrics.density + 0.5f).roundToInt()
 
 internal fun TextView.setTextSizeDp(value: Float) {
-    setTextSize(TypedValue.COMPLEX_UNIT_DIP, value)
+    setTextSize(TypedValue.COMPLEX_UNIT_SP, value)
 }
 
 internal data class ModernSettingsPalette(
@@ -50,6 +51,7 @@ internal data class ModernSettingsPalette(
     val switchOff: Int,
     val button: Int,
     val ripple: Int,
+    val onAccent: Int,
 ) {
     fun cardBackground(context: Context): GradientDrawable =
         rounded(surface, context.dp(28))
@@ -75,37 +77,23 @@ internal data class ModernSettingsPalette(
 
     companion object {
         fun from(context: Context): ModernSettingsPalette {
-            val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-            val isNight = mode == Configuration.UI_MODE_NIGHT_YES
-            return if (isNight) {
-                ModernSettingsPalette(
-                    isLight = false,
-                    background = Color.rgb(36, 36, 36),
-                    surface = Color.rgb(28, 28, 28),
-                    surfaceOverlay = withAlpha(Color.rgb(48, 48, 48), 226),
-                    title = Color.rgb(232, 232, 232),
-                    summary = Color.rgb(168, 168, 168),
-                    divider = Color.rgb(54, 54, 54),
-                    accent = Color.rgb(126, 149, 184),
-                    switchOff = Color.rgb(65, 65, 65),
-                    button = Color.rgb(55, 55, 55),
-                    ripple = withAlpha(Color.WHITE, 24),
-                )
-            } else {
-                ModernSettingsPalette(
-                    isLight = true,
-                    background = Color.rgb(236, 240, 246),
-                    surface = Color.WHITE,
-                    surfaceOverlay = withAlpha(Color.rgb(244, 247, 251), 230),
-                    title = Color.rgb(37, 41, 50),
-                    summary = Color.rgb(124, 132, 146),
-                    divider = Color.rgb(224, 228, 235),
-                    accent = Color.rgb(126, 149, 184),
-                    switchOff = Color.rgb(214, 221, 232),
-                    button = Color.rgb(232, 237, 245),
-                    ripple = withAlpha(Color.rgb(20, 35, 55), 22),
-                )
-            }
+            val colors = injectorColorScheme(context)
+            val night = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+                Configuration.UI_MODE_NIGHT_YES
+            return ModernSettingsPalette(
+                isLight = !night,
+                background = colors.surface.toArgb(),
+                surface = colors.surfaceContainerLow.toArgb(),
+                surfaceOverlay = colors.surfaceContainerHigh.toArgb(),
+                title = colors.onSurface.toArgb(),
+                summary = colors.onSurfaceVariant.toArgb(),
+                divider = colors.outlineVariant.toArgb(),
+                accent = colors.primary.toArgb(),
+                switchOff = colors.surfaceContainerHighest.toArgb(),
+                button = colors.secondaryContainer.toArgb(),
+                ripple = colors.primary.copy(alpha = 0.12f).toArgb(),
+                onAccent = colors.onPrimary.toArgb(),
+            )
         }
     }
 }
@@ -294,7 +282,7 @@ internal class ModernActionButton(
         gravity = Gravity.CENTER
         setTextSizeDp(14.0f)
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        setTextColor(if (emphasized) Color.WHITE else palette.title)
+        setTextColor(if (emphasized) palette.onAccent else palette.title)
         background = if (emphasized) {
             ripple(rounded(palette.accent, context.dp(22)), palette.ripple)
         } else {

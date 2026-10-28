@@ -18,6 +18,7 @@ xposed-service = "102.0.0"
 compose-ui = { module = "androidx.compose.ui:ui", version.ref = "compose" }
 compose-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "compose" }
 compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
+compose-icons-cmp = { module = "com.composables:icons-material-symbols-rounded-filled-cmp-jvm", version = "2.2.1" }
 compose-icons = { module = "com.composables:icons-material-symbols-rounded-filled-android", version = "2.2.1" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle" }
