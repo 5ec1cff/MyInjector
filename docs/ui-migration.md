@@ -69,3 +69,11 @@ python3 scripts/check_settings_ui.py --serial emulator-5554 --service-state-only
 ```
 
 此测试验证 Compose 状态传播，不模拟 Xposed Binder 本身；测试 Activity 不进入 release。
+
+## 二级页面过渡动画
+
+为模块 Activity 的 Navigation 3 显式设置进入、返回及预测返回过渡，复用 Compose 的 `slideInHorizontally`、`slideOutHorizontally`、`fadeIn`、`fadeOut` 和标准缓动。页面以 350 毫秒短距离滑动与 220 毫秒淡入淡出表达层级；普通返回反转方向，预测返回根据手势边缘选择方向，并由导航框架处理完成／取消。入口与用法遵循 [Navigation 3 官方动画接口](https://developer.android.com/guide/navigation/navigation-3/animate-destinations)。
+
+导航容器裁剪越界内容，不执行额外的尺寸动画；保留原有页面保存状态与系统动画缩放行为。未新增动画库，也未改动其他窗口。
+
+Android 15 模拟器已通过模块导航、持久化、搜索和编辑入口回归，以及按钮返回、左右侧手势返回、手势取消检查。录屏及事件时间位于 `app/build/reports/navigation-motion/`，已检查过渡中间帧；debug 构建与 4 个单元测试通过。

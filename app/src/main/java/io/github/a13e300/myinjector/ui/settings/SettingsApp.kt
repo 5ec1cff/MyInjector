@@ -3,6 +3,14 @@
 package io.github.a13e300.myinjector.ui.settings
 
 import android.content.SharedPreferences
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,16 +22,21 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
+import androidx.navigationevent.NavigationEvent
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.roundedfilled.*
 import io.github.a13e300.myinjector.BuildConfig
@@ -51,6 +64,7 @@ internal fun SettingsApp(
     val sections = remember { moduleSettingsSections() }
     // Navigation 3 按返回栈缓存 NavEntry；页面必须读取 State，避免捕获首次连接值。
     val currentServiceConnected by rememberUpdatedState(serviceConnected)
+    val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1 else -1
     var routes by rememberSaveable { mutableStateOf(listOf("home")) }
     val apps by produceState<List<AppSettingsDestination>?>(null) {
         value = withContext(Dispatchers.IO) { loadApps() }
@@ -59,8 +73,14 @@ internal fun SettingsApp(
 
     NavDisplay(
         backStack = routes, onBack = ::navigateBack,
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+        modifier = Modifier.fillMaxSize().clipToBounds().background(MaterialTheme.colorScheme.background)
             .semantics { testTagsAsResourceId = true },
+        sizeTransform = null,
+        transitionSpec = { settingsPageTransition(true, direction) },
+        popTransitionSpec = { settingsPageTransition(false, direction) },
+        predictivePopTransitionSpec = { edge ->
+            settingsPageTransition(false, if (edge == NavigationEvent.EDGE_RIGHT) -1 else 1)
+        },
         entryProvider = { route ->
             NavEntry(route) {
                 val section = sections.firstOrNull { it.key == route }
@@ -96,6 +116,19 @@ internal fun SettingsApp(
             }
         },
     )
+}
+
+/** 短距离滑动表达页面层级，复用 Compose 的标准缓动与淡入淡出，交由 Navigation 3 驱动与取消。 */
+private fun settingsPageTransition(forward: Boolean, direction: Int): ContentTransform {
+    val spatialSpec = tween<IntOffset>(durationMillis = 350, easing = FastOutSlowInEasing)
+    val effectsSpec = tween<Float>(durationMillis = 220)
+    val enter = slideInHorizontally(spatialSpec) { width ->
+        if (forward) direction * width / 5 else -direction * width / 12
+    } + fadeIn(effectsSpec, initialAlpha = if (forward) 0f else 0.9f)
+    val exit = slideOutHorizontally(spatialSpec) { width ->
+        if (forward) -direction * width / 12 else direction * width / 5
+    } + fadeOut(effectsSpec, targetAlpha = if (forward) 0.9f else 0f)
+    return enter togetherWith exit
 }
 
 @Composable
