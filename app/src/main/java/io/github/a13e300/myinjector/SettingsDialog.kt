@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.view.ContextThemeWrapper
 import io.github.a13e300.myinjector.arch.*
 import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
+import io.github.a13e300.myinjector.ui.DialogHostContext
 import io.github.a13e300.myinjector.ui.modernInjectedMessageView
 import io.github.a13e300.myinjector.ui.showModernInjectedDialog
 import io.github.a13e300.myinjector.ui.showInjectorComposeDialog
@@ -27,7 +28,8 @@ abstract class SettingDialog(val activityCtx: Context) {
             splitNames = null
         }, 0
     ) as Context).createConfigurationContext(activityCtx.resources.configuration)
-    val context = object : ContextThemeWrapper(appCtx, R.style.AppTheme) {
+    val context: Context = object : ContextThemeWrapper(appCtx, R.style.AppTheme), DialogHostContext {
+        override val dialogHost: Activity? get() = activityCtx.findBaseActivityOrNull()
         override fun getSystemService(name: String): Any? =
             if (name == WINDOW_SERVICE) activityCtx.getSystemService(name) else super.getSystemService(name)
     }

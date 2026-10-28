@@ -117,7 +117,7 @@ private fun HomePage(
             Surface(shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(MaterialSymbols.RoundedFilled.Extension, null, Modifier.size(32.dp))
-                    Text("为应用添一点可能", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("应用与系统", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(
                         if (connected) "模块服务已连接 · 按应用管理你的设置" else "模块服务未连接 · 请在框架中启用模块",
                         style = MaterialTheme.typography.bodyMedium,
@@ -217,7 +217,7 @@ private fun SectionPage(
     ) {
         item("description") {
             Text(
-                sectionPackage(section.key) + " · 修改后自动同步，保留手动提交入口",
+                sectionPackage(section.key) + if (section.key == "miuihome") " · 修改会自动同步到桌面" else " · 修改自动同步，也可在页末手动提交",
                 Modifier.padding(bottom = 16.dp), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

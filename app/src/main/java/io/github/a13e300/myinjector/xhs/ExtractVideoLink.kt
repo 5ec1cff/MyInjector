@@ -36,6 +36,7 @@ import io.github.a13e300.myinjector.ui.dp
 import io.github.a13e300.myinjector.ui.modernInjectedButton
 import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
 import io.github.a13e300.myinjector.ui.showModernInjectedDialog
+import io.github.a13e300.myinjector.ui.DialogHostContext
 
 class ExtractVideoLink : MyDynHook("extractVideoLink") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.extractVideoLink
@@ -93,7 +94,8 @@ class ExtractVideoLink : MyDynHook("extractVideoLink") {
                         val feed = locateNoteFeed(activity)
                         val video = feed.getObj("video")
                         val urlInfoList = video.getObjAs<List<*>>("urlInfoList")
-                        val dialogCtx = object : ContextThemeWrapper(context, R.style.AppTheme) {
+                        val dialogCtx = object : ContextThemeWrapper(context, R.style.AppTheme), DialogHostContext {
+                            override val dialogHost: Activity get() = activity
                             override fun getSystemService(name: String): Any? {
                                 if (name == WINDOW_SERVICE) {
                                     return activity.getSystemService(name)

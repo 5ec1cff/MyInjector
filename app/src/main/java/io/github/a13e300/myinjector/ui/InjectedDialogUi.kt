@@ -1,7 +1,11 @@
 package io.github.a13e300.myinjector.ui
 
 import android.app.Dialog
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.content.ContextWrapper
+import android.os.Bundle
 import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
@@ -33,15 +37,47 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.min
+
+internal interface DialogHostContext {
+    val dialogHost: Activity?
+}
+
+private fun Context.dialogHostActivity(): Activity? = when (this) {
+    is DialogHostContext -> dialogHost
+    is Activity -> this
+    is ContextWrapper -> baseContext.dialogHostActivity()
+    else -> null
+}
+
+private class InjectorDialog(context: Context, private val host: Activity?) : ComponentDialog(context) {
+    private val callbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityDestroyed(activity: Activity) { if (activity === host) dismiss() }
+        override fun onActivityCreated(activity: Activity, state: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivityStopped(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
+    }
+    override fun onStart() {
+        super.onStart()
+        host?.application?.registerActivityLifecycleCallbacks(callbacks)
+    }
+    override fun onStop() {
+        host?.application?.unregisterActivityLifecycleCallbacks(callbacks)
+        super.onStop()
+    }
+}
 
 // onClick 保持为最后一个参数，兼容所有现有调用处的尾随 lambda。
 data class ModernInjectedDialogAction(
@@ -60,7 +96,9 @@ internal fun showInjectorComposeDialog(
     actions: List<ModernInjectedDialogAction> = emptyList(),
     content: @Composable () -> Unit,
 ): Dialog {
-    val dialog = ComponentDialog(context)
+    val host = context.dialogHostActivity()
+    val dialog = InjectorDialog(context, host)
+    if (host?.isFinishing == true || host?.isDestroyed == true) return dialog
     val compose = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
@@ -136,14 +174,14 @@ internal fun showModernInjectedTextInputDialog(
     hint: CharSequence? = null,
     onSubmit: (String) -> Unit,
 ) {
-    var text by mutableStateOf(initialText.toString())
+    var text by mutableStateOf(TextFieldValue(initialText.toString(), TextRange(initialText.length)))
     lateinit var dialog: Dialog
-    fun submit() { onSubmit(text); dialog.dismiss() }
+    fun submit() { onSubmit(text.text); dialog.dismiss() }
     dialog = showInjectorComposeDialog(
         context, title,
         listOf(
             ModernInjectedDialogAction("取消"),
-            ModernInjectedDialogAction("确定", emphasized = true) { onSubmit(text) },
+            ModernInjectedDialogAction("确定", emphasized = true) { onSubmit(text.text) },
         ),
     ) {
         val requester = remember { FocusRequester() }

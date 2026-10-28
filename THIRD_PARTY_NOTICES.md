@@ -1,5 +1,10 @@
 # 第三方代码说明
 
+设置界面通过 Gradle 使用 AndroidX Compose、Material 3、Activity、Lifecycle、SavedState 和 Navigation 3，
+采用 Apache License 2.0；圆形填充图标使用 `com.composables` 的 Material Symbols Compose 库，
+其 Maven 元数据声明为 [MIT License](https://github.com/composablehorizons/composeicons/blob/main/LICENSE)。
+相关版本固定在 `gradle/libs.versions.toml`。界面仅参考 mpvRx 的设计风格，未复制其实现代码。
+
 `app/src/main/cpp/miuihome/` 下的 HYOS native 后端文件：
 
 - `lsposed_hook_backend.cpp`

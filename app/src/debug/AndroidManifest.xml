@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- 仅 debug APK 的回归测试入口，不进入 release 或桌面启动器。 -->
+        <activity android:name=".ui.DialogTestActivity" android:exported="true" />
+    </application>
+</manifest>
