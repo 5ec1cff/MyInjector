@@ -617,6 +617,7 @@ class Settings : IHook() {
     ): ObfsTable {
 
         val settingsFragment = creator.create("SettingsActivity") { bridge ->
+            bridge.getClassData("org.telegram.ui.SettingsActivity")?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     // NaGram removed "store bundled ", so we use this key word in onFragmentCreated
@@ -659,6 +660,8 @@ class Settings : IHook() {
         }
 
         val uItemFactoryViewTypeField = creator.create("UItemFactoryViewTypeField") { bridge ->
+            bridge.getClassData("org.telegram.ui.Components.UItem\$UItemFactory")?.fields?.singleOrNull { it.name == "viewType" && it.typeName == "int" }
+                ?.let { return@create it.toObfsInfo() }
             bridge.findField {
                 matcher {
                     readMethods {
@@ -673,6 +676,8 @@ class Settings : IHook() {
         }
 
         val settingsActivityFillItems = creator.create("SettingsActivityFillItems") { bridge ->
+            telegramNamedMethod(bridge, settingsFragment.className, "fillItems", "java.util.ArrayList", "org.telegram.ui.Components.UniversalAdapter")
+                ?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     declaredClass(settingsFragment.className)
@@ -718,6 +723,8 @@ class Settings : IHook() {
 
         // also called by fillItems
         val uItemAsShadow = creator.create("UItemAsShadow") { bridge ->
+            telegramNamedMethod(bridge, uItemOfFactory.className, "asShadow", "java.lang.CharSequence")
+                ?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     addCaller {
@@ -735,6 +742,8 @@ class Settings : IHook() {
         // AdapterWithDiffUtils.Item.viewType is the only int field in its declaring class, so we don't need to find it by dexkit
         // we only find the id field by finding the only method write it
         val uItemId = creator.create("UItemId") { bridge ->
+            bridge.getClassData(uItemOfFactory.className)?.fields?.singleOrNull { it.name == "id" && it.typeName == "int" }
+                ?.let { return@create it.toObfsInfo() }
             bridge.findField {
                 matcher {
                     declaredClass(uItemOfFactory.className)

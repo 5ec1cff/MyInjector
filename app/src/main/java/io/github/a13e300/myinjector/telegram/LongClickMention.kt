@@ -125,8 +125,10 @@ class LongClickMention : MyDynHook("longClickMention") {
             }.maxBy { it.usingFields.size }
             println("MentionsAdapter.getItem ${mentionsAdapterGetItem.descriptor}")
 
-            val f =
-                locateMentionsAdapterPositionAndLength(mentionsContainerViewAdapter.type, bridge)
+            val namedFields = mentionsContainerViewAdapter.type.fields
+            val f = if (namedFields.any { it.name == "resultStartPosition" } && namedFields.any { it.name == "resultLength" }) {
+                namedFields.single { it.name == "resultStartPosition" } to namedFields.single { it.name == "resultLength" }
+            } else locateMentionsAdapterPositionAndLength(mentionsContainerViewAdapter.type, bridge)
             mentionsAdapterResultStartPosition = f.first
             mentionsAdapterResultLength = f.second
 

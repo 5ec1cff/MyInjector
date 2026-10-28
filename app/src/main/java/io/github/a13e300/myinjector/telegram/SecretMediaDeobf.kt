@@ -81,6 +81,7 @@ private fun secretCode(bridge: DexKitBridge, method: MethodData): SecretCode {
 }
 
 private fun findSaveSecretImage(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
+    namedSecretMedia(bridge)?.let { return it }
     val fill = bridge.findMethod { matcher {
         paramTypes("org.telegram.messenger.MessageObject", "java.util.ArrayList", "java.util.ArrayList", "java.util.ArrayList")
         addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SaveToGallery") }

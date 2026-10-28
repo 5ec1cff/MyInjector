@@ -83,6 +83,7 @@ private fun blurCode(bridge: DexKitBridge, method: MethodData): BlurCode {
 }
 
 private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
+    namedProfileBlur(bridge)?.let { return it }
     val found = linkedMapOf<String, String>()
     fun save(key: String, method: MethodData?) {
         found[key] = method?.descriptor.orEmpty()

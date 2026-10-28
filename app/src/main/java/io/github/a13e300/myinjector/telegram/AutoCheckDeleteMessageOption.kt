@@ -50,6 +50,8 @@ class AutoCheckDeleteMessageOption : MyDynHook("autoCheckDeleteMessageOption") {
         }
 
         val alertDialogBuilderSetView = creator.create("AlertDialogBuilderSetView") { bridge ->
+            telegramNamedMethod(bridge, "org.telegram.ui.ActionBar.AlertDialog\$Builder", "setView", "android.view.View")
+                ?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     addCaller {
@@ -65,6 +67,8 @@ class AutoCheckDeleteMessageOption : MyDynHook("autoCheckDeleteMessageOption") {
         }
 
         val alertDialogCustomView = creator.create("AlertDialogCustomView") { bridge ->
+            bridge.getClassData(alertDialogClass.className)?.fields?.singleOrNull { it.name == "customView" && it.typeName == "android.view.View" }
+                ?.let { return@create it.toObfsInfo() }
             bridge.findField {
                 matcher {
                     addWriteMethod {

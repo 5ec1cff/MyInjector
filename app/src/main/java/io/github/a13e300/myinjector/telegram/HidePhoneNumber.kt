@@ -26,6 +26,7 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAfter
+import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
@@ -39,6 +40,8 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
     private fun deobf(creator: ObfsTableCreator): ObfsTable {
 
         val settingsActivitySetInfo = creator.create("SettingsActivitySetInfo") { bridge ->
+            telegramNamedMethod(bridge, "org.telegram.ui.SettingsActivity", "setInfo", "org.telegram.tgnet.TLRPC\$User")
+                ?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     usingEqStrings(" • @")
@@ -55,6 +58,11 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
             val bridge = creator.bridge
             if (located) return
             located = true
+            bridge.getClassData("org.telegram.ui.SettingsActivity")?.let { cls ->
+                subtitleView = cls.fields.single { it.name == "subtitleView" }
+                titleView = cls.fields.single { it.name == "titleView" }
+                return
+            }
 
             val createView =
                 bridge.findMethod {
@@ -450,11 +458,8 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
         // hide phone number in settings
         // exists in 12.4.0
 
-        val settingsActivity = findClass(SettingsActivitySetInfo.className)
-        settingsActivity.hookAllAfter(
-            SettingsActivitySetInfo.memberName,
-            cond = ::isEnabled
-        ) { param ->
+        org.luckypray.dexkit.wrap.DexMethod(SettingsActivitySetInfo.descriptor)
+            .getMethodInstance(classLoader).hookAfter(cond = ::isEnabled) { param ->
             val subtitleView =
                 param.thisObject.getObjAs<TextView>(SettingsActivitySubtitleView.memberName)
             val oldText = subtitleView.text.toString()

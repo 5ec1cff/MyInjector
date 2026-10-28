@@ -105,6 +105,7 @@ class OpenLinkDialog : MyDynHook("openLinkDialog") {
 }
 
 private fun findOpenLinkDialog(bridge: DexKitBridge): Map<String, String> {
+    namedOpenLink(bridge)?.let { return it }
     val external = bridge.findMethod { matcher {
         addInvoke { declaredClass("org.telegram.messenger.SendMessagesHelper"); name("requestUrlAuth") }
         addInvoke { declaredClass("org.telegram.messenger.AndroidUtilities"); name("shouldShowUrlInAlert") }

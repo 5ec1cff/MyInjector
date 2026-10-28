@@ -129,19 +129,19 @@ internal fun findProfileActivityRows(bridge: DexKitBridge, baseFragment: String)
     val adapter = bind.className
     val holder = bind.paramTypeNames.first()
     val methods = bridge.findMethod { matcher { declaredClass(adapter) } }
-    save("viewType", methods.single { it.paramTypeNames == listOf("int") && it.returnTypeName == "int" })
-    save("createHolder", methods.single {
-        it.paramTypeNames == listOf("android.view.ViewGroup", "int") && it.returnTypeName == holder
+    save("viewType", telegramNamedMethod(bridge, adapter, "getItemViewType", "int") ?: methods.single { it.paramTypeNames == listOf("int") && it.returnTypeName == "int" && it.modifiers and 0x40 == 0 })
+    save("createHolder", telegramNamedMethod(bridge, adapter, "onCreateViewHolder", "android.view.ViewGroup", "int") ?: methods.single {
+        it.paramTypeNames == listOf("android.view.ViewGroup", "int") && it.returnTypeName == holder && it.modifiers and 0x40 == 0
     })
-    val enabled = methods.single { it.paramTypeNames == listOf(holder) && it.returnTypeName == "boolean" }
+    val enabled = telegramNamedMethod(bridge, adapter, "isEnabled", holder) ?: methods.single { it.paramTypeNames == listOf(holder) && it.returnTypeName == "boolean" && it.modifiers and 0x40 == 0 }
     save("isEnabled", enabled)
-    save("holderPosition", enabled.invokes.distinctBy { it.descriptor }.single {
+    save("holderPosition", telegramNamedMethod(bridge, holder, "getAdapterPosition") ?: enabled.invokes.distinctBy { it.descriptor }.single {
         it.className == holder && it.paramTypeNames.isEmpty() && it.returnTypeName == "int" &&
             it.invokes.any { call -> call.paramTypeNames == listOf(holder) && call.returnTypeName == "int" }
     })
     save("holderView", bridge.findField { matcher { declaredClass(holder); type("android.view.View") } }.single())
     save("adapterProfile", bridge.findField { matcher { declaredClass(adapter); type(profile) } }.single())
-    save("setTextAndValue", bind.invokes.distinctBy { it.descriptor }.single {
+    save("setTextAndValue", telegramNamedMethod(bridge, "org.telegram.ui.Cells.TextDetailCell", "setTextAndValue", "java.lang.CharSequence", "java.lang.CharSequence", "boolean") ?: bind.invokes.distinctBy { it.descriptor }.single {
         it.paramTypeNames == listOf("java.lang.CharSequence", "java.lang.CharSequence", "boolean") &&
             it.returnTypeName == "void"
     })
@@ -158,7 +158,7 @@ internal fun findProfileActivityRows(bridge: DexKitBridge, baseFragment: String)
         declaredClass(profile); returnType("void")
         usingEqStrings("addContact", "phone", "first_name_card", "last_name_card")
     } }.single { it.paramTypeNames.takeLast(4) == listOf("android.view.View", "int", "float", "float") })
-    val fill = bridge.findMethod { matcher {
+    val fill = telegramNamedMethod(bridge, "$profile\$DiffCallback", "fillPositions", "android.util.SparseIntArray") ?: bridge.findMethod { matcher {
         paramTypes("android.util.SparseIntArray"); returnType("void")
         addInvoke { descriptor("Landroid/util/SparseIntArray;->clear()V") }
         addUsingField { declaredClass(profile); type("int") }

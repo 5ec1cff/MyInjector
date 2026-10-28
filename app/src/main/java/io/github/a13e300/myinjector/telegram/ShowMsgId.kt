@@ -1,5 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
+import android.text.SpannableStringBuilder
 import android.text.TextPaint
 import io.github.a13e300.myinjector.arch.InstanceOpType
 import io.github.a13e300.myinjector.arch.InvokeType
@@ -42,6 +43,17 @@ class ShowMsgId : MyDynHook("showMsgId") {
             if (called) return
             called = true
             val bridge = creator.bridge
+            val named = telegramNamedMethod(bridge, "org.telegram.ui.Cells.ChatMessageCell", "measureTime", "org.telegram.messenger.MessageObject")
+            if (named != null) {
+                chatMessageCellMeasureTime = named
+                fun field(name: String) = named.declaredClass!!.fields.single { it.name == name }
+                chatMessageCellTimeWidth = field("timeWidth")
+                chatMessageCellTimeTextWidth = field("timeTextWidth")
+                chatMessageCellCurrentTimeString = field("currentTimeString")
+                chatMessageCellIsMegaGroup = field("isMegagroup")
+                themeChatTimePaint = bridge.getClassData("org.telegram.ui.ActionBar.Theme")!!.fields.single { it.name == "chat_timePaint" }
+                return
+            }
             chatMessageCellMeasureTime = bridge.findMethod {
                 matcher {
                     usingEqStrings("MessageScheduledRepeatMonthlyMany")
@@ -367,7 +379,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
                 val postAuthor = owner.getObjAsN<String?>("post_author")
                 if (postAuthor != null) delta += postAuthor.replace("\n", "") + " "
             }
-            time = delta + time
+            time = SpannableStringBuilder(delta).append(time)
             param.thisObject.setObj(chatMessageCellCurrentTimeString.memberName, time)
             val paint = chatTimePaint.get(null) as TextPaint
             val deltaWidth = ceil(paint.measureText(delta)).toInt()

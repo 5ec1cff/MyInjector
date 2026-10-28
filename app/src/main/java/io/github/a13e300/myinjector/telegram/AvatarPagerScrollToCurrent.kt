@@ -34,6 +34,8 @@ class AvatarPagerScrollToCurrent : MyDynHook("avatarPageScrollToCurrent") {
         }
 
         val imageLocation = creator.create("ProfileGalleryViewGetImageLocation") { bridge ->
+            telegramNamedMethod(bridge, "org.telegram.ui.Components.ProfileGalleryView", "getImageLocation", "int")
+                ?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     addCaller { descriptor(foreground.descriptor) }
@@ -44,6 +46,7 @@ class AvatarPagerScrollToCurrent : MyDynHook("avatarPageScrollToCurrent") {
         }
 
         val reset = creator.create("ProfileGalleryViewResetCurrentItem") { bridge ->
+            telegramNamedMethod(bridge, imageLocation.className, "resetCurrentItem")?.let { return@create it.toObfsInfo() }
             // setCurrentItem(adapter.getExtraCount(), false): two calls and one field read.
             bridge.findMethod {
                 matcher {

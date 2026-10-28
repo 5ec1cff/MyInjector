@@ -121,7 +121,7 @@ internal fun messageMenuMembers(creator: ObfsTableCreator): Map<String, ObfsInfo
 }
 
 private fun findCopyPrivateChatLink(bridge: DexKitBridge): Map<String, String> {
-    val createMenu = bridge.findMethod { matcher { usingStrings("open menu msg_id="); returnType("boolean") } }.single()
+    val createMenu = telegramNamedMethod(bridge, "org.telegram.ui.ChatActivity", "createMenu", "android.view.View", "boolean", "boolean", "float", "float", "boolean", "boolean", "boolean") ?: bridge.findMethod { matcher { usingStrings("open menu msg_id="); returnType("boolean") } }.single()
     val options = bridge.findMethod { matcher {
         declaredClass(createMenu.className); paramTypes("int"); returnType("void")
         usingEqStrings("tel:", "canSelectTopics", "messagesCount")
@@ -138,13 +138,14 @@ private fun findCopyPrivateChatLink(bridge: DexKitBridge): Map<String, String> {
         it.isConstructor && it.paramCount == 4 && it.paramTypeNames.count { t -> t == "boolean" } == 2
     }
     val sub = subConstructor.declaredClass!!
-    val text = sub.methods.single { it.paramCount == 0 && (it.returnTypeName == "android.widget.TextView" || it.returnType?.superClass?.name == "android.widget.TextView") }
+    val text = telegramNamedMethod(bridge, sub.name, "getTextView") ?: sub.methods.single { it.paramCount == 0 && (it.returnTypeName == "android.widget.TextView" || it.returnType?.superClass?.name == "android.widget.TextView") }
     val setText = sub.methods.single { it.paramTypeNames.toSet() == setOf("int", "java.lang.CharSequence") && it.paramCount == 2 }
     val provider = subConstructor.paramTypeNames.single { it !in listOf("android.content.Context", "boolean") }
     fun field(c: String, type: String) = bridge.findField { matcher { declaredClass(c); type(type) } }.single()
     return mapOf("createMenu" to createMenu.descriptor, "options" to options.descriptor,
         "selected" to selected.descriptor, "user" to user.descriptor, "popupAdd" to popup.descriptor,
-        "layout" to popup.usingFields.single().field.descriptor,
+        "layout" to (bridge.getClassData(popup.className)!!.fields.singleOrNull { it.name == "linearLayout" }
+            ?: popup.usingFields.single().field).descriptor,
         "provider" to bridge.findMethod { matcher { declaredClass(createMenu.className); paramTypes(); returnType(provider) } }.single().descriptor, "subClass" to sub.name,
         "subText" to text.descriptor, "setText" to setText.descriptor)
 }

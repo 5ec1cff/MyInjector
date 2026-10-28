@@ -39,7 +39,9 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     found["editCreate"] = create.descriptor
     val updateCode = scanTelegramDex(bridge, update)
     val createCode = scanTelegramDex(bridge, create)
-    fun cell(resource: String, code: TgDexCode): FieldData = code.calls.filter {
+    fun cell(resource: String, code: TgDexCode): FieldData = bridge.getClassData(edit)!!.fields.singleOrNull {
+        it.name == mapOf("ChannelAdministrators" to "adminCell", "ChannelBlacklist" to "blockCell", "EventLog" to "logCell")[resource]
+    } ?: code.calls.filter {
         it.receiver?.field?.className == edit && it.args.any { arg -> arg?.resource == resource }
     }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single()
     val admin = cell("ChannelAdministrators", updateCode)
@@ -84,8 +86,8 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     } }.single().descriptor
     val usersCreateCode = scanTelegramDex(bridge, usersCreate)
     for ((key, resource) in mapOf("searchItem" to "outline_header_search", "doneItem" to "ic_ab_done")) {
-        found[key] = usersCreateCode.writes.filter { it.field.className == users && it.value?.resource == resource }
-            .map { it.field }.distinctBy { it.descriptor }.single().descriptor
+        found[key] = (bridge.getClassData(users)!!.fields.singleOrNull { it.name == key }?.descriptor ?: usersCreateCode.writes.filter { it.field.className == users && it.value?.resource == resource }
+            .map { it.field }.distinctBy { it.descriptor }.single().descriptor)
     }
     val constructor = bridge.findMethod { matcher { declaredClass(users); name("<init>"); paramTypes("android.os.Bundle") } }.single()
     found["usersType"] = scanTelegramDex(bridge, constructor).writes.single { it.field.className == users && it.value?.bundleKey == "type" }.field.descriptor
@@ -99,6 +101,13 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     val count = reset.first { it.value?.number == 0 }.field
     found["rowCount"] = count.descriptor
     found["rowFields"] = allRows.joinToString("\n") { it.descriptor }
+    val namedRows = bridge.getClassData(users)!!.fields
+    if (namedRows.any { it.name == "participantsDivider2Row" }) {
+        for (key in listOf("recentActionsRow", "addNewSectionRow", "participantsDivider2Row", "removedUsersRow")) {
+            found[key] = namedRows.single { it.name == key }.descriptor
+        }
+        return found
+    }
     // Recent actions was removed from the newer adapter, but its reset field
     // still precedes the anti-spam rows. Disabled native rows need no shifting.
     found["recentActionsRow"] = allRows.first().descriptor

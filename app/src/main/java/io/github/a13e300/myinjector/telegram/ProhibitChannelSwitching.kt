@@ -12,6 +12,7 @@ class ProhibitChannelSwitching : MyDynHook("prohibitChannelSwitching") {
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {
         creator.create("ChatPullingDownDrawable") { bridge ->
+            bridge.getClassData("org.telegram.ui.ChatPullingDownDrawable")?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
                     usingNumbers(16f, 26f, 22f, 32f, 20f, 1f, 0.5f, 24f, 2f, 16 / 220f)

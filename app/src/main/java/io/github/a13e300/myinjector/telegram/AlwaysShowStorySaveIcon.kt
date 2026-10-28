@@ -25,6 +25,14 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
             if (called) return
             called = true
             val bridge = creator.bridge
+            val named = telegramNamedMethod(bridge, "org.telegram.ui.Stories.PeerStoriesView", "updatePosition", "boolean")
+            val namedFields = named?.declaredClass?.fields.orEmpty()
+            if (named != null && namedFields.any { it.name == "allowShare" } && namedFields.any { it.name == "allowShareLink" }) {
+                peerStoriesViewUpdatePosition = named
+                peerStoriesAllowShare = namedFields.single { it.name == "allowShare" }
+                peerStoriesAllowShareLink = namedFields.single { it.name == "allowShareLink" }
+                return
+            }
             peerStoriesViewUpdatePosition = bridge.findMethod {
                 matcher {
                     usingEqStrings("_pframe", ".mp4")

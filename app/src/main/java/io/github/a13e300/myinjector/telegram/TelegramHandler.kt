@@ -20,7 +20,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
     private var _creator: ObfsTableCreator? = null
     val creator: ObfsTableCreator
-        get() = _creator ?: ObfsTableCreator("tg", 2, appInfo = loadPackageParam.appInfo)
+        get() = _creator ?: ObfsTableCreator("tg", 3, appInfo = loadPackageParam.appInfo)
             .also { _creator = it }
     val hookErrors = mutableMapOf<String, String>()
 
@@ -28,7 +28,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         super.onHook()
 
         creator.create("BaseFragment") { bridge ->
-            bridge.findClass {
+            (bridge.getClassData("org.telegram.ui.ActionBar.BaseFragment") ?: bridge.findClass {
                 matcher {
                     fields {
                         add {
@@ -37,7 +37,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
                         }
                     }
                 }
-            }.single().toObfsInfo()
+            }.single()).toObfsInfo()
         }
 
         subHook(Settings())

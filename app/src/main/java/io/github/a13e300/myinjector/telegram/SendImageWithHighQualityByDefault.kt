@@ -24,6 +24,8 @@ class SendImageWithHighQualityByDefault : MyDynHook("SendImageWithHighQualityByD
         }
         val creator = TelegramHandler.creator
         val setHighQuality = creator.create("PhotoAttachPhotoCellSetHighQuality") { bridge ->
+            telegramNamedMethod(bridge, "org.telegram.ui.Cells.PhotoAttachPhotoCell", "setHighQuality", "boolean")
+                ?.let { return@create it.toObfsInfo() }
             bridge.findMethod { matcher {
                 paramTypes("boolean")
                 returnType("void")
@@ -38,6 +40,8 @@ class SendImageWithHighQualityByDefault : MyDynHook("SendImageWithHighQualityByD
             } }.single().toObfsInfo()
         }
         val videoInfo = creator.create("PhotoAttachPhotoCellVideoInfoContainer") { bridge ->
+            bridge.getClassData(setHighQuality.className)?.fields?.singleOrNull { it.name == "videoInfoContainer" }
+                ?.let { return@create it.toObfsInfo() }
             // The badge is the only FrameLayout subclass used by setHighQuality.
             bridge.getMethodData(setHighQuality.descriptor)!!.usingFields.single {
                 bridge.getClassData(it.field.typeName)?.superClass?.name == "android.widget.FrameLayout"
