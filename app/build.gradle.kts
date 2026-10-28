@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 
 plugins {
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.android.application)
     alias(libs.plugins.protobuf)
 }
@@ -86,6 +87,7 @@ android {
     }
     buildFeatures {
         buildConfig = true
+        compose = true
     }
     buildTypes {
         release {
@@ -178,12 +180,22 @@ androidComponents.onVariants { variant ->
 }
 
 dependencies {
+    implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.icons)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime)
+    implementation(libs.savedstate)
+    implementation(libs.navigation3.ui)
+    testImplementation(libs.junit)
+
     // prebuilt fork of dexkit
     // https://github.com/5ec1cff/DexKit/commit/494cf312b09ae2f4e2f6924e7d2b12e224a3ff15
     implementation(files("dexkit-android-release.aar"))
     // transitive dependency of dexkit
     implementation("com.google.flatbuffers:flatbuffers-java:23.5.26")
-    compileOnly(libs.androidx.annotation)
+    implementation(libs.androidx.annotation)
     compileOnly(project(":hidden-api"))
     implementation(libs.protobuf.kotlin)
     implementation(libs.protobuf.java)
