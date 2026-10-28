@@ -91,11 +91,10 @@ internal fun SettingsApp(
                         LargeTopAppBar(
                             title = { Text(section?.title?.toString() ?: "MyInjector", fontWeight = FontWeight.Bold) },
                             navigationIcon = {
-                                IconButton(onClick = ::navigateBack) {
-                                    Icon(
-                                        if (section == null) MaterialSymbols.RoundedFilled.Close else MaterialSymbols.RoundedFilled.Arrow_back,
-                                        if (section == null) "关闭" else "返回首页",
-                                    )
+                                if (section != null) {
+                                    IconButton(onClick = ::navigateBack) {
+                                        Icon(MaterialSymbols.RoundedFilled.Arrow_back, "返回首页")
+                                    }
                                 }
                             },
                             scrollBehavior = behavior,
