@@ -7,7 +7,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.PixelFormat
-import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -36,7 +35,7 @@ import io.github.a13e300.myinjector.ui.dp
 import io.github.a13e300.myinjector.ui.modernInjectedButton
 import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
 import io.github.a13e300.myinjector.ui.showModernInjectedDialog
-import io.github.a13e300.myinjector.ui.DialogHostContext
+import io.github.a13e300.myinjector.ui.InjectedDialogContext
 
 class ExtractVideoLink : MyDynHook("extractVideoLink") {
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.extractVideoLink
@@ -94,15 +93,7 @@ class ExtractVideoLink : MyDynHook("extractVideoLink") {
                         val feed = locateNoteFeed(activity)
                         val video = feed.getObj("video")
                         val urlInfoList = video.getObjAs<List<*>>("urlInfoList")
-                        val dialogCtx = object : ContextThemeWrapper(context, R.style.AppTheme), DialogHostContext {
-                            override val dialogHost: Activity get() = activity
-                            override fun getSystemService(name: String): Any? {
-                                if (name == WINDOW_SERVICE) {
-                                    return activity.getSystemService(name)
-                                }
-                                return super.getSystemService(name)
-                            }
-                        }
+                        val dialogCtx = InjectedDialogContext(context, activity)
                         val palette = ModernSettingsPalette.from(dialogCtx)
                         val links = LinearLayout(dialogCtx).apply {
                             orientation = LinearLayout.VERTICAL

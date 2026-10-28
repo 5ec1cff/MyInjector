@@ -10,6 +10,8 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--serial', required=True)
 parser.add_argument('--out', type=Path, default=Path('app/build/reports/ui-smoke'))
+parser.add_argument('--resource-context-package', help='仅加载此已安装包的资源，复现无 Application 的 Context')
+parser.add_argument('--dialogs-only', action='store_true')
 args = parser.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
 package = 'io.github.a13e300.myinjector'
@@ -55,39 +57,45 @@ def capture(name):
 
 def start(activity):
     adb('shell', 'am', 'force-stop', package)
-    adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity)
+    extra = ['--es', 'resource_context_package', args.resource_context_package] if (
+        args.resource_context_package and activity == '.ui.DialogTestActivity'
+    ) else []
+    adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity, *extra)
 
 
-start('.SettingsActivity')
-locate('系统框架')
-capture('home')
-tap('系统框架')
-before = switch('禁用 MIUI wake path')['checked']
-tap('禁用 MIUI wake path')
-assert switch('禁用 MIUI wake path')['checked'] != before
-start('.SettingsActivity')
-tap('系统框架')
-assert switch('禁用 MIUI wake path')['checked'] != before, '开关未持久化'
-tap('禁用 MIUI wake path')
-assert switch('禁用 MIUI wake path')['checked'] == before
-capture('system')
-tap('搜索此页设置')
-adb('shell', 'input', 'text', 'forceNewTaskRules')
-adb('shell', 'input', 'keyevent', '4')
-tap('强制 NEW_TASK 规则')
-locate('已添加的条目：')
-capture('rules')
-tap('取消')
-tap('清除搜索')
-tap('剪切板白名单列表')
-locate('保存')
-capture('clipboard')
-tap('取消')
-tap('返回首页')
-locate('系统界面')
-print('PASS: 模块导航、开关持久化、搜索、规则编辑和剪切板选择入口', flush=True)
+if not args.dialogs_only:
+    start('.SettingsActivity')
+    locate('系统框架')
+    capture('home')
+    tap('系统框架')
+    before = switch('禁用 MIUI wake path')['checked']
+    tap('禁用 MIUI wake path')
+    assert switch('禁用 MIUI wake path')['checked'] != before
+    start('.SettingsActivity')
+    tap('系统框架')
+    assert switch('禁用 MIUI wake path')['checked'] != before, '开关未持久化'
+    tap('禁用 MIUI wake path')
+    assert switch('禁用 MIUI wake path')['checked'] == before
+    capture('system')
+    tap('搜索此页设置')
+    adb('shell', 'input', 'text', 'forceNewTaskRules')
+    adb('shell', 'input', 'keyevent', '4')
+    tap('强制 NEW_TASK 规则')
+    locate('已添加的条目：')
+    capture('rules')
+    tap('取消')
+    tap('清除搜索')
+    tap('剪切板白名单列表')
+    locate('保存')
+    capture('clipboard')
+    tap('取消')
+    tap('返回首页')
+    locate('系统界面')
+    print('PASS: 模块导航、开关持久化、搜索、规则编辑和剪切板选择入口', flush=True)
 
 start('.ui.DialogTestActivity')
+if args.resource_context_package:
+    locate('资源 Context：无 Application')
 tap('打开注入设置')
 assert switch('仅对自己隐藏')['enabled'] == 'false'
 tap('隐藏手机号')
@@ -114,10 +122,16 @@ locate('隐私')
 tap('隐藏手机号')
 assert switch('仅对自己隐藏')['enabled'] == 'false'
 tap('返回')
+locate('配置回调：0')
 tap('打开文本输入')
 locate('1,2')
 capture('input-keyboard')
 tap('确定')
 locate('打开注入设置')
+locate('配置回调：0')
 assert b'1,2' in adb('shell', 'run-as', package, 'cat', 'shared_prefs/ui_smoke.xml')
-print('PASS: 普通 Activity 弹窗、联动、拒绝写入、嵌套弹窗、搜索和键盘提交', flush=True)
+tap('打开注入设置')
+locate('隐私')
+tap('返回')
+locate('配置回调：0')
+print('PASS: 普通 Activity 弹窗、联动、拒绝写入、嵌套弹窗、搜索、键盘提交及再次打开后回调释放', flush=True)

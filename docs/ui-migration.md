@@ -39,3 +39,20 @@ python3 scripts/check_settings_ui.py --serial emulator-5554
 `lintDebug` 仍报告 3 个迁移前已存在的错误：`SettingsWifiDetails.kt` 的 MissingPermission / NewApi，以及 `SystemUIHandler.kt` 的 SuspiciousIndentation。这两个文件不在本次修改中；新增界面代码未出现 Lint 错误。
 
 验证边界：模拟器验证了界面、存储和普通宿主生命周期；未在真实启用 Xposed 的 Telegram、小红书、Chrome 进程内执行 Hook、热更新或重启操作。
+
+## 注入资源 Context 的兼容性修复
+
+303 版在小红书宿主打开设置时出现 `Context.registerComponentCallbacks` 空指针。对应 release mapping 将混淆堆栈还原为 Compose 的 `ComposeViewContext.startObserving`。注入时加载模块资源的 LoadedApk 未创建 Application，`ContextImpl.getApplicationContext()` 返回 null；普通 Activity 的初版测试没有覆盖这个条件。
+
+新增 `InjectedDialogContext` 统一承载设置和视频链接弹窗：保留模块资源与主题，Application、配置回调注册／注销及窗口服务委托给宿主。必须同时覆盖注册与注销方法，因为 ContextWrapper 会直接把它们转发到底层 Context，仅覆盖 `getApplicationContext()` 不能解决此问题。
+
+回归使用 `createPackageContext` 加载其他已安装包的资源，并断言它没有 Application；随后使用模块资源绘制弹窗。修复前在 Android 15 模拟器复现出相同空指针，修复后通过以下检查（包括联动、拒绝写入、嵌套弹窗、搜索与文本输入），并在弹窗关闭及再次打开／关闭后确认宿主配置回调计数回到零：
+
+```sh
+python3 scripts/check_settings_ui.py --serial emulator-5554 --dialogs-only \
+  --resource-context-package com.android.chrome --out app/build/reports/context-regression
+```
+
+该参数仅加载资源，不启动 Chrome，也不需要 Xposed；debug 测试 Activity 与这些测试入口仍不进入 release APK。
+
+修复后 debug、release 构建和 4 个单元测试通过。真实启用 Xposed 的小红书宿主仍需安装修复版后验证。
