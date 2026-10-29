@@ -13,6 +13,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import io.github.a13e300.myinjector.scope.ScopeManager
 import io.github.a13e300.myinjector.scope.ScopeCatalog
+import io.github.a13e300.myinjector.scope.ScopeApplication
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -26,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -47,10 +47,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal data class AppSettingsDestination(
-    val packageName: String,
-    val label: CharSequence,
+    val app: ScopeApplication,
     val icon: ImageBitmap,
-    val hasSettings: Boolean = false,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +96,10 @@ internal fun SettingsApp(
         entryProvider = { route ->
             NavEntry(route) {
                 val section = sections.firstOrNull { it.key == route }
+                val packageName = ScopeCatalog.components[route]
+                val destination = apps?.firstOrNull { it.app.packageName == packageName }
+                val isHome = route == "home"
+                val title = if (isHome) "MyInjector" else destination?.app?.label ?: section?.title?.toString().orEmpty()
                 val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                 Scaffold(
                     modifier = Modifier.nestedScroll(behavior.nestedScrollConnection),
@@ -106,9 +108,9 @@ internal fun SettingsApp(
                     topBar = {
                         LargeTopAppBar(
                             modifier = Modifier.testTag("settings_top_bar"),
-                            title = { Text(section?.title?.toString() ?: "MyInjector", fontWeight = FontWeight.Bold) },
+                            title = { Text(title, fontWeight = FontWeight.Bold) },
                             navigationIcon = {
-                                if (section != null) {
+                                if (!isHome) {
                                     IconButton(onClick = ::navigateBack) {
                                         Icon(MaterialSymbols.RoundedFilled.Arrow_back, "返回首页")
                                     }
@@ -120,14 +122,21 @@ internal fun SettingsApp(
                     },
                 ) { padding ->
                     Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding), contentAlignment = Alignment.TopCenter) {
-                        if (section == null) {
+                        if (isHome) {
                             HomePage(
-                                sections, apps, currentServiceConnected, currentSyncStatus, currentScope, currentScopeToggle,
-                                onOpenSection = { routes = routes + it },
+                                apps, currentServiceConnected, currentSyncStatus, currentScope, currentScopeToggle,
+                                onOpenModuleSettings = { routes = routes + it },
                                 onOpenApp = openApp,
                                 onUpdate = { onAction(sections.first { it.key == "hotreload" }.items.single() as SettingsItemSpec.Action) },
                             )
-                        } else SectionPage(section, prefs, onToggle, onEdit, onAction, currentScope, currentScopeToggle)
+                        } else if (destination != null && section != null) {
+                            SectionPage(destination.app, section, prefs, onToggle, onEdit, onAction,
+                                currentScope, currentScopeToggle, openApp)
+                        } else if (apps == null) {
+                            CircularProgressIndicator(Modifier.padding(24.dp))
+                        } else {
+                            Text("此应用已卸载或不再可用", Modifier.padding(24.dp))
+                        }
                     }
                 }
             }
@@ -150,17 +159,18 @@ private fun settingsPageTransition(forward: Boolean, direction: Int): ContentTra
 
 @Composable
 private fun HomePage(
-    sections: List<SettingsSectionSpec>, apps: List<AppSettingsDestination>?, connected: Boolean, syncStatus: String,
+    apps: List<AppSettingsDestination>?, connected: Boolean, syncStatus: String,
     scope: ScopeManager.State, onScopeToggle: (String, Boolean) -> Unit,
-    onOpenSection: (String) -> Unit, onOpenApp: (String) -> Unit, onUpdate: () -> Unit,
+    onOpenModuleSettings: (String) -> Unit, onOpenApp: (String) -> Unit, onUpdate: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val normalized = query.trim()
-    val components = sections.filter { it.key != "hotreload" &&
-        (it.title.contains(normalized, true) || sectionPackage(it.key).contains(normalized, true)) }
     val visibleApps = apps.orEmpty().filter {
-        it.label.contains(normalized, true) || it.packageName.contains(normalized, true)
+        it.app.label.contains(normalized, true) || it.app.packageName.contains(normalized, true) ||
+            ScopeCatalog.applicationPackage(it.app.packageName).contains(normalized, true)
     }
+    val components = visibleApps.filter { it.app.isSystemApp }
+    val applications = visibleApps.filterNot { it.app.isSystemApp }
     LazyColumn(
         modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth().testTag("settings_home"),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
@@ -188,17 +198,6 @@ private fun HomePage(
             Spacer(Modifier.height(16.dp))
         }
         item("search") { SettingsSearchField(query, { query = it }, "搜索应用或系统组件") }
-        if (components.isNotEmpty()) {
-            item("components_label") { SectionLabel("系统组件") }
-            itemsIndexed(components, key = { _, it -> it.key }) { index, section ->
-                DestinationCard(
-                    section.title.toString(), sectionPackage(section.key), sectionIcon(section.key),
-                    index == 0, index == components.lastIndex,
-                    onClick = { onOpenSection(section.key) },
-                )
-            }
-        }
-        item("apps_label") { SectionLabel("应用作用域") }
         if (apps == null) {
             item("loading") { LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp)) }
         } else if (visibleApps.isEmpty()) {
@@ -209,9 +208,19 @@ private fun HomePage(
                 )
             }
         } else {
-            itemsIndexed(visibleApps, key = { _, it -> it.packageName }) { index, app ->
-                AppScopeCard(app, scope, onScopeToggle, onOpenApp,
-                    index == 0, index == visibleApps.lastIndex)
+            if (components.isNotEmpty()) {
+                item("components_label") { SectionLabel("系统组件") }
+                itemsIndexed(components, key = { _, it -> it.app.packageName }) { index, destination ->
+                    AppScopeCard(destination, scope, onScopeToggle, onOpenApp, onOpenModuleSettings,
+                        index == 0, index == components.lastIndex)
+                }
+            }
+            if (applications.isNotEmpty()) {
+                item("apps_label") { SectionLabel("应用作用域") }
+                itemsIndexed(applications, key = { _, it -> it.app.packageName }) { index, destination ->
+                    AppScopeCard(destination, scope, onScopeToggle, onOpenApp, onOpenModuleSettings,
+                        index == 0, index == applications.lastIndex)
+                }
             }
         }
     }
@@ -219,10 +228,16 @@ private fun HomePage(
 
 @Composable
 private fun AppScopeCard(
-    app: AppSettingsDestination, scope: ScopeManager.State,
-    onToggle: (String, Boolean) -> Unit, onSettings: (String) -> Unit,
+    destination: AppSettingsDestination, scope: ScopeManager.State,
+    onToggle: (String, Boolean) -> Unit, onSettings: (String) -> Unit, onOpenModuleSettings: (String) -> Unit,
     first: Boolean, last: Boolean,
 ) {
+    val app = destination.app
+    val sectionKey = app.sectionKey
+    if (sectionKey != null) {
+        DestinationCard(destination, first, last) { onOpenModuleSettings(sectionKey) }
+        return
+    }
     val checked = app.packageName in scope.enabled
     val pending = app.packageName in scope.pending
     Surface(
@@ -234,9 +249,9 @@ private fun AppScopeCard(
     ) {
         Column {
             ListItem(
-                content = { Text(app.label.toString(), style = MaterialTheme.typography.titleMedium) },
+                content = { Text(app.label, style = MaterialTheme.typography.titleMedium) },
                 supportingContent = { Text(app.packageName) },
-                leadingContent = { Image(app.icon, null, Modifier.size(44.dp)) },
+                leadingContent = { Image(destination.icon, null, Modifier.size(44.dp)) },
                 trailingContent = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Switch(checked, { onToggle(app.packageName, it) },
@@ -260,8 +275,7 @@ private fun AppScopeCard(
 
 @Composable
 private fun DestinationCard(
-    title: String, summary: String, icon: ImageVector, first: Boolean, last: Boolean,
-    appIcon: ImageBitmap? = null, onClick: () -> Unit,
+    destination: AppSettingsDestination, first: Boolean, last: Boolean, onClick: () -> Unit,
 ) {
     Card(
         onClick = onClick, modifier = Modifier.fillMaxWidth(),
@@ -272,14 +286,9 @@ private fun DestinationCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         ListItem(
-            content = { Text(title, style = MaterialTheme.typography.titleMedium) },
-            supportingContent = { Text(summary) },
-            leadingContent = {
-                if (appIcon != null) Image(appIcon, null, Modifier.size(44.dp))
-                else Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Icon(icon, null, Modifier.padding(12.dp).size(24.dp))
-                }
-            },
+            content = { Text(destination.app.label, style = MaterialTheme.typography.titleMedium) },
+            supportingContent = { Text(ScopeCatalog.applicationPackage(destination.app.packageName)) },
+            leadingContent = { Image(destination.icon, null, Modifier.size(44.dp)) },
             trailingContent = { Icon(MaterialSymbols.RoundedFilled.Chevron_right, null) },
             colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
         )
@@ -288,10 +297,10 @@ private fun DestinationCard(
 
 @Composable
 private fun SectionPage(
-    section: SettingsSectionSpec, prefs: SharedPreferences,
+    app: ScopeApplication, section: SettingsSectionSpec, prefs: SharedPreferences,
     onToggle: (SettingsItemSpec.Switch, Boolean) -> Unit,
     onEdit: (SettingsItemSpec.Text) -> Unit, onAction: (SettingsItemSpec.Action) -> Unit,
-    scope: ScopeManager.State, onScopeToggle: (String, Boolean) -> Unit,
+    scope: ScopeManager.State, onScopeToggle: (String, Boolean) -> Unit, onOpenApp: (String) -> Unit,
 ) {
     var revision by remember { mutableIntStateOf(0) }
     DisposableEffect(prefs) {
@@ -311,19 +320,26 @@ private fun SectionPage(
     ) {
         item("description") {
             Text(
-                sectionPackage(section.key) + " · 修改自动同步，未连接时将在连接后补交",
+                ScopeCatalog.applicationPackage(app.packageName) + " · 修改自动同步，未连接时将在连接后补交",
                 Modifier.padding(bottom = 16.dp), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         item("scope") {
-            val packageName = ScopeCatalog.components.getValue(section.key)
+            val packageName = app.packageName
             SettingRow("启用作用域", scope.message,
                 checked = packageName in scope.enabled,
                 enabled = scope.ready && scope.pending.isEmpty()) {
                 onScopeToggle(packageName, packageName !in scope.enabled)
             }
             Spacer(Modifier.height(12.dp))
+        }
+        if (app.hasSettings) item("app_settings") {
+            TextButton(onClick = { onOpenApp(app.packageName) }) {
+                Icon(MaterialSymbols.RoundedFilled.Settings, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("应用内设置")
+            }
         }
         item("search") {
             SettingsSearchField(query, { query = it }, "搜索此页设置")
@@ -351,17 +367,4 @@ private fun SectionLabel(title: String) {
         title, Modifier.padding(start = 12.dp, top = 20.dp, bottom = 8.dp),
         style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
     )
-}
-
-private fun sectionPackage(key: String): String = when (key) {
-    "system" -> "android"
-    "systemui" -> "com.android.systemui"
-    "miuihome" -> "com.miui.home"
-    else -> "MyInjector"
-}
-
-private fun sectionIcon(key: String): ImageVector = when (key) {
-    "system" -> MaterialSymbols.RoundedFilled.Tune
-    "systemui" -> MaterialSymbols.RoundedFilled.Notifications
-    else -> MaterialSymbols.RoundedFilled.Home
 }

@@ -11,6 +11,7 @@ import io.github.a13e300.myinjector.ui.InjectorTheme
 import io.github.a13e300.myinjector.ui.settings.AppSettingsDestination
 import io.github.a13e300.myinjector.ui.settings.SettingsApp
 import io.github.a13e300.myinjector.ui.settings.SettingsItemSpec
+import io.github.a13e300.myinjector.scope.ScopeApplication
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -645,11 +646,16 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
             .bufferedReader().use { catalog.applications(it.lineSequence()) }
         return packages.mapNotNull { pkg ->
             try {
-                val info = packageManager.getApplicationInfo(pkg, 0)
-                AppSettingsDestination(pkg, info.loadLabel(packageManager),
-                    info.loadIcon(packageManager).toBitmap(96, 96).asImageBitmap(), pkg in catalog.settingsApps)
+                val info = packageManager.getApplicationInfo(catalog.applicationPackage(pkg), 0)
+                if (info.flags and ApplicationInfo.FLAG_INSTALLED == 0) return@mapNotNull null
+                AppSettingsDestination(
+                    ScopeApplication(pkg,
+                        if (pkg == "system") "系统框架" else info.loadLabel(packageManager).toString(),
+                        catalog.isSystemApp(info.flags)),
+                    info.loadIcon(packageManager).toBitmap(96, 96).asImageBitmap(),
+                )
             } catch (_: PackageManager.NameNotFoundException) { null }
-        }.sortedWith(compareBy({ it.label.toString().lowercase() }, { it.packageName }))
+        }.sortedWith(compareBy(catalog.applicationOrder) { it.app })
     }
 
     private fun openAppSettings(packageName: String) {

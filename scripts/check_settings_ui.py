@@ -131,6 +131,22 @@ if args.scope_only:
     tap('启用作用域')
     assert switch('启用作用域')['checked'] == 'true'
     tap('返回首页')
+    # 系统组件按设置能力排序；无模块内设置者与普通应用共用列表开关。
+    tap('搜索应用或系统组件')
+    adb('shell', 'input', 'text', 'SysApp')
+    adb('shell', 'input', 'keyevent', '4')
+    root = tree()
+    texts = [n.get('text') for n in root.iter('node') if n.get('text')]
+    assert texts.index('Z SysApp Telegram') < texts.index('A SysApp Settings'), '有应用内设置者应排在前面'
+    assert '系统组件' in texts and '应用作用域' not in texts, '系统应用应只出现在系统组件组'
+    assert switch('A SysApp Settings作用域')['checked'] == 'false'
+    tap('A SysApp Settings作用域')
+    assert switch('A SysApp Settings作用域')['checked'] == 'true'
+    assert not any(n.get('content-desc') == '返回首页' for n in tree().iter('node')), '普通系统应用不应进入二级页面'
+    tap('应用内设置')
+    assert switch('Z SysApp Telegram作用域')['checked'] == 'false', '系统应用设置入口不能切换作用域'
+    capture('scope-system-apps')
+    tap('清除搜索')
     tap('搜索应用或系统组件')
     adb('shell', 'input', 'text', 'Termux')
     adb('shell', 'input', 'keyevent', '4')
@@ -147,7 +163,7 @@ if args.scope_only:
     tap('应用内设置')
     assert switch('Chrome作用域')['checked'] == 'false', '设置入口不能切换作用域'
     capture('scope-with-settings')
-    print('PASS: 系统二级页开关、无设置应用开关、独立设置入口', flush=True)
+    print('PASS: 系统模块设置二级开关、系统/普通应用列表开关、设置优先排序与独立设置入口', flush=True)
     sys.exit(0)
 
 if args.service_state_only:
@@ -204,7 +220,7 @@ if not args.dialogs_only:
     capture('clipboard')
     tap('取消')
     tap('返回首页')
-    locate('系统界面')
+    locate('系统框架')
     print('PASS: 模块导航、开关持久化、搜索、规则编辑和剪切板选择入口', flush=True)
 
 start('.ui.DialogTestActivity')

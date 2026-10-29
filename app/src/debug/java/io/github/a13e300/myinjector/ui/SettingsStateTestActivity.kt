@@ -9,6 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.a13e300.myinjector.ui.settings.SettingsApp
+import io.github.a13e300.myinjector.ui.settings.AppSettingsDestination
+import io.github.a13e300.myinjector.scope.ScopeApplication
+import io.github.a13e300.myinjector.scope.ScopeCatalog
+import androidx.compose.ui.graphics.ImageBitmap
 
 /** 在同一页面中模拟异步连接／断开，回归 Navigation 3 缓存入口的状态更新。 */
 class SettingsStateTestActivity : ComponentActivity() {
@@ -31,12 +35,20 @@ class SettingsStateTestActivity : ComponentActivity() {
                         scope = scope.copy(enabled = if (enabled) scope.enabled + pkg else scope.enabled - pkg)
                     },
                     loadApps = {
-                        if (intent.getBooleanExtra("scope_test", false)) listOf(
-                            io.github.a13e300.myinjector.ui.settings.AppSettingsDestination("com.termux", "Termux",
-                                androidx.compose.ui.graphics.ImageBitmap(48, 48), false),
-                            io.github.a13e300.myinjector.ui.settings.AppSettingsDestination("com.android.chrome", "Chrome",
-                                androidx.compose.ui.graphics.ImageBitmap(48, 48), true),
+                        val components = listOf(
+                            ScopeApplication("system", "系统框架", true),
+                            ScopeApplication("com.android.systemui", "PM 系统界面", true),
+                            ScopeApplication("com.miui.home", "PM 桌面", true),
+                        )
+                        val applications = if (intent.getBooleanExtra("scope_test", false)) listOf(
+                            ScopeApplication("com.termux", "Termux", false),
+                            ScopeApplication("com.android.chrome", "Chrome", false),
+                            ScopeApplication("com.android.settings", "A SysApp Settings", true),
+                            ScopeApplication("org.telegram.messenger", "Z SysApp Telegram", true),
                         ) else emptyList()
+                        (components + applications).sortedWith(ScopeCatalog.applicationOrder).map {
+                            AppSettingsDestination(it, ImageBitmap(48, 48))
+                        }
                     },
                     openApp = { scope = scope.copy(message = "已打开应用内设置") },
                     onToggle = { _, _ -> },
