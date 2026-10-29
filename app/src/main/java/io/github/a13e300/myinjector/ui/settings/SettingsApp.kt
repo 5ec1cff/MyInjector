@@ -54,6 +54,7 @@ internal data class AppSettingsDestination(
 internal fun SettingsApp(
     prefs: SharedPreferences,
     serviceConnected: Boolean,
+    syncStatus: String = "",
     loadApps: () -> List<AppSettingsDestination>,
     openApp: (String) -> Unit,
     onToggle: (SettingsItemSpec.Switch, Boolean) -> Unit,
@@ -64,6 +65,7 @@ internal fun SettingsApp(
     val sections = remember { moduleSettingsSections() }
     // Navigation 3 按返回栈缓存 NavEntry；页面必须读取 State，避免捕获首次连接值。
     val currentServiceConnected by rememberUpdatedState(serviceConnected)
+    val currentSyncStatus by rememberUpdatedState(syncStatus)
     val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1 else -1
     var routes by rememberSaveable { mutableStateOf(listOf("home")) }
     val apps by produceState<List<AppSettingsDestination>?>(null) {
@@ -104,7 +106,7 @@ internal fun SettingsApp(
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                         if (section == null) {
                             HomePage(
-                                sections, apps, currentServiceConnected,
+                                sections, apps, currentServiceConnected, currentSyncStatus,
                                 onOpenSection = { routes = routes + it },
                                 onOpenApp = openApp,
                                 onUpdate = { onAction(sections.first { it.key == "hotreload" }.items.single() as SettingsItemSpec.Action) },
@@ -132,7 +134,7 @@ private fun settingsPageTransition(forward: Boolean, direction: Int): ContentTra
 
 @Composable
 private fun HomePage(
-    sections: List<SettingsSectionSpec>, apps: List<AppSettingsDestination>?, connected: Boolean,
+    sections: List<SettingsSectionSpec>, apps: List<AppSettingsDestination>?, connected: Boolean, syncStatus: String,
     onOpenSection: (String) -> Unit, onOpenApp: (String) -> Unit, onUpdate: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -156,6 +158,7 @@ private fun HomePage(
                         if (connected) "模块服务已连接 · 按应用管理你的设置" else "模块服务未连接 · 请在框架中启用模块",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    Text(syncStatus, style = MaterialTheme.typography.bodySmall)
                     FilledTonalButton(onClick = onUpdate, modifier = Modifier.testTag("hot_update")) {
                         Icon(MaterialSymbols.RoundedFilled.System_update, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))

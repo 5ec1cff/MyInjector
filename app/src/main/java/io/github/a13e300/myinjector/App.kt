@@ -9,6 +9,8 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
 
 
     companion object {
+        lateinit var settings: io.github.a13e300.myinjector.config.ModulePreferences
+            private set
         @Volatile
         var mService: XposedService? = null
             private set
@@ -47,6 +49,7 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
 
     override fun onCreate() {
         super.onCreate()
+        settings = io.github.a13e300.myinjector.config.ModulePreferences(this)
         XposedServiceHelper.registerListener(this)
     }
 
@@ -56,11 +59,14 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
 
     override fun onServiceBind(service: XposedService) {
         mService = service
+        settings.bind(service)
         notifyServiceStateChanged(mService)
     }
 
     override fun onServiceDied(service: XposedService) {
+        if (mService !== service) return
         mService = null
+        settings.bind(null)
         notifyServiceStateChanged(mService)
     }
 }

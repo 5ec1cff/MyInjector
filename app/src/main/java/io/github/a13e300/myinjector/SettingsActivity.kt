@@ -76,13 +76,16 @@ import kotlin.math.min
 class SettingsActivity : androidx.activity.ComponentActivity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var palette: ModernSettingsPalette
+    private var syncStatus by mutableStateOf("配置等待同步")
+    private val syncListener: (String) -> Unit = { syncStatus = it }
     private var serviceConnected by mutableStateOf(false)
     private var xposedServiceListener: App.ServiceStateListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         palette = ModernSettingsPalette.from(this)
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        prefs = App.settings.cache
+        App.settings.addListener(syncListener)
         enableEdgeToEdge()
         xposedServiceListener = { service ->
             runOnUiThread { serviceConnected = service != null }
@@ -93,10 +96,11 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                 SettingsApp(
                     prefs = prefs,
                     serviceConnected = serviceConnected,
+                    syncStatus = syncStatus,
                     loadApps = ::loadAppDestinations,
                     openApp = ::openAppSettings,
                     onToggle = { item, checked ->
-                        prefs.edit().putBoolean(item.key, checked).apply()
+                        App.settings.putBoolean(item.key, checked)
                         commitForSection(item.sectionKey)
                     },
                     onEdit = { item ->
@@ -113,6 +117,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     }
 
     override fun onDestroy() {
+        App.settings.removeListener(syncListener)
         xposedServiceListener?.let(App::removeServiceStateListener)
         super.onDestroy()
     }
@@ -308,7 +313,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
             actions = listOf(
                 ModernDialogAction("取消"),
                 ModernDialogAction("保存", emphasized = true) {
-                    prefs.edit().putString(item.key, entries.joinToString("\n")).apply()
+                    App.settings.putString(item.key, entries.joinToString("\n"))
                     commitForSection(item.sectionKey)
                 },
             ),
@@ -542,9 +547,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
             actions = listOf(
                 ModernDialogAction("取消"),
                 ModernDialogAction("保存", emphasized = true) {
-                    prefs.edit()
-                        .putString(item.key, sortedClipboardPackages(entries, selectedPackages))
-                        .apply()
+                    App.settings.putString(item.key, sortedClipboardPackages(entries, selectedPackages))
                     commitForSection(item.sectionKey)
                 },
             ),
@@ -636,6 +639,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     }
 
     private fun commitForSection(sectionKey: String) {
+        App.settings.syncNow()
         when (sectionKey) {
             "system" -> commitSystem()
             "systemui" -> commitSystemUI()
