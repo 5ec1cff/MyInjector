@@ -120,7 +120,7 @@ for name in classes:
 for name in prefixes:
     out.append(f'    checkFeature("{name}") {{ audit{name}(creator()) }}')
 for name, call in [
-    ('DisableProfileAvatarBlur', 'findProfileAvatarBlur(bridge, base.className)'),
+    ('DisableProfileAvatarBlur', 'findProfileAvatarBlur(bridge, base.className).also { auditProfileBlurMembers(bridge, it) }'),
     ('ShowIdInProfile', 'findProfileActivityRows(bridge, base.className)'),
     ('ShowDCInProfile', 'findProfileDataCenter(bridge, bridge.getMethodData(findProfileActivityRows(bridge, base.className).getValue("updateRows"))!!.className).mapValues { it.value.descriptor }'),
     ('OpenLinkDialog', 'findOpenLinkDialog(bridge)'),

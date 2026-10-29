@@ -143,8 +143,14 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
         matcher { addInvoke { declaredClass("android.graphics.RadialGradient"); name("<init>") } }
     }.single()
     save("topUpdateBackgroundPaint", topBackground)
+    // 13.1 的音乐视图也含有 RadialGradient，且会被 TopView 更新颜色。
+    // 通过模糊视图的 actions setter 参数确认按钮视图类型，避免把音乐视图选进来。
+    val blurActionsType = blur.methods.singleOrNull {
+        it.name == "setActionsView" && it.paramCount == 1
+    }?.paramTypeNames?.single()
     val actions = topBackground.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
         it.className == pa.name && it.type.superClass?.name == "android.view.View" &&
+            (blurActionsType == null || it.typeName == blurActionsType) &&
             it.type.fields.any { f -> f.typeName == "android.graphics.RadialGradient" }
     }
     save("actionsView", actions)

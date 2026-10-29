@@ -32,3 +32,23 @@ python3 scripts/check_telegram_apks.py --dexkit ~/DexKit \
 三个 APK 均通过 39 组检查：30 组解析、7 组保留 API 检查，以及反射签名和复读权限场景检查。旧版 NaGram 12.10.3（1249）的混淆路径通过回归。复读检查包含 21 个权限场景及菜单打开后权限变化。debug、release 构建和已有单元测试通过。
 
 验证边界：静态检查确认成员存在、签名及已覆盖的调用关系；没有在真实 Xposed 宿主中验证账号界面、绘制效果、消息发送或热更新。安装模块后需重启目标应用，再检查设置中的错误记录及实际功能。
+
+## Telegram 13.1.1（72371）头像模糊适配
+
+从当前 ADB 设备提取官方 `org.telegram.messenger` 的 base APK 和 arm64、xxhdpi split，保存于 `~/tg-apks/telegram-13.1.1-72371/`。base APK 的 SHA-256 为 `f4b44311c7f7451836084b4bcdd8379857e3f2ca1b64b7e063e8568f6002128f`。
+
+使用与报错 map ID 一致的 308 版 release mapping 还原堆栈，并在提取的 APK 上复现失败。dexsql 检查发现：TopView 更新颜色时，按钮视图和音乐视图都含有 RadialGradient；原先根据这一字段及 View 父类唯一匹配 actionsView，会得到两个候选。
+
+现在通过模糊视图 `setActionsView` 的参数类型约束 actionsView，保留旧版本没有此 setter 时的原特征匹配。实际选中 `ProfileActivity.Z`（按钮视图），而非 `ProfileActivity.b0`（音乐视图）。Telegram 适配缓存版本升至 4。
+
+静态回归补充验证：资料页与模糊视图所持按钮字段类型一致、setter 写入正确字段、按钮与音乐类型不同；未混淆版本的合成 getter 也纳入检查。下面四个 APK 均通过 39 组检查，新版显示两个渐变候选，之前的三个版本各为一个候选：
+
+```sh
+python3 scripts/check_telegram_apks.py \
+  ~/tg-apks/telegram-13.1.1-72371/base.apk \
+  ~/tg-apks/AyuGram-arm64-v8a-20261028.apk \
+  ~/tg-apks/exteraGram-arm64-v8a-20261028.apk \
+  ~/nagram-1249.apk
+```
+
+debug、release 构建及已有单元测试通过。本次设备操作仅提取 APK，实际绘制与头像展开效果需安装修复版并重启 Telegram 后验证。

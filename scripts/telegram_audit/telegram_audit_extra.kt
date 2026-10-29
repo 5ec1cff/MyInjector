@@ -37,6 +37,34 @@ private fun auditKeptApi(bridge: DexKitBridge, feature: String) {
     }
 }
 
+private fun auditProfileBlurMembers(bridge: DexKitBridge, members: Map<String, String>) {
+    val actions = bridge.getFieldData(members.getValue("actionsView"))!!
+    val blurActions = bridge.getFieldData(members.getValue("blurActionsView"))!!
+    check(actions.typeName == blurActions.typeName)
+    val background = bridge.getMethodData(members.getValue("topUpdateBackgroundPaint"))!!
+    // 未混淆版通过编译器生成的外部类字段 getter 访问 actionsView。
+    val getters = background.invokes.filter {
+        it.modifiers and 0x1000 != 0 && it.paramTypeNames == listOf(actions.className)
+    }
+    val reads = background.usingFields + getters.flatMap { it.usingFields }
+    val candidates = reads.map { it.field }.distinctBy { it.descriptor }.filter {
+        it.className == actions.className && it.type.superClass?.name == "android.view.View" &&
+            it.type.fields.any { field -> field.typeName == "android.graphics.RadialGradient" }
+    }
+    check(candidates.any { it.descriptor == actions.descriptor })
+    val setter = bridge.getClassData(blurActions.className)!!.methods.singleOrNull {
+        it.name == "setActionsView" && it.paramCount == 1
+    }
+    if (setter != null) {
+        check(setter.paramTypeNames.single() == actions.typeName)
+        check(setter.usingFields.any { it.field.descriptor == blurActions.descriptor })
+    }
+    members.getValue("blurMusicView").takeIf { it.isNotEmpty() }?.let {
+        check(bridge.getFieldData(it)!!.typeName != actions.typeName)
+    }
+    println("Profile blur: ${candidates.size} gradient candidates; actions=${actions.descriptor}")
+}
+
 private fun auditReflectionShapes(bridge: DexKitBridge) {
     auditContactRows(bridge, (bridge.getClassData("org.telegram.ui.ActionBar.BaseFragment") ?: bridge.findClass { matcher { addField { name("fragmentView"); type("android.view.View") } } }.single()).name)
     // Validate the reflection predicates executed after the DexKit searches.
