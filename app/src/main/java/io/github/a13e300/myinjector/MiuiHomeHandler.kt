@@ -2,13 +2,10 @@ package io.github.a13e300.myinjector
 
 import android.app.IActivityManager
 import android.app.ActivityThread
-import android.app.PendingIntent
 import android.app.TaskStackBuilder
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Build
 import android.net.Uri
 import android.os.Handler
@@ -24,40 +21,22 @@ import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllConstantIf
-import java.io.File
-import kotlin.concurrent.thread
 
 class MiuiHomeHandler : IHook() {
-    private lateinit var config: MiuiHomeConfig
-    private lateinit var configPath: File
+    @Volatile private var config = MiuiHomeConfig.getDefaultInstance()
+    private val remoteConfig = io.github.a13e300.myinjector.config.RemoteConfig(
+        "miuihome", io.github.a13e300.myinjector.config.HookConfigs::miuiHome, { config = it },
+    )
 
     override fun onHook() {
-        configPath =
-            File(loadPackageParam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
-        loadConfig()
+        remoteConfig.start()
         hookDragKill()
         hookPreLaunch()
         hookOpenAOSPSettings()
-        registerBroadcast()
     }
-
-    private fun defaultConfig(): MiuiHomeConfig =
-        MiuiHomeConfig.newBuilder()
-            .setOpenAospSettings(false)
-            .setDragKill(false)
-            .setDisablePreLaunch(false)
-            .build()
-
-    private fun loadConfig() = runCatching {
-        config = if (configPath.isFile) {
-            configPath.inputStream().use { MiuiHomeConfig.parseFrom(it) }
-        } else {
-            defaultConfig()
-        }
-        logI("loaded config $config")
-    }.onFailure {
-        config = defaultConfig()
-        logE("failed to load config from $configPath", it)
+    override fun onUnhook(): Boolean {
+        remoteConfig.close()
+        return true
     }
 
     private fun hookPreLaunch() = runCatching {
@@ -195,48 +174,4 @@ class MiuiHomeHandler : IHook() {
         logE("hookOpenAOSPSettings", it)
     }
 
-    private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent?) {
-            intent ?: return
-            runCatching {
-                val pendingIntent =
-                    intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
-                if (pendingIntent?.creatorPackage != BuildConfig.APPLICATION_ID) {
-                    logE("onReceive: invalid caller ${pendingIntent?.creatorPackage}")
-                    return
-                }
-                intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
-                    config = MiuiHomeConfig.parseFrom(it)
-                    configPath.writeBytes(it)
-                    logI("onReceive: update config $config")
-                }
-            }.onFailure {
-                logE("onReceive: ", it)
-            }
-        }
-    }
-
-    private fun registerBroadcast() {
-        thread {
-            try {
-                while (true) {
-                    Thread.sleep(1000)
-                    val ctx = ActivityThread.currentActivityThread().application ?: continue
-                    val flags =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
-                    ctx.registerReceiver(
-                        receiver,
-                        IntentFilter("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG"),
-                        null,
-                        null,
-                        flags
-                    )
-                    logI("registerBroadcast: registered")
-                    break
-                }
-            } catch (t: Throwable) {
-                logE("registerBroadcast: ", t)
-            }
-        }
-    }
 }

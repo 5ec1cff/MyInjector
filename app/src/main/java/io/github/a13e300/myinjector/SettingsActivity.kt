@@ -809,20 +809,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
         sendBroadcast(intent)
     }
 
-    private fun commitSystemUI() {
-        val intent = Intent("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG")
-        val pendingIntent =
-            PendingIntent.getBroadcast(this, 1, intent, PendingIntent.FLAG_IMMUTABLE)
-        val config = SystemUIConfig.newBuilder()
-            .setAlwaysExpandNotification(prefs.getBoolean("alwaysExpandNotification", false))
-            .setNoDndNotification(prefs.getBoolean("noDndNotification", false))
-            .setShowNotificationDetail(prefs.getBoolean("showNotificationDetail", false))
-            .setFixWhiteSplash(prefs.getBoolean("fixWhiteSplash", false))
-            .build()
-        intent.putExtra("EXTRA_CREDENTIAL", pendingIntent)
-        intent.putExtra("EXTRA_CONFIG", config.toByteArray())
-        sendBroadcast(intent)
-    }
+    private fun commitSystemUI() = App.settings.syncNow()
 
     private fun commitMiuiHome() {
         val intent = Intent("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG")

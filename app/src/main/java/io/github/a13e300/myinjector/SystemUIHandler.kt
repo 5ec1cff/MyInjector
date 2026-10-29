@@ -3,12 +3,9 @@ package io.github.a13e300.myinjector
 import android.annotation.SuppressLint
 import android.app.ActivityThread
 import android.app.INotificationManager
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -37,17 +34,18 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNopIf
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.bridge.Unhook
-import java.io.File
 import java.lang.reflect.Modifier
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.concurrent.CountDownLatch
-import kotlin.concurrent.thread
 
 class MyFrameLayout(context: Context) : FrameLayout(context)
 
 class SystemUIHandler : IHook() {
-    private lateinit var config: SystemUIConfig
+    @Volatile private var config = SystemUIConfig.getDefaultInstance()
+    private val remoteConfig = io.github.a13e300.myinjector.config.RemoteConfig(
+        "systemui", io.github.a13e300.myinjector.config.HookConfigs::systemUI, { config = it },
+    )
     private val pluginInitializeLock = Any()
     private var pluginHooked = false
     private val pluginInitializeHooks = mutableSetOf<Unhook>()
@@ -105,37 +103,17 @@ class SystemUIHandler : IHook() {
         }
     }.onFailure { logE("hookCreatePkgContext: ", it) }
 
-    private lateinit var configPath: File
-
-    private fun loadConfig() = runCatching {
-        if (configPath.isFile) {
-            config = configPath.inputStream().use { SystemUIConfig.parseFrom(it) }
-            logI("loaded config $config")
-        } else {
-            config = SystemUIConfig.getDefaultInstance()
-            logI("use default config")
-        }
-    }.onFailure {
-        logE("failed to load config from $configPath", it)
-    }
-
     @SuppressLint("SetTextI18n")
     override fun onHook() {
         if (loadPackageParam.packageName != "com.android.systemui") return
-        configPath =
-            File(loadPackageParam.appInfo.deviceProtectedDataDir, "myinjector_config.proto")
-        loadConfig()
+        remoteConfig.start()
         hookPlugin()
         hookNotificationInfo()
         hookSplashScreen()
     }
 
     override fun onUnhook(): Boolean {
-        runCatching {
-            ActivityThread.currentActivityThread().application.unregisterReceiver(receiver)
-        }.onFailure {
-            logE("unregister receiver", it)
-        }
+        remoteConfig.close()
         removeMyView()
         return true
     }
@@ -312,7 +290,6 @@ class SystemUIHandler : IHook() {
             }
 
         hookExpandNotification()
-        registerBroadcast()
     }
 
     private fun hookExpandNotification() = runCatching {
@@ -381,49 +358,4 @@ class SystemUIHandler : IHook() {
         logE("hookSplashScreen", it)
     }
 
-    private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent?) {
-            intent ?: return
-            runCatching {
-                val pendingIntent =
-                    intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
-                val caller = pendingIntent?.creatorPackage
-                if (caller == BuildConfig.APPLICATION_ID) {
-                    intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
-                        config = SystemUIConfig.parseFrom(it)
-                        configPath.writeBytes(it)
-                        logI("onReceive: update config $config")
-                    }
-                } else {
-                    logE("onReceive: invalid caller $caller")
-                }
-            }.onFailure {
-                logE("onReceive: ", it)
-            }
-        }
-    }
-
-    private fun registerBroadcast() {
-        thread {
-            try {
-                while (true) {
-                    Thread.sleep(1000)
-                    val ctx = ActivityThread.currentActivityThread().application ?: continue
-                    val flags =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
-                    ctx.registerReceiver(
-                        receiver,
-                        IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEMUI_CONFIG"),
-                        null,
-                        null,
-                        flags
-                    )
-                    logI("registerBroadcast: registered")
-                    break
-                }
-            } catch (t: Throwable) {
-                logE("registerBroadcast: ", t)
-            }
-        }
-    }
 }
