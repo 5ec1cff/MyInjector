@@ -15,6 +15,7 @@ import io.github.a13e300.myinjector.scope.ScopeApplication
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
@@ -78,9 +79,12 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     private val syncListener: (String) -> Unit = { syncStatus = it }
     private var serviceConnected by mutableStateOf(false)
     private var xposedServiceListener: App.ServiceStateListener? = null
+    private val launcherAlias by lazy { ComponentName(this, "$packageName.LauncherAlias") }
+    private var launcherIconVisible by mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        refreshLauncherIconVisibility()
         palette = ModernSettingsPalette.from(this)
         prefs = App.settings.cache
         App.settings.addListener(syncListener)
@@ -95,6 +99,8 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                 SettingsApp(
                     prefs = prefs,
                     serviceConnected = serviceConnected,
+                    launcherIconVisible = launcherIconVisible,
+                    onLauncherIconToggle = ::changeLauncherIconVisibility,
                     syncStatus = syncStatus,
                     scopeState = scopeState,
                     onScopeToggle = App.scopes::setEnabled,
@@ -636,8 +642,32 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshLauncherIconVisibility()
         App.scopes.refresh()
         appListVersion++
+    }
+
+    /** 组件状态是唯一数据源；DEFAULT 按 manifest 的声明解析，不另外保存开关偏好。 */
+    private fun refreshLauncherIconVisibility() {
+        launcherIconVisible = when (packageManager.getComponentEnabledSetting(launcherAlias)) {
+            PackageManager.COMPONENT_ENABLED_STATE_DEFAULT ->
+                packageManager.getActivityInfo(launcherAlias, PackageManager.MATCH_DISABLED_COMPONENTS).enabled
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
+            else -> false
+        }
+    }
+
+    private fun changeLauncherIconVisibility(visible: Boolean) {
+        runCatching {
+            packageManager.setComponentEnabledSetting(launcherAlias,
+                if (visible) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP)
+        }.onFailure {
+            logE("failed to change launcher icon visibility:", it)
+            Toast.makeText(this, "无法修改桌面图标状态：${it.message}", Toast.LENGTH_LONG).show()
+        }
+        refreshLauncherIconVisibility()
     }
 
     private fun loadAppDestinations(): List<AppSettingsDestination> {

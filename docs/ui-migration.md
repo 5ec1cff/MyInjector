@@ -107,3 +107,17 @@ x86_64 模拟器使用移除 arm64 native 库后重新签名的临时 debug 测�
 
 `check_settings_ui.py --sticky-search-only` 使用 debug 测试 Activity 的长列表验证两个页面从初始位置滚动吸顶、
 继续滚动时位置不变，以及吸顶后的搜索与清除操作；`--insets-only` 回归键盘布局。
+
+## 桌面图标显示开关
+
+首页状态卡片下方的“显示桌面图标”直接读取、修改 `LauncherAlias` 的组件启用状态，
+不写入 Hook 配置或额外偏好。默认按 manifest 启用；切换后读回实际状态，Activity 恢复时重新读取。
+桌面 MAIN/LAUNCHER 入口移到 activity-alias，SettingsActivity 保留框架 MODULE_SETTINGS 入口；
+alias 指向无界面、使用独立任务的 LauncherActivity，随后在模块任务中打开 SettingsActivity，
+避免系统在禁用 alias 时关闭当前设置页。
+使用 DONT_KILL_APP 切换 alias，隐藏桌面图标后仍可通过框架打开模块设置。
+
+`check_settings_ui.py --launcher-icon-only` 验证默认入口唯一、图标显示／隐藏、切换时进程保留、
+重启及外部组件状态同步，并确认框架设置入口始终可用。
+Android 16 模拟器需先执行 `adb -s <serial> root`，以允许脚本通过 shell 模拟外部组件状态变更；
+模块自身切换 alias 无需 root 或额外权限。

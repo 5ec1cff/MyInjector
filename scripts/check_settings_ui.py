@@ -15,6 +15,7 @@ parser.add_argument('--resource-context-package', help='仅加载此已安装包
 parser.add_argument('--dialogs-only', action='store_true')
 parser.add_argument('--insets-only', action='store_true', help='验证状态栏和键盘开关后的列表边界')
 parser.add_argument('--sticky-search-only', action='store_true', help='验证首页及二级页面搜索栏滚动吸顶')
+parser.add_argument('--launcher-icon-only', action='store_true', help='验证桌面 alias、可见性开关及框架设置入口')
 parser.add_argument('--scope-only', action='store_true', help='验证作用域开关与独立设置入口')
 parser.add_argument('--service-state-only', action='store_true', help='回归首页缓存入口的异步服务状态更新')
 args = parser.parse_args()
@@ -67,6 +68,50 @@ def start(activity):
     ) else []
     adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity, *extra)
 
+
+if args.launcher_icon_only:
+    alias = package + '/.LauncherAlias'
+    def resolve(category):
+        return adb('shell', 'cmd', 'package', 'query-activities', '--brief', '--user', '0',
+            '-a', 'android.intent.action.MAIN', '-c', category, '-p', package).decode()
+
+    def launcher():
+        return resolve('android.intent.category.LAUNCHER')
+
+    def module_settings():
+        result = resolve('de.robv.android.xposed.category.MODULE_SETTINGS')
+        assert package + '/.SettingsActivity' in result, ('模块设置入口被禁用', result)
+
+    try:
+        adb('shell', 'pm', 'default-state', '--user', '0', alias)
+        start('.LauncherAlias')
+        assert switch('显示桌面图标')['checked'] == 'true'
+        assert launcher().count(alias) == 1, '应只有一个桌面入口且由 alias 提供'
+        pid = adb('shell', 'pidof', package).strip()
+        tap('显示桌面图标')
+        assert switch('显示桌面图标')['checked'] == 'false'
+        assert alias not in launcher(), '关闭后仍有桌面入口'
+        assert adb('shell', 'pidof', package).strip() == pid, '切换图标不应杀死模块进程'
+        module_settings()
+        capture('launcher-icon-hidden')
+        start('.SettingsActivity')
+        assert switch('显示桌面图标')['checked'] == 'false', '重启后应从组件读取隐藏状态'
+        tap('显示桌面图标')
+        assert switch('显示桌面图标')['checked'] == 'true'
+        assert launcher().count(alias) == 1
+        # 从系统侧修改组件状态，重新打开页面必须反映真实状态，不能使用独立偏好缓存。
+        adb('shell', 'pm', 'disable', '--user', '0', alias)
+        start('.SettingsActivity')
+        assert switch('显示桌面图标')['checked'] == 'false'
+        adb('shell', 'pm', 'enable', '--user', '0', alias)
+        start('.SettingsActivity')
+        assert switch('显示桌面图标')['checked'] == 'true'
+        module_settings()
+        capture('launcher-icon-visible')
+        print('PASS: 默认 alias 唯一入口、显示/隐藏、进程保活、重启及外部组件状态同步、框架入口保留', flush=True)
+    finally:
+        adb('shell', 'pm', 'default-state', '--user', '0', alias)
+    sys.exit(0)
 
 if args.sticky_search_only:
     def bounds(node):

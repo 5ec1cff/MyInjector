@@ -56,6 +56,8 @@ internal data class AppSettingsDestination(
 internal fun SettingsApp(
     prefs: SharedPreferences,
     serviceConnected: Boolean,
+    launcherIconVisible: Boolean = true,
+    onLauncherIconToggle: (Boolean) -> Unit = {},
     syncStatus: String = "",
     scopeState: ScopeManager.State = ScopeManager.State(),
     onScopeToggle: (String, Boolean) -> Unit = { _, _ -> },
@@ -70,6 +72,8 @@ internal fun SettingsApp(
     val sections = remember { moduleSettingsSections() }
     // Navigation 3 按返回栈缓存 NavEntry；页面必须读取 State，避免捕获首次连接值。
     val currentServiceConnected by rememberUpdatedState(serviceConnected)
+    val currentLauncherIconVisible by rememberUpdatedState(launcherIconVisible)
+    val currentLauncherIconToggle by rememberUpdatedState(onLauncherIconToggle)
     val currentSyncStatus by rememberUpdatedState(syncStatus)
     val currentScope by rememberUpdatedState(scopeState)
     val currentScopeToggle by rememberUpdatedState(onScopeToggle)
@@ -125,6 +129,8 @@ internal fun SettingsApp(
                         if (isHome) {
                             HomePage(
                                 apps, currentServiceConnected, currentSyncStatus, currentScope, currentScopeToggle,
+                                launcherIconVisible = currentLauncherIconVisible,
+                                onLauncherIconToggle = currentLauncherIconToggle,
                                 onOpenModuleSettings = { routes = routes + it },
                                 onOpenApp = openApp,
                                 onUpdate = { onAction(sections.first { it.key == "hotreload" }.items.single() as SettingsItemSpec.Action) },
@@ -161,6 +167,7 @@ private fun settingsPageTransition(forward: Boolean, direction: Int): ContentTra
 private fun HomePage(
     apps: List<AppSettingsDestination>?, connected: Boolean, syncStatus: String,
     scope: ScopeManager.State, onScopeToggle: (String, Boolean) -> Unit,
+    launcherIconVisible: Boolean, onLauncherIconToggle: (Boolean) -> Unit,
     onOpenModuleSettings: (String) -> Unit, onOpenApp: (String) -> Unit, onUpdate: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -196,6 +203,11 @@ private fun HomePage(
                 }
             }
             Spacer(Modifier.height(16.dp))
+        }
+        item("launcher_icon") {
+            SettingRow("显示桌面图标", "关闭后仍可从框架打开模块设置", checked = launcherIconVisible) {
+                onLauncherIconToggle(!launcherIconVisible)
+            }
         }
         stickyHeader(key = "search") {
             SettingsSearchHeader(query, { query = it }, "搜索应用或系统组件")
