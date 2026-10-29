@@ -11,6 +11,7 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
     companion object {
         lateinit var settings: io.github.a13e300.myinjector.config.ModulePreferences
             private set
+        val scopes = io.github.a13e300.myinjector.scope.ScopeManager()
         @Volatile
         var mService: XposedService? = null
             private set
@@ -60,6 +61,7 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
     override fun onServiceBind(service: XposedService) {
         mService = service
         settings.bind(service)
+        scopes.bind(service)
         notifyServiceStateChanged(mService)
     }
 
@@ -67,6 +69,7 @@ class App : Application(), XposedServiceHelper.OnServiceListener {
         if (mService !== service) return
         mService = null
         settings.bind(null)
+        scopes.bind(null)
         notifyServiceStateChanged(mService)
     }
 }

@@ -13,6 +13,7 @@ parser.add_argument('--serial', required=True)
 parser.add_argument('--out', type=Path, default=Path('app/build/reports/ui-smoke'))
 parser.add_argument('--resource-context-package', help='仅加载此已安装包的资源，复现无 Application 的 Context')
 parser.add_argument('--dialogs-only', action='store_true')
+parser.add_argument('--scope-only', action='store_true', help='验证作用域开关与独立设置入口')
 parser.add_argument('--service-state-only', action='store_true', help='回归首页缓存入口的异步服务状态更新')
 args = parser.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
@@ -64,6 +65,35 @@ def start(activity):
     ) else []
     adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity, *extra)
 
+
+if args.scope_only:
+    activity = '.ui.SettingsStateTestActivity'
+    adb('shell', 'am', 'force-stop', package)
+    adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity,
+        '--ez', 'scope_test', 'true', '--ez', 'connected', 'true')
+    tap('系统框架')
+    assert switch('启用作用域')['checked'] == 'false'
+    tap('启用作用域')
+    assert switch('启用作用域')['checked'] == 'true'
+    tap('返回首页')
+    tap('搜索应用或系统组件')
+    adb('shell', 'input', 'text', 'Termux')
+    adb('shell', 'input', 'keyevent', '4')
+    assert switch('Termux作用域')['checked'] == 'false'
+    tap('Termux作用域')
+    assert switch('Termux作用域')['checked'] == 'true'
+    assert not any(n.get('text') == '应用内设置' for n in tree().iter('node'))
+    capture('scope-no-settings')
+    tap('清除搜索')
+    tap('搜索应用或系统组件')
+    adb('shell', 'input', 'text', 'Chrome')
+    adb('shell', 'input', 'keyevent', '4')
+    locate('应用内设置')
+    tap('应用内设置')
+    assert switch('Chrome作用域')['checked'] == 'false', '设置入口不能切换作用域'
+    capture('scope-with-settings')
+    print('PASS: 系统二级页开关、无设置应用开关、独立设置入口', flush=True)
+    sys.exit(0)
 
 if args.service_state_only:
     activity = '.ui.SettingsStateTestActivity'

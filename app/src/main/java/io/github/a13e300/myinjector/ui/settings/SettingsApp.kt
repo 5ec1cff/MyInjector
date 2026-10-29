@@ -11,6 +11,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import io.github.a13e300.myinjector.scope.ScopeManager
+import io.github.a13e300.myinjector.scope.ScopeCatalog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +50,7 @@ internal data class AppSettingsDestination(
     val packageName: String,
     val label: CharSequence,
     val icon: ImageBitmap,
+    val hasSettings: Boolean = false,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +59,9 @@ internal fun SettingsApp(
     prefs: SharedPreferences,
     serviceConnected: Boolean,
     syncStatus: String = "",
+    scopeState: ScopeManager.State = ScopeManager.State(),
+    onScopeToggle: (String, Boolean) -> Unit = { _, _ -> },
+    appListVersion: Int = 0,
     loadApps: () -> List<AppSettingsDestination>,
     openApp: (String) -> Unit,
     onToggle: (SettingsItemSpec.Switch, Boolean) -> Unit,
@@ -66,9 +73,11 @@ internal fun SettingsApp(
     // Navigation 3 按返回栈缓存 NavEntry；页面必须读取 State，避免捕获首次连接值。
     val currentServiceConnected by rememberUpdatedState(serviceConnected)
     val currentSyncStatus by rememberUpdatedState(syncStatus)
+    val currentScope by rememberUpdatedState(scopeState)
+    val currentScopeToggle by rememberUpdatedState(onScopeToggle)
     val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1 else -1
     var routes by rememberSaveable { mutableStateOf(listOf("home")) }
-    val apps by produceState<List<AppSettingsDestination>?>(null) {
+    val apps by produceState<List<AppSettingsDestination>?>(null, appListVersion) {
         value = withContext(Dispatchers.IO) { loadApps() }
     }
     fun navigateBack() { if (routes.size > 1) routes = routes.dropLast(1) else onClose() }
@@ -106,12 +115,12 @@ internal fun SettingsApp(
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                         if (section == null) {
                             HomePage(
-                                sections, apps, currentServiceConnected, currentSyncStatus,
+                                sections, apps, currentServiceConnected, currentSyncStatus, currentScope, currentScopeToggle,
                                 onOpenSection = { routes = routes + it },
                                 onOpenApp = openApp,
                                 onUpdate = { onAction(sections.first { it.key == "hotreload" }.items.single() as SettingsItemSpec.Action) },
                             )
-                        } else SectionPage(section, prefs, onToggle, onEdit, onAction)
+                        } else SectionPage(section, prefs, onToggle, onEdit, onAction, currentScope, currentScopeToggle)
                     }
                 }
             }
@@ -135,6 +144,7 @@ private fun settingsPageTransition(forward: Boolean, direction: Int): ContentTra
 @Composable
 private fun HomePage(
     sections: List<SettingsSectionSpec>, apps: List<AppSettingsDestination>?, connected: Boolean, syncStatus: String,
+    scope: ScopeManager.State, onScopeToggle: (String, Boolean) -> Unit,
     onOpenSection: (String) -> Unit, onOpenApp: (String) -> Unit, onUpdate: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -159,6 +169,7 @@ private fun HomePage(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(syncStatus, style = MaterialTheme.typography.bodySmall)
+                    Text(scope.message, style = MaterialTheme.typography.bodySmall)
                     FilledTonalButton(onClick = onUpdate, modifier = Modifier.testTag("hot_update")) {
                         Icon(MaterialSymbols.RoundedFilled.System_update, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -180,23 +191,61 @@ private fun HomePage(
                 )
             }
         }
-        item("apps_label") { SectionLabel("应用设置") }
+        item("apps_label") { SectionLabel("应用作用域") }
         if (apps == null) {
             item("loading") { LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp)) }
         } else if (visibleApps.isEmpty()) {
             item("empty") {
                 Text(
-                    if (query.isBlank()) "尚未安装带有设置入口的应用" else "没有匹配的应用",
+                    if (query.isBlank()) "尚未安装作用域列表中的应用" else "没有匹配的应用",
                     Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
             itemsIndexed(visibleApps, key = { _, it -> it.packageName }) { index, app ->
-                DestinationCard(
-                    app.label.toString(), app.packageName, MaterialSymbols.RoundedFilled.Apps,
-                    index == 0, index == visibleApps.lastIndex, app.icon,
-                    onClick = { onOpenApp(app.packageName) },
-                )
+                AppScopeCard(app, scope, onScopeToggle, onOpenApp,
+                    index == 0, index == visibleApps.lastIndex)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppScopeCard(
+    app: AppSettingsDestination, scope: ScopeManager.State,
+    onToggle: (String, Boolean) -> Unit, onSettings: (String) -> Unit,
+    first: Boolean, last: Boolean,
+) {
+    val checked = app.packageName in scope.enabled
+    val pending = app.packageName in scope.pending
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(topStart = if (first) 28.dp else 4.dp,
+            topEnd = if (first) 28.dp else 4.dp, bottomStart = if (last) 28.dp else 4.dp,
+            bottomEnd = if (last) 28.dp else 4.dp),
+    ) {
+        Column {
+            ListItem(
+                content = { Text(app.label.toString(), style = MaterialTheme.typography.titleMedium) },
+                supportingContent = { Text(app.packageName) },
+                leadingContent = { Image(app.icon, null, Modifier.size(44.dp)) },
+                trailingContent = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Switch(checked, { onToggle(app.packageName, it) },
+                            enabled = scope.ready && scope.pending.isEmpty(),
+                            modifier = Modifier.testTag("scope_${app.packageName}")
+                                .semantics { contentDescription = "${app.label}作用域" })
+                        if (pending) Text("处理中", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+            )
+            if (app.hasSettings) TextButton(onClick = { onSettings(app.packageName) },
+                modifier = Modifier.align(Alignment.End).padding(end = 12.dp, bottom = 4.dp)) {
+                Icon(MaterialSymbols.RoundedFilled.Settings, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("应用内设置")
             }
         }
     }
@@ -235,6 +284,7 @@ private fun SectionPage(
     section: SettingsSectionSpec, prefs: SharedPreferences,
     onToggle: (SettingsItemSpec.Switch, Boolean) -> Unit,
     onEdit: (SettingsItemSpec.Text) -> Unit, onAction: (SettingsItemSpec.Action) -> Unit,
+    scope: ScopeManager.State, onScopeToggle: (String, Boolean) -> Unit,
 ) {
     var revision by remember { mutableIntStateOf(0) }
     DisposableEffect(prefs) {
@@ -258,6 +308,15 @@ private fun SectionPage(
                 Modifier.padding(bottom = 16.dp), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        item("scope") {
+            val packageName = ScopeCatalog.components.getValue(section.key)
+            SettingRow("启用作用域", scope.message,
+                checked = packageName in scope.enabled,
+                enabled = scope.ready && scope.pending.isEmpty()) {
+                onScopeToggle(packageName, packageName !in scope.enabled)
+            }
+            Spacer(Modifier.height(12.dp))
         }
         item("search") {
             SettingsSearchField(query, { query = it }, "搜索此页设置")

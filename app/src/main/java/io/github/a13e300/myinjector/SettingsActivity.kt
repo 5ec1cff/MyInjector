@@ -70,6 +70,9 @@ import kotlin.math.min
 class SettingsActivity : androidx.activity.ComponentActivity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var palette: ModernSettingsPalette
+    private var scopeState by mutableStateOf(io.github.a13e300.myinjector.scope.ScopeManager.State())
+    private val scopeListener: (io.github.a13e300.myinjector.scope.ScopeManager.State) -> Unit = { scopeState = it }
+    private var appListVersion by mutableStateOf(0)
     private var syncStatus by mutableStateOf("配置等待同步")
     private val syncListener: (String) -> Unit = { syncStatus = it }
     private var serviceConnected by mutableStateOf(false)
@@ -80,6 +83,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
         palette = ModernSettingsPalette.from(this)
         prefs = App.settings.cache
         App.settings.addListener(syncListener)
+        App.scopes.addListener(scopeListener)
         enableEdgeToEdge()
         xposedServiceListener = { service ->
             runOnUiThread { serviceConnected = service != null }
@@ -91,6 +95,9 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                     prefs = prefs,
                     serviceConnected = serviceConnected,
                     syncStatus = syncStatus,
+                    scopeState = scopeState,
+                    onScopeToggle = App.scopes::setEnabled,
+                    appListVersion = appListVersion,
                     loadApps = ::loadAppDestinations,
                     openApp = ::openAppSettings,
                     onToggle = { item, checked ->
@@ -108,6 +115,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     }
 
     override fun onDestroy() {
+        App.scopes.removeListener(scopeListener)
         App.settings.removeListener(syncListener)
         xposedServiceListener?.let(App::removeServiceStateListener)
         super.onDestroy()
@@ -625,14 +633,23 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
         }
     }
 
-    private fun loadAppDestinations(): List<AppSettingsDestination> = APP_PACKAGES.mapNotNull { pkg ->
-        runCatching {
-            val info = packageManager.getApplicationInfo(pkg, 0)
-            AppSettingsDestination(
-                pkg, info.loadLabel(packageManager),
-                info.loadIcon(packageManager).toBitmap(96, 96).asImageBitmap(),
-            )
-        }.getOrNull()
+    override fun onResume() {
+        super.onResume()
+        App.scopes.refresh()
+        appListVersion++
+    }
+
+    private fun loadAppDestinations(): List<AppSettingsDestination> {
+        val catalog = io.github.a13e300.myinjector.scope.ScopeCatalog
+        val packages = checkNotNull(javaClass.classLoader!!.getResourceAsStream("META-INF/xposed/scope.list"))
+            .bufferedReader().use { catalog.applications(it.lineSequence()) }
+        return packages.mapNotNull { pkg ->
+            try {
+                val info = packageManager.getApplicationInfo(pkg, 0)
+                AppSettingsDestination(pkg, info.loadLabel(packageManager),
+                    info.loadIcon(packageManager).toBitmap(96, 96).asImageBitmap(), pkg in catalog.settingsApps)
+            } catch (_: PackageManager.NameNotFoundException) { null }
+        }.sortedWith(compareBy({ it.label.toString().lowercase() }, { it.packageName }))
     }
 
     private fun openAppSettings(packageName: String) {
@@ -1367,22 +1384,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
         private val clipboardIconCache = java.util.concurrent.ConcurrentHashMap<String, Drawable>()
         private val loadingClipboardIcons = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
-        private val APP_PACKAGES = listOf(
-            "com.xingin.xhs",
-            "com.kiwibrowser.browser",
-            "com.android.chrome",
-            "org.telegram.messenger",
-            "org.telegram.messenger.web",
-            "org.telegram.messenger.beta",
-            "org.telegram.plus",
-            "com.exteragram.messenger",
-            "com.radolyn.ayugram",
-            "uz.unnarsx.cherrygram",
-            "xyz.nextalone.nagram",
-            "nu.gpu.nagram",
-            "com.xtaolabs.pagergram",
-            "fork.risin42.nagramx",
-        )
+
     }
 }
 
