@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 
-/** alias 只指向无界面的转发入口；禁用它时不影响设置 Activity 及其任务。 */
+/** 无界面的独立桌面入口，转发到设置页后结束，启停时不影响设置页及其任务。 */
 class LauncherActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

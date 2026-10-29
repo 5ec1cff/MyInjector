@@ -42,21 +42,17 @@
         </activity>
         <activity
             android:name=".LauncherActivity"
-            android:exported="false"
+            android:exported="true"
+            android:enabled="true"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.NoDisplay" />
-        <activity-alias
-            android:name=".LauncherAlias"
-            android:targetActivity=".LauncherActivity"
-            android:enabled="true"
-            android:exported="true">
+            android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
+        </activity>
     </application>
 
 </manifest>

@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.content.ContextCompat
 import io.github.a13e300.myinjector.ui.InjectorTheme
 import io.github.a13e300.myinjector.ui.settings.AppSettingsDestination
 import io.github.a13e300.myinjector.ui.settings.SettingsApp
@@ -14,9 +15,12 @@ import io.github.a13e300.myinjector.ui.settings.SettingsItemSpec
 import io.github.a13e300.myinjector.scope.ScopeApplication
 import android.annotation.SuppressLint
 import android.content.ClipData
+import android.content.BroadcastReceiver
 import android.content.ClipboardManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -29,6 +33,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PatternMatcher
 import android.text.Editable
 import android.text.InputType
 import android.text.Spannable
@@ -79,8 +84,13 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     private val syncListener: (String) -> Unit = { syncStatus = it }
     private var serviceConnected by mutableStateOf(false)
     private var xposedServiceListener: App.ServiceStateListener? = null
-    private val launcherAlias by lazy { ComponentName(this, "$packageName.LauncherAlias") }
+    private val launcherComponent by lazy { ComponentName(this, LauncherActivity::class.java) }
     private var launcherIconVisible by mutableStateOf(true)
+    private val launcherStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            refreshLauncherIconVisibility()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -640,18 +650,33 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(Intent.ACTION_PACKAGE_CHANGED).apply {
+            addDataScheme("package")
+            addDataSchemeSpecificPart(packageName, PatternMatcher.PATTERN_LITERAL)
+        }
+        ContextCompat.registerReceiver(this, launcherStateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // 注册后读取，补齐不可见期间的变更，并避免首次查询与注册之间丢失更新。
+        refreshLauncherIconVisibility()
+    }
+
+    override fun onStop() {
+        unregisterReceiver(launcherStateReceiver)
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
-        refreshLauncherIconVisibility()
         App.scopes.refresh()
         appListVersion++
     }
 
     /** 组件状态是唯一数据源；DEFAULT 按 manifest 的声明解析，不另外保存开关偏好。 */
     private fun refreshLauncherIconVisibility() {
-        launcherIconVisible = when (packageManager.getComponentEnabledSetting(launcherAlias)) {
+        launcherIconVisible = when (packageManager.getComponentEnabledSetting(launcherComponent)) {
             PackageManager.COMPONENT_ENABLED_STATE_DEFAULT ->
-                packageManager.getActivityInfo(launcherAlias, PackageManager.MATCH_DISABLED_COMPONENTS).enabled
+                packageManager.getActivityInfo(launcherComponent, PackageManager.MATCH_DISABLED_COMPONENTS).enabled
             PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
             else -> false
         }
@@ -659,7 +684,7 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
 
     private fun changeLauncherIconVisibility(visible: Boolean) {
         runCatching {
-            packageManager.setComponentEnabledSetting(launcherAlias,
+            packageManager.setComponentEnabledSetting(launcherComponent,
                 if (visible) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP)

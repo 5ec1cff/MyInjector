@@ -4,5 +4,6 @@
         <activity android:name=".ui.DialogTestActivity" android:exported="true" />
         <activity android:name=".ui.SettingsStateTestActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.ProfileMusicPaintTestActivity" android:exported="true" />
+        <receiver android:name=".ui.LauncherStateTestReceiver" android:exported="true" />
     </application>
 </manifest>

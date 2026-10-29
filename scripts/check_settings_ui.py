@@ -15,7 +15,7 @@ parser.add_argument('--resource-context-package', help='仅加载此已安装包
 parser.add_argument('--dialogs-only', action='store_true')
 parser.add_argument('--insets-only', action='store_true', help='验证状态栏和键盘开关后的列表边界')
 parser.add_argument('--sticky-search-only', action='store_true', help='验证首页及二级页面搜索栏滚动吸顶')
-parser.add_argument('--launcher-icon-only', action='store_true', help='验证桌面 alias、可见性开关及框架设置入口')
+parser.add_argument('--launcher-icon-only', action='store_true', help='验证桌面 Activity、可见性开关及框架设置入口')
 parser.add_argument('--scope-only', action='store_true', help='验证作用域开关与独立设置入口')
 parser.add_argument('--service-state-only', action='store_true', help='回归首页缓存入口的异步服务状态更新')
 args = parser.parse_args()
@@ -70,7 +70,7 @@ def start(activity):
 
 
 if args.launcher_icon_only:
-    alias = package + '/.LauncherAlias'
+    entry = package + '/.LauncherActivity'
     def resolve(category):
         return adb('shell', 'cmd', 'package', 'query-activities', '--brief', '--user', '0',
             '-a', 'android.intent.action.MAIN', '-c', category, '-p', package).decode()
@@ -83,14 +83,14 @@ if args.launcher_icon_only:
         assert package + '/.SettingsActivity' in result, ('模块设置入口被禁用', result)
 
     try:
-        adb('shell', 'pm', 'default-state', '--user', '0', alias)
-        start('.LauncherAlias')
+        adb('shell', 'pm', 'default-state', '--user', '0', entry)
+        start('.LauncherActivity')
         assert switch('显示桌面图标')['checked'] == 'true'
-        assert launcher().count(alias) == 1, '应只有一个桌面入口且由 alias 提供'
+        assert launcher().count(entry) == 1, '应只有一个桌面入口且由独立 Activity 提供'
         pid = adb('shell', 'pidof', package).strip()
         tap('显示桌面图标')
         assert switch('显示桌面图标')['checked'] == 'false'
-        assert alias not in launcher(), '关闭后仍有桌面入口'
+        assert entry not in launcher(), '关闭后仍有桌面入口'
         assert adb('shell', 'pidof', package).strip() == pid, '切换图标不应杀死模块进程'
         module_settings()
         capture('launcher-icon-hidden')
@@ -98,19 +98,35 @@ if args.launcher_icon_only:
         assert switch('显示桌面图标')['checked'] == 'false', '重启后应从组件读取隐藏状态'
         tap('显示桌面图标')
         assert switch('显示桌面图标')['checked'] == 'true'
-        assert launcher().count(alias) == 1
+        assert launcher().count(entry) == 1
+        # debug 接收器只修改 PM 状态；实际 PACKAGE_CHANGED 接收器必须在前台实时刷新 UI。
+        def resumed_activity():
+            return next(line.strip() for line in adb('shell', 'dumpsys', 'activity', 'activities').decode().splitlines()
+                if 'topResumedActivity=' in line and package in line)
+        activity_record = resumed_activity()
+        pid = adb('shell', 'pidof', package).strip()
+        for visible in [False, True]:
+            adb('shell', 'am', 'broadcast', '--user', '0', '-n', package + '/.ui.LauncherStateTestReceiver',
+                '--ez', 'visible', str(visible).lower())
+            deadline = time.monotonic() + 30
+            while switch('显示桌面图标')['checked'] != str(visible).lower():
+                assert time.monotonic() < deadline, 'PACKAGE_CHANGED 未刷新图标开关'
+                time.sleep(0.25)
+            assert resumed_activity() == activity_record, '广播更新不应重新打开 Activity'
+            assert adb('shell', 'pidof', package).strip() == pid, '广播更新不应重启进程'
+            assert (entry in launcher()) == visible
         # 从系统侧修改组件状态，重新打开页面必须反映真实状态，不能使用独立偏好缓存。
-        adb('shell', 'pm', 'disable', '--user', '0', alias)
+        adb('shell', 'pm', 'disable', '--user', '0', entry)
         start('.SettingsActivity')
         assert switch('显示桌面图标')['checked'] == 'false'
-        adb('shell', 'pm', 'enable', '--user', '0', alias)
+        adb('shell', 'pm', 'enable', '--user', '0', entry)
         start('.SettingsActivity')
         assert switch('显示桌面图标')['checked'] == 'true'
         module_settings()
         capture('launcher-icon-visible')
-        print('PASS: 默认 alias 唯一入口、显示/隐藏、进程保活、重启及外部组件状态同步、框架入口保留', flush=True)
+        print('PASS: Activity 唯一桌面入口、显示/隐藏、PACKAGE_CHANGED 前台同步、进程及 Activity 保留、重启及外部组件状态同步、框架入口保留', flush=True)
     finally:
-        adb('shell', 'pm', 'default-state', '--user', '0', alias)
+        adb('shell', 'pm', 'default-state', '--user', '0', entry)
     sys.exit(0)
 
 if args.sticky_search_only:
