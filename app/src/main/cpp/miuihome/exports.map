@@ -1,1 +1,1 @@
-{ global: libxposed_native_entry; local: *; };
+{ global: native_init; local: *; };

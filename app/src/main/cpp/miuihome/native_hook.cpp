@@ -1,6 +1,6 @@
 #include "gesture_state.h"
 #include "lsposed_hook_backend.h"
-#include "remote_preferences.h"
+#include "native_broadcast.h"
 #include "runtime_profile.h"
 #include <android/log.h>
 #include <atomic>
@@ -35,7 +35,8 @@ using namespace miuihome;
 constexpr char kTag[] = "MyInjectorMiuiHome";
 constexpr uint32_t kDrag = 1, kSettings = 2;
 std::atomic<uint32_t> config{0};
-std::atomic<bool> configPending{false};
+std::atomic<uint32_t> incomingConfig{0};
+std::atomic<bool> configPending{false}, configReceived{false};
 std::atomic<uint64_t> configEpoch{1};
 std::atomic<int> eventFd{-1};
 std::atomic<pid_t> workerPid{0};
@@ -208,8 +209,8 @@ void wakeWorker() {
     }
 }
 void receivedConfig(uint32_t mask) {
-    config.store(mask & (kDrag | kSettings), std::memory_order_release);
-    configEpoch.fetch_add(1, std::memory_order_acq_rel);
+    incomingConfig.store(mask & (kDrag | kSettings), std::memory_order_release);
+    configReceived.store(true, std::memory_order_release);
     configPending.store(true, std::memory_order_release);
     wakeWorker();
 }
@@ -312,7 +313,7 @@ struct Dart {
 
 void sendCommand(const Event &event) {
     uint32_t mask = config.load(std::memory_order_acquire);
-    if (!(mask & (event.operation == 2 ? kSettings : kDrag)))
+    if (event.operation != 0 && !(mask & (event.operation == 2 ? kSettings : kDrag)))
         return;
     void *intent = api.intentDefault();
     void *bundle = api.bundleDefault();
@@ -331,7 +332,8 @@ void sendCommand(const Event &event) {
     }
     api.setAction(intent, &action);
     bool ok = addI32(bundle, "operation", event.operation) && addI32(bundle, "protocol", 1);
-    ok = ok && addI64(bundle, "generation", int64_t(event.generation)) &&
+    if (event.operation != 0)
+        ok = ok && addI64(bundle, "generation", int64_t(event.generation)) &&
              addI32(bundle, "taskId", event.task.id) && addI32(bundle, "userId", event.task.user) &&
              addI64(bundle, "durationMs", int64_t(event.duration)) &&
              addString(bundle, "package", event.task.package);
@@ -432,20 +434,47 @@ void *worker(void *) {
     if (fd < 0)
         return nullptr;
     eventFd.store(fd);
+    ReceiverStatus receiver = ReceiverStatus::WaitingForRuntime;
+    for (unsigned attempt = 0; attempt < 600; ++attempt) {
+        receiver = StartConfigReceiver(api.handle, launcherBase, profile.rust, receivedConfig);
+        if (receiver != ReceiverStatus::WaitingForRuntime)
+            break;
+        timespec pause{0, 50000000};
+        nanosleep(&pause, nullptr);
+    }
+    if (receiver != ReceiverStatus::Ready) {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "config broadcast receiver unavailable");
+        eventFd.store(-1);
+        close(fd);
+        return nullptr;
+    }
     Drag drag{};
     Task menu{};
-    uint64_t generation = 0, menuTime = 0, nextRetry = 0;
+    uint64_t generation = 0, menuTime = 0, nextRequest = 0;
+    unsigned requests = 0;
     bool menuHeld = false;
     while (workerPid.load() == getpid()) {
         uint64_t now = nowNs();
-        if (RemotePreferencesRetryPending() && now >= nextRetry) {
-            RetryRemotePreferences();
-            nextRetry = nowNs() + 1000000000;
+        // 仅在首次同步之前重试握手。稳定状态完全由广播驱动，不轮询系统服务。
+        if (!configReceived.load(std::memory_order_acquire) && requests < 60 &&
+            now >= nextRequest) {
+            Event request{};
+            request.task.user = int32_t(getuid() / 100000);
+            sendCommand(request);
+            ++requests;
+            nextRequest = now + 1000000000;
+            if (requests == 60)
+                __android_log_print(ANDROID_LOG_WARN, kTag, "waiting for initial config broadcast");
         }
         if (configPending.exchange(false, std::memory_order_acq_rel)) {
+            uint32_t mask = incomingConfig.load(std::memory_order_acquire);
+            uint32_t previous = config.exchange(mask, std::memory_order_acq_rel);
+            // 即使关/开广播合并后 mask 相同，也不能沿用更新前的手势。
+            configEpoch.fetch_add(1);
             drag.cancel();
             menuHeld = false;
-            __android_log_print(ANDROID_LOG_INFO, kTag, "native remote config mask=%u", config.load());
+            if (previous != mask)
+                __android_log_print(ANDROID_LOG_INFO, kTag, "native config mask=%u", mask);
         }
         if (overflow.exchange(false)) {
             drag.cancel();
@@ -495,7 +524,7 @@ void *worker(void *) {
             firedMenu.store(generation, std::memory_order_release);
             menuHeld = false;
         }
-        bool waiting = RemotePreferencesRetryPending();
+        bool waiting = !configReceived.load(std::memory_order_acquire) && requests < 60;
         int timeout = (drag.active || menuHeld) ? 10 : (waiting ? 1000 : -1);
         pollfd pending{fd, POLLIN, 0};
         poll(&pending, 1, timeout);
@@ -504,7 +533,7 @@ void *worker(void *) {
         }
     }
     config.store(0, std::memory_order_release);
-    StopRemotePreferences();
+    StopConfigReceiver();
     eventFd.store(-1);
     close(fd);
     return nullptr;
@@ -533,6 +562,7 @@ void loaded(const char *name, void *handle) {
 void afterFork() {
     workerPid.store(0);
     config.store(0);
+    configReceived.store(false);
     configPending.store(false);
     ownerThread.store(0);
     int fd = eventFd.exchange(-1);
@@ -650,17 +680,14 @@ MyInjectorObserveDart(const uint64_t *registers, unsigned kind) {
     return 0;
 }
 
-namespace {
-void runtimeLoaded(const XposedRuntimeApi *runtime, const char *) {
-    if (!isHyos() || !InitializeLsposedHookBackend(runtime) ||
-        !InitializeRemotePreferences(runtime, receivedConfig, wakeWorker)) return;
+extern "C" __attribute__((visibility("default"))) NativeOnModuleLoaded
+native_init(const NativeAPIEntries *entries) {
+    if (!isHyos() || !InitializeLsposedHookBackend(entries))
+        return nullptr;
     __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "LSPosed HYOS native API 103 pid=%d uid=%d launcher=%d", getpid(), getuid(), isLauncher());
-    // 远程 I/O 由 worker 执行，避免在框架的 dlopen 注册调用栈中访问 companion。
+                        "LSPosed HYOS native_init pid=%d uid=%d launcher=%d", getpid(), getuid(),
+                        isLauncher());
     pthread_atfork(nullptr, nullptr, afterFork);
     startWorker();
+    return loaded;
 }
-const XposedRuntimeModule nativeProfile{runtimeLoaded, loaded};
-const XposedModule module{nullptr, &nativeProfile};
-}
-XPOSED_EXPORT_MODULE(module)

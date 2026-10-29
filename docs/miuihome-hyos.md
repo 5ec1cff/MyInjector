@@ -1,9 +1,9 @@
 # Rust/Flutter 小米桌面支持
 
-通过 LSPosed 的 HYOS 支持加载 arm64 `libxposed_native_entry`（native API 103）。
+通过 LSPosed 的 HYOS 支持加载 arm64 `native_init` 入口，使用旧版 Hook/Unhook API。
 安装完整模块 APK，同时启用**系统框架**和 **com.miui.home** 作用域，然后重启设备。
-升级后打开一次模块设置，连接服务后会将旧桌面设置迁移到 remote prefs；之后桌面冷启动
-不依赖再次打开模块。需要支持当前 native API 103 订阅流控的 LSPosed release 框架。
+升级后打开一次模块设置，连接服务后会将旧设置迁移到 remote prefs。
+桌面冷启动通过系统桥接读取已保存配置，不依赖再次打开模块，也不依赖尚未公开的 native API 103。
 
 模块在安装 hook 前解析 `libapp.so`、`libapp_launcher.so` 的 `.gnu_debugdata`、
 指令结构和重定位，动态取得八处 hook、对象字段、事件 CID、Runtime 和广播虚表。
@@ -34,27 +34,35 @@ native 在 Dart 所在线程中复制任务身份，通过队列交给 worker；
 该路径，尚未跟踪它是否实际命中这些补丁页；来源、地址及证据边界见
 [madvise 分析](miuihome-madvise.md)。
 
-## 远程配置
+## 远程配置与广播桥接
 
-模块通过现有 libxposed service 将三个开关写入 `miuihome` remote preferences。
-HYOS 与 system_server 读取同一组数据，不再用配置广播、Runtime receiver、启动握手，
-也不再保存 `/data/system/myinjector_miuihome.pb`。
-模块端旧数据导入、离线补交与同步状态见 [配置迁移](remote-preferences.md)。
+模块通过 libxposed service 102 将三个开关写入 `miuihome` remote preferences。
+system_server 通过 Java API 从同一组读取配置并监听变化，校验特权命令时也使用该配置。
+模块端旧数据导入、离线补交和自动同步保持不变，见 [配置迁移](remote-preferences.md)。
+不再由模块 Activity 广播 protobuf，也不恢复 system_server/宿主的配置文件持久化。
+module metadata 使用 minApiVersion=102、targetApiVersion=102。
 
-native API 的 on_loaded 只保存 API 并启动 worker，不在 dlopen 注册期间执行远程 I/O。
-worker 先订阅再取快照；每次回调同步读完整快照并原子发布 mask、使旧手势 epoch 失效后返回。
-count=0 是全量刷新，clear 使用默认全关。读取失败保留最近成功值，唤醒 worker 定时重试，
-稳定时不轮询；订阅底层的冻结、背压与重连由框架处理，模块不重订阅或管理 ACK。
-只有首次订阅接入失败时重试建立逻辑订阅。卸载生命周期尚未定义，升级 native 模块需重启宿主。
+HYOS 使用恢复后的旧通道消费配置：
 
-公开头文件为 103；module metadata 保留 minApiVersion=102、targetApiVersion=103，
-以适配当前框架的模块元数据校验与新入口选择。Java API/service 仍使用 102。
-Hook 后端改用 context 和 XposedStatus 接口，保留 inline/PLT hook 与 madvise guard。
+1. native 等待桌面的 Runtime 初始化，通过 Broadcast_register_receiver 注册
+   `io.github.a13e300.myinjector.miuihome.CONFIG` 接收器。发送者必须持有
+   `android.permission.BROADCAST_PACKAGE_REMOVED` 系统权限，普通应用不能伪造下发。
+2. 注册后通过 marker Intent 请求初始快照；首次收到配置之前每秒重试，最多 60 次。
+   稳定状态由广播驱动，空闲 worker 阻塞于 eventfd。
+3. system_server 在桥接就绪、Java 配置更新、初始握手及正常卸载时广播快照；
+   卸载时下发全关配置。已有配置直接从框架读取，不依赖打开模块 Activity。
 
-强停等上行命令仍通过专用 marker Intent 进入 AMS.preStartProcess。
+广播显式发给 `com.miui.home`，携带 protocol、mask 和单调递增的 revision。
+mask 的位 0、1、2 分别对应拖动强停、AOSP 设置、禁用预启动。
+native 拒绝未知协议、非法位和过期版本；worker 切换配置并使旧手势失效。
+
+接收器沿用动态解析器校验的 Rust Arc/Mutex 布局和 native API 所有权规则。
+原 inline/PLT hook 与 madvise guard 不变；不再包含 native 103 头文件或远程订阅代码。
+
+配置握手和强停等上行命令仍通过专用 marker Intent 进入 AMS.preStartProcess。
 system_server 按调用 UID、Android 用户、任务身份及同组配置校验，再交给自己的线程执行。
 marker 使用不存在的包名，避免桥接失效时变成对普通应用的预启动请求。
-存储迁移保留预启动、AOSP 信息页与 Toast 的现有实现，功能迁移仍可分别进行。
+预启动、AOSP 信息页及 Toast 保持原有实现。
 
 ## 构建与验证
 

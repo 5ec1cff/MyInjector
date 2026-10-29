@@ -164,7 +164,7 @@ def negative_profile(apk, binary, directory, actual):
 def module(apk):
     with zipfile.ZipFile(apk) as archive:
         assert archive.read("META-INF/xposed/native_init.list").strip() == b"libmyinjector_miuihome.so"
-        assert b"targetApiVersion=103" in archive.read("META-INF/xposed/module.prop")
+        assert b"targetApiVersion=102" in archive.read("META-INF/xposed/module.prop")
         entry = archive.getinfo("lib/arm64-v8a/libmyinjector_miuihome.so")
         assert entry.compress_type == zipfile.ZIP_STORED
         with Path(apk).open("rb") as stream:
@@ -182,14 +182,14 @@ def module(apk):
                 "<IBBHQQ", data[dynsym[4]:dynsym[4]+dynsym[5]]):
             if ni and section and info >> 4 in (1, 2) and visibility & 3 == 0:
                 exports.add(names[ni:names.index(0, ni)].decode())
-        assert exports == {"libxposed_native_entry"}, exports
+        assert exports == {"native_init"}, exports
         phoff = struct.unpack_from("<Q", data, 32)[0]
         phsize, phnum = struct.unpack_from("<HH", data, 54)
         for i in range(phnum):
             p = struct.unpack_from("<IIQQQQQQ", data, phoff+i*phsize)
             if p[0] == 1:
                 assert p[7] >= 16384, "native ELF segment alignment"
-    print("通过：LSPosed native 入口、仅导出 libxposed_native_entry、ELF/APK 的 16KB 对齐")
+    print("通过：LSPosed native 入口、仅导出 native_init、ELF/APK 的 16KB 对齐")
 
 
 def main():
@@ -203,11 +203,6 @@ def main():
         subprocess.run(["clang++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
                         "-I", str(NATIVE), str(ROOT/"tests/miuihome_native_test.cpp"), "-o", binary], check=True)
         subprocess.run([binary], check=True)
-        remote_binary = str(Path(tmp)/"remote-test")
-        subprocess.run(["clang++", "-std=c++17", "-pthread", "-Wall", "-Wextra", "-Werror",
-                        "-I", str(NATIVE), str(NATIVE/"remote_preferences.cpp"),
-                        str(ROOT/"tests/miuihome_remote_preferences_test.cpp"), "-o", remote_binary], check=True)
-        subprocess.run([remote_binary], check=True)
         if args.launcher:
             resolver = args.resolver
             if resolver is None:

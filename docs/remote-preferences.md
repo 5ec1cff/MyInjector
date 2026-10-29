@@ -20,13 +20,14 @@ remote 为 Hook 的权威来源，本地缓存不会在每次启动时整组覆�
 系统框架和 SystemUI 页面已移除只用于提前触发同步的“提交修改”按钮。
 配置按 Android 用户隔离：system_server 使用 user 0，其余宿主按自身用户读取。
 
-实施按写端、Java 读端、系统框架、HYOS native 分阶段提交。
+Java 配置存储保持 remote preferences；HYOS native 接入使用旧 native API。
 SystemUI 和旧 Java 桌面已通过 RemoteConfig 获取初始快照、监听整组刷新，
 卸载时注销监听并停止刷新任务；不再读写宿主配置文件或注册配置广播。
 系统框架也已停止配置广播和文件持久化；更新时比较旧配置，保留 xSpace 与 dexopt 的即时副作用。
-HYOS 使用 native API 103 直接订阅 miuihome，系统桥接从同组校验设置；
-已删除配置广播、启动握手和 native receiver，不再写宿主/system_server 配置文件。
-回调同步读取并发布快照后才返回；FULL、空配置、类型错误、读取失败重试均有 native 回归测试。
+HYOS 恢复使用旧 native_init 入口和配置广播：system_server 通过 Java remote prefs
+读取 miuihome 组，初始握手、配置变化和正常卸载时发送经过权限限制的配置广播。
+桌面原生接收器校验协议与单调 revision，切换配置并撤销旧手势。
+不依赖尚未公开的 native API 103，不保存宿主/system_server 配置文件，也不恢复模块 App 的配置广播。
 原有特权命令行为保持，预启动/AOSP 页面/Toast 不在本次存储迁移中改写。
 
 验证：迁移/远端优先、commit 失败但缓存改变、并发编辑不被旧确认覆盖、outbox 重建恢复、
@@ -35,11 +36,10 @@ HYOS 使用 native API 103 直接订阅 miuihome，系统桥接从同组校验�
 ## 本轮验证与边界
 
 迁移、失败缓存重试、提交期间再编辑、服务切换、远端清空不复活旧缓存、原规则解析的 JVM 单元测试通过。
-native 测试覆盖首次订阅失败重试、初始 FULL 早于 subscribe 返回、同步发布、类型检查、
-clear、失败后唤醒重试和句柄释放；原手势/SHA 测试保留。
+native 测试恢复配置协议/乱序拒绝、全关快照、相同 mask 的新版本，以及原手势/SHA 测试。
 release APK 构建、唯一入口/元数据与 ELF/APK 16KB 对齐检查通过。
 真实桌面样本 7751 的解析与错误拒绝测试通过，解析测试不等于模块注入验收。
 
-未自动安装模块、部署框架或重启设备；需在支持当前 API 103 的 LSPosed release 上验收：
-升级保留 22 项、离线编辑杀 App 再重连、各配置即时生效、Java 热更新与 HYOS 冻结恢复。
+未自动安装模块、部署框架或重启设备；需在支持旧 HYOS native 入口和 Java API/service 102 的框架上验收：
+升级保留 22 项、离线编辑杀 App 再重连、各配置即时生效、Java 热更新和桌面冷启动握手。
 小米桌面预启动、AOSP 页面及 Toast 仍维持原有行为，本轮只迁移配置；强停仍需系统框架作用域。
