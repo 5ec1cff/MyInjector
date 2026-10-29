@@ -1,8 +1,9 @@
 # Rust/Flutter 小米桌面支持
 
-通过 LSPosed 的 HYOS 支持加载 arm64 `native_init` 入口。安装完整模块 APK，
-同时启用**系统框架**和 **com.miui.home** 作用域，然后重启设备。升级后打开一次
-模块设置，把已有桌面开关同步给 system_server；之后仍使用原来的三个开关。
+通过 LSPosed 的 HYOS 支持加载 arm64 `libxposed_native_entry`（native API 103）。
+安装完整模块 APK，同时启用**系统框架**和 **com.miui.home** 作用域，然后重启设备。
+升级后打开一次模块设置，连接服务后会将旧桌面设置迁移到 remote prefs；之后桌面冷启动
+不依赖再次打开模块。需要支持当前 native API 103 订阅流控的 LSPosed release 框架。
 
 模块在安装 hook 前解析 `libapp.so`、`libapp_launcher.so` 的 `.gnu_debugdata`、
 指令结构和重定位，动态取得八处 hook、对象字段、事件 CID、Runtime 和广播虚表。
@@ -33,40 +34,37 @@ native 在 Dart 所在线程中复制任务身份，通过队列交给 worker；
 该路径，尚未跟踪它是否实际命中这些补丁页；来源、地址及证据边界见
 [madvise 分析](miuihome-madvise.md)。
 
-## 配置广播
+## 远程配置
 
-配置不再借用 `hasSystemFeature`，也不周期查询 PackageManager。
+模块通过现有 libxposed service 将三个开关写入 `miuihome` remote preferences。
+HYOS 与 system_server 读取同一组数据，不再用配置广播、Runtime receiver、启动握手，
+也不再保存 `/data/system/myinjector_miuihome.pb`。
+模块端旧数据导入、离线补交与同步状态见 [配置迁移](remote-preferences.md)。
 
-1. 模块界面把原 `MiuiHomeConfig` protobuf 和 PendingIntent 凭证发送给
-   system_server。服务端验证凭证的创建包，原子保存配置后广播最新快照。
-2. native 等待桌面的 Runtime 初始化，通过 `Broadcast_register_receiver` 注册
-   `io.github.a13e300.myinjector.miuihome.CONFIG` 接收器。接收器要求发送者持有
-   `android.permission.BROADCAST_PACKAGE_REMOVED` 系统权限，阻止普通应用伪造下发。
-3. 注册后请求一次初始快照，解决桌面重启时漏掉此前广播的问题。首次收到配置之前，
-   每秒重试握手，最多 60 次；之后完全等待广播，空闲 worker 阻塞于 eventfd。
-   system_server 初始化、配置变更及正常卸载 hook 时也会主动广播；卸载下发全关快照。
+native API 的 on_loaded 只保存 API 并启动 worker，不在 dlopen 注册期间执行远程 I/O。
+worker 先订阅再取快照；每次回调同步读完整快照并原子发布 mask、使旧手势 epoch 失效后返回。
+count=0 是全量刷新，clear 使用默认全关。读取失败保留最近成功值，唤醒 worker 定时重试，
+稳定时不轮询；订阅底层的冻结、背压与重连由框架处理，模块不重订阅或管理 ACK。
+只有首次订阅接入失败时重试建立逻辑订阅。卸载生命周期尚未定义，升级 native 模块需重启宿主。
 
-广播显式发给 `com.miui.home`，携带 `protocol=1`、`mask` 和单调递增的 `revision`。
-mask 的位 0、1、2 分别对应拖动强停、AOSP 设置、禁用预启动。native 拒绝未知协议、
-非法位和过期版本；回调只发布配置并唤醒 worker，由 worker 切换配置、撤销旧手势。
+公开头文件为 103；module metadata 保留 minApiVersion=102、targetApiVersion=103，
+以适配当前框架的模块元数据校验与新入口选择。Java API/service 仍使用 102。
+Hook 后端改用 context 和 XposedStatus 接口，保留 inline/PLT hook 与 madvise guard。
 
-接收器使用经实际构造指令校验的 `RArc<RMutex<BroadcastReceiver_TO<RBox<()>>>>` 布局，复用
-桌面的 Arc/Mutex 实现，为自身回调和析构复制虚表；持有 Runtime 引用，退出时注销并
-释放引用。Intent、RString、返回错误及 pending result 按各自 native API 的所有权释放。
-
-首次握手与强停等上行命令仍通过专用 marker Intent 进入 `AMS.preStartProcess`。
-system_server 按调用 UID 和 Android 用户校验桌面身份，再交给自己的线程执行。
+强停等上行命令仍通过专用 marker Intent 进入 AMS.preStartProcess。
+system_server 按调用 UID、Android 用户、任务身份及同组配置校验，再交给自己的线程执行。
 marker 使用不存在的包名，避免桥接失效时变成对普通应用的预启动请求。
+存储迁移保留预启动、AOSP 信息页与 Toast 的现有实现，功能迁移仍可分别进行。
 
 ## 构建与验证
 
 ```sh
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 python3 scripts/check_miuihome_native.py \
   --launcher /path/to/MiuiHome-rs.apk \
   --launcher /path/to/系统桌面_RELEASE-8.01.02.8584-260918-10231931-R.apk \
   --launcher /path/to/系统桌面_RELEASE-8.01.02.8593-260918-10241550-R.apk \
-  --module app/build/outputs/apk/debug/MyInjector-<版本>-debug.apk
+  --module app/build/outputs/apk/release/MyInjector-<版本>-release.apk
 ```
 
 检查需要主机的 Clang、CMake 和 Python 标准库，自动编译模块的同一份 C++ 解析器。

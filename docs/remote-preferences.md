@@ -20,7 +20,10 @@ remote 为 Hook 的权威来源，本地缓存不会在每次启动时整组覆�
 SystemUI 和旧 Java 桌面已通过 RemoteConfig 获取初始快照、监听整组刷新，
 卸载时注销监听并停止刷新任务；不再读写宿主配置文件或注册配置广播。
 系统框架也已停止配置广播和文件持久化；更新时比较旧配置，保留 xSpace 与 dexopt 的即时副作用。
-HYOS 系统桥接从同一 miuihome 组校验设置；native 读端切换前暂保留桥接向桌面的配置广播。
+HYOS 使用 native API 103 直接订阅 miuihome，系统桥接从同组校验设置；
+已删除配置广播、启动握手和 native receiver，不再写宿主/system_server 配置文件。
+回调同步读取并发布快照后才返回；FULL、空配置、类型错误、读取失败重试均有 native 回归测试。
+原有特权命令行为保持，预启动/AOSP 页面/Toast 不在本次存储迁移中改写。
 
 验证：迁移/远端优先、commit 失败但缓存改变、并发编辑不被旧确认覆盖、outbox 重建恢复、
 22 项配置与设置目录一致的单元测试，以及 release Kotlin 编译。

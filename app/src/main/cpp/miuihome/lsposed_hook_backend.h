@@ -10,7 +10,7 @@ constexpr int kHookFailed = 1;
 
 struct NativeSymbolResolver;
 
-bool InitializeLsposedHookBackend(const NativeAPIEntries* entries);
+bool InitializeLsposedHookBackend(const XposedRuntimeApi* entries);
 bool EnsureLsposedMadviseGuard(const char* runtime_name = nullptr);
 int InstallPltHook(void* base_addr, const char* symbol, void* hook_handler,
                    void** original);

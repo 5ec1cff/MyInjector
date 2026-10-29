@@ -13,7 +13,6 @@ import io.github.a13e300.myinjector.ui.settings.SettingsApp
 import io.github.a13e300.myinjector.ui.settings.SettingsItemSpec
 import android.annotation.SuppressLint
 import android.app.Dialog
-import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -66,10 +65,8 @@ import io.github.a13e300.myinjector.ui.setTextSizeDp
 import io.github.libxposed.service.HookedTarget
 import io.github.libxposed.service.HotReloadResult
 import io.github.libxposed.service.XposedService
-import java.util.Arrays
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
-import java.util.stream.Collectors
 import kotlin.concurrent.thread
 import kotlin.math.min
 
@@ -101,7 +98,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                     openApp = ::openAppSettings,
                     onToggle = { item, checked ->
                         App.settings.putBoolean(item.key, checked)
-                        commitForSection(item.sectionKey)
                     },
                     onEdit = { item ->
                         if (item.key == "clipboardWhitelistPackages") showClipboardWhitelistDialog(item)
@@ -112,8 +108,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                 )
             }
         }
-        // 保留已启用桌面选项向 HYOS 桥接的迁移。
-        commitMiuiHome()
     }
 
     override fun onDestroy() {
@@ -314,7 +308,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                 ModernDialogAction("取消"),
                 ModernDialogAction("保存", emphasized = true) {
                     App.settings.putString(item.key, entries.joinToString("\n"))
-                    commitForSection(item.sectionKey)
                 },
             ),
         )
@@ -548,7 +541,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
                 ModernDialogAction("取消"),
                 ModernDialogAction("保存", emphasized = true) {
                     App.settings.putString(item.key, sortedClipboardPackages(entries, selectedPackages))
-                    commitForSection(item.sectionKey)
                 },
             ),
         )
@@ -632,18 +624,8 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     private fun handleAction(item: SettingsItemSpec.Action) {
         when (item.key) {
             "checkHotUpdate" -> showHotUpdateDialog()
-            "commit" -> commitSystem()
-            "commitSysUI" -> commitSystemUI()
+            "commit", "commitSysUI" -> App.settings.syncNow()
             else -> item.action?.invoke()
-        }
-    }
-
-    private fun commitForSection(sectionKey: String) {
-        App.settings.syncNow()
-        when (sectionKey) {
-            "system" -> commitSystem()
-            "systemui" -> commitSystemUI()
-            "miuihome" -> commitMiuiHome()
         }
     }
 
@@ -671,25 +653,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
             logE("failed to open settings for $packageName:", it)
             Toast.makeText(this, "无法打开应用设置：${it.message}", Toast.LENGTH_LONG).show()
         }
-    }
-
-    private fun commitSystem() = App.settings.syncNow()
-
-    private fun commitSystemUI() = App.settings.syncNow()
-
-    private fun commitMiuiHome() {
-        val intent = Intent("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG")
-        val pendingIntent =
-            PendingIntent.getBroadcast(this, 1, intent, PendingIntent.FLAG_IMMUTABLE)
-        val config = MiuiHomeConfig.newBuilder()
-            .setOpenAospSettings(prefs.getBoolean("miuiHomeOpenAospSettings", false))
-            .setDragKill(prefs.getBoolean("miuiHomeDragKill", false))
-            .setDisablePreLaunch(prefs.getBoolean("miuiHomeDisablePreLaunch", false))
-            .build()
-        intent.putExtra("EXTRA_CREDENTIAL", pendingIntent)
-        intent.putExtra("EXTRA_CONFIG", config.toByteArray())
-        sendBroadcast(Intent(intent).setPackage("com.miui.home"))
-        sendBroadcast(Intent(intent).setPackage("android"))
     }
 
     @SuppressLint("SetTextI18n", "XposedNewApi")
@@ -1403,7 +1366,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     }
 
     companion object {
-        private const val PREFS_NAME = "system_server"
 
         private var clipboardAppEntryCache: List<ClipboardAppEntry>? = null
         private val clipboardIconCache = java.util.concurrent.ConcurrentHashMap<String, Drawable>()

@@ -9,7 +9,6 @@
 
 - `lsposed_hook_backend.cpp`
 - `lsposed_hook_backend.h`
-- `native_api.h`
 
 改编自 [wxxsfxyzm/MiuiBackGestureHook](https://github.com/wxxsfxyzm/MiuiBackGestureHook)，
 来源提交为 `b6e582fc32f83bda3d153b12e3ded2d411acf7f3`，采用 Apache License 2.0。
@@ -22,3 +21,7 @@
 固定来源提交为 `ae63ae3a36ed01724674e8f3d750dc47bf125410`，采用 0BSD 许可证。
 按上游的 userspace 嵌入方式复制所需文件，以构建选项启用 SINGLE、CRC64，
 符号保持隐藏；调用方将输出限制为 16MiB。许可证原文保存在该目录的 `COPYING`。
+
+`app/src/main/cpp/miuihome/native_api.h` 已替换为 LSPosed native API 103 官方头文件，
+原样复制自本地 LSPosed_private `1d84fc67` 的 `core/src/main/jni/include/native_api.h`，
+不再使用 MiuiBackGestureHook 的旧 version=2 API 声明。

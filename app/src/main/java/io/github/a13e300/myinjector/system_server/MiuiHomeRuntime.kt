@@ -11,7 +11,6 @@ import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ServiceManager
-import android.os.SystemClock
 import android.widget.Toast
 import io.github.a13e300.myinjector.MiuiHomeConfig
 import io.github.a13e300.myinjector.arch.IHook
@@ -29,7 +28,6 @@ class MiuiHomeRuntime : IHook() {
         const val PREFIX = "io.github.a13e300.myinjector.miuihome."
         const val COMMAND = PREFIX + "COMMAND"
         const val COMMAND_PACKAGE = PREFIX + "command"
-        const val CONFIG = PREFIX + "CONFIG"
     }
 
     @Volatile private var config = MiuiHomeConfig.getDefaultInstance()
@@ -38,13 +36,10 @@ class MiuiHomeRuntime : IHook() {
         "miuihome", io.github.a13e300.myinjector.config.HookConfigs::miuiHome,
     ) { updated ->
         config = updated
-        handler?.post { publishConfig() }
     }
     private var worker: HandlerThread? = null
     private var handler: Handler? = null
     private val seen = LinkedHashMap<String, Unit>() // accessed only on worker
-    private val publishLock = Any()
-    private var configRevision = 0L // guarded by publishLock
     private val systemContext: Context
         get() = ActivityThread.currentActivityThread().systemContext
 
@@ -63,47 +58,20 @@ class MiuiHomeRuntime : IHook() {
                     // module unloads, the marker names no installed application.
                     param.result = null
                     if (isLauncherCaller() && intent.getIntExtra("protocol", 0) == 1) {
-                        if (intent.getIntExtra("operation", -1) == 0) {
-                            val user = Binder.getCallingUid() / 100000
-                            handler?.post { publishConfig(user) }
-                        } else {
-                            val request = readRequest(intent, Binder.getCallingPid())
-                            if (request != null) handler?.post { execute(request) }
-                        }
+                        val request = readRequest(intent, Binder.getCallingPid())
+                        if (request != null) handler?.post { execute(request) }
                     }
                 } else if (config.disablePreLaunch && isLauncherCaller()) {
                     param.result = null
                 }
             }
             ready = true
-            handler?.post { publishConfig() }
         }.onFailure { logE("MiuiHome preStartProcess bridge", it) }
         logI("MiuiHome HYOS system bridge initialized: ready=$ready")
     }
 
     private fun androidUser(id: Int): Any = findClass("android.os.UserHandle")
         .getDeclaredConstructor(Integer.TYPE).newInstance(id)
-
-    private fun publishConfig(userId: Int = -1) = runCatching {
-        synchronized(publishLock) {
-            val current = config
-            val mask = if (ready) {
-                (if (current.dragKill) 1 else 0) or
-                    (if (current.openAospSettings) 2 else 0) or
-                    (if (current.disablePreLaunch) 4 else 0)
-            } else 0
-            // native receiver 要求发送者持有 BROADCAST_PACKAGE_REMOVED 系统权限。
-            // 单调版本号让启动应答、配置更新及卸载通知的乱序到达保持安全。
-            val revision = maxOf(SystemClock.elapsedRealtimeNanos(), configRevision + 1)
-                .also { configRevision = it }
-            val intent = Intent(CONFIG).setPackage(LAUNCHER)
-                .addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_RECEIVER_REGISTERED_ONLY)
-                .putExtra("protocol", 1)
-                .putExtra("mask", mask)
-                .putExtra("revision", revision)
-            systemContext.call("sendBroadcastAsUser", intent, androidUser(userId))
-        }
-    }.onFailure { logE("MiuiHome config broadcast", it) }
 
     private fun isLauncherCaller(): Boolean = runCatching {
         val uid = Binder.getCallingUid()
@@ -182,7 +150,6 @@ class MiuiHomeRuntime : IHook() {
     override fun onUnhook(): Boolean {
         remoteConfig.close()
         ready = false
-        publishConfig()
         handler?.removeCallbacksAndMessages(null)
         worker?.quitSafely()
         worker = null

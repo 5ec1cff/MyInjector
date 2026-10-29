@@ -26,7 +26,7 @@ constexpr size_t kMaxPltSlots = 16u;
 constexpr size_t kMaxSymbols = 1u << 24;
 constexpr size_t kInlinePatchGuardSpan = 32u;
 
-const NativeAPIEntries* g_lsposed_api = nullptr;
+const XposedRuntimeApi* g_lsposed_api = nullptr;
 using MadviseFn = int (*)(void*, size_t, int);
 MadviseFn g_direct_madvise_backup = nullptr;
 MadviseFn g_archive_madvise_backup = nullptr;
@@ -582,7 +582,7 @@ int InstallPltHook(void* base, const char* symbol, void* replacement,
 }
 
 int InstallInlineHook(void* target, void* replacement, void** original) {
-    if (g_lsposed_api == nullptr || g_lsposed_api->hookFunc == nullptr ||
+    if (g_lsposed_api == nullptr || g_lsposed_api->hook == nullptr ||
             !EnsureLsposedMadviseGuard() || target == nullptr ||
             replacement == nullptr || original == nullptr) {
         return kHookFailed;
@@ -597,21 +597,21 @@ int InstallInlineHook(void* target, void* replacement, void** original) {
     // Xiaomi may issue MADV_DONTNEED concurrently with hook installation, so
     // registering only after hookFunc returns leaves a small destructive race.
     *original = nullptr;
-    const int result = g_lsposed_api->hookFunc(target, replacement, original);
+    const int result = g_lsposed_api->hook(g_lsposed_api->context, target, replacement, original);
     if (result != 0) return kHookFailed;
     if (*original == nullptr) {
-        g_lsposed_api->unhookFunc(target);
+        g_lsposed_api->unhook(g_lsposed_api->context, target);
         return kHookFailed;
     }
     return kHookSuccess;
 }
 
 int RemoveInlineHook(void* target) {
-    if (g_lsposed_api == nullptr || g_lsposed_api->unhookFunc == nullptr ||
+    if (g_lsposed_api == nullptr || g_lsposed_api->unhook == nullptr ||
             target == nullptr) {
         return kHookFailed;
     }
-    return g_lsposed_api->unhookFunc(target) == 0 ? kHookSuccess : kHookFailed;
+    return g_lsposed_api->unhook(g_lsposed_api->context, target) == 0 ? kHookSuccess : kHookFailed;
 }
 
 NativeSymbolResolver* NewNativeSymbolResolver(const char* path, void* base) {
@@ -673,9 +673,9 @@ bool EnsureLsposedMadviseGuard(const char* runtime_name) {
     return true;
 }
 
-bool InitializeLsposedHookBackend(const NativeAPIEntries* entries) {
-    if (entries == nullptr || entries->hookFunc == nullptr ||
-            entries->unhookFunc == nullptr) {
+bool InitializeLsposedHookBackend(const XposedRuntimeApi* entries) {
+    if (entries == nullptr || entries->hook == nullptr ||
+            entries->unhook == nullptr) {
         return false;
     }
     g_lsposed_api = entries;
