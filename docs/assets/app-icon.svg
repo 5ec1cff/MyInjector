@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="18 18 72 72">
+  <title>MyInjector — application module injection</title>
+  <rect x="18" y="18" width="72" height="72" rx="16" fill="#EADDFF"/>
+  <path d="M55,32 H40 C34.477,32 30,36.477 30,42 V68 C30,73.523 34.477,78 40,78 H66 C71.523,78 76,73.523 76,68 V57 H66 V66 C66,67.105 65.105,68 64,68 H42 C40.895,68 40,67.105 40,66 V44 C40,42.895 40.895,42 42,42 H55 Z" fill="#21005D"/>
+  <path d="M66,31 H74 C76.209,31 78,32.791 78,35 V43 C78,45.209 76.209,47 74,47 H66 C63.791,47 62,45.209 62,43 V35 C62,32.791 63.791,31 66,31 Z" fill="#6750A4"/>
+  <path d="M68,41 L54,55 M54,46 V55 H63" fill="none" stroke="#6750A4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
