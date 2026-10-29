@@ -43,7 +43,7 @@ class ModulePreferences(context: Context) {
         report("配置待同步")
         syncNow()
     }
-    fun syncNow() {
+    private fun syncNow() {
         worker.execute {
             retry?.cancel(false)
             retry = null

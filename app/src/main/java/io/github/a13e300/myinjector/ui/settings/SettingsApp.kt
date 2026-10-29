@@ -254,7 +254,7 @@ private fun SectionPage(
     ) {
         item("description") {
             Text(
-                sectionPackage(section.key) + if (section.key == "miuihome") " · 修改会自动同步到桌面" else " · 修改自动同步，也可在页末手动提交",
+                sectionPackage(section.key) + " · 修改自动同步，未连接时将在连接后补交",
                 Modifier.padding(bottom = 16.dp), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

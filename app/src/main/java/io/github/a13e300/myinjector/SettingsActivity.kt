@@ -621,7 +621,6 @@ class SettingsActivity : androidx.activity.ComponentActivity() {
     private fun handleAction(item: SettingsItemSpec.Action) {
         when (item.key) {
             "checkHotUpdate" -> showHotUpdateDialog()
-            "commit", "commitSysUI" -> App.settings.syncNow()
             else -> item.action?.invoke()
         }
     }
