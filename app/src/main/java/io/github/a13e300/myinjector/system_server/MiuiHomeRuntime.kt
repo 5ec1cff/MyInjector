@@ -2,32 +2,25 @@ package io.github.a13e300.myinjector.system_server
 
 import android.app.ActivityThread
 import android.app.IActivityManager
-import android.app.PendingIntent
 import android.app.TaskStackBuilder
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ServiceManager
 import android.os.SystemClock
-import android.util.AtomicFile
 import android.widget.Toast
-import io.github.a13e300.myinjector.BuildConfig
 import io.github.a13e300.myinjector.MiuiHomeConfig
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObjAsN
-import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.logE
 import io.github.a13e300.myinjector.logI
-import java.io.File
 
 /** Binder-authenticated bridge for the DEX-less launcher. No exported service is added. */
 class MiuiHomeRuntime : IHook() {
@@ -41,8 +34,12 @@ class MiuiHomeRuntime : IHook() {
 
     @Volatile private var config = MiuiHomeConfig.getDefaultInstance()
     @Volatile private var ready = false
-    private val configFile = AtomicFile(File("/data/system/myinjector_miuihome.pb"))
-    private var broadcasts: BroadcastManager? = null
+    private val remoteConfig = io.github.a13e300.myinjector.config.RemoteConfig(
+        "miuihome", io.github.a13e300.myinjector.config.HookConfigs::miuiHome,
+    ) { updated ->
+        config = updated
+        handler?.post { publishConfig() }
+    }
     private var worker: HandlerThread? = null
     private var handler: Handler? = null
     private val seen = LinkedHashMap<String, Unit>() // accessed only on worker
@@ -53,14 +50,9 @@ class MiuiHomeRuntime : IHook() {
 
     override fun onHook() {
         if (findClassOrNull("com.android.server.am.ProcessListStub") == null) return
-        runCatching { config = configFile.openRead().use { MiuiHomeConfig.parseFrom(it) } }
         worker = HandlerThread("MyInjector-MiuiHome").also { it.start() }
         handler = Handler(worker!!.looper)
-        broadcasts = BroadcastManager("MyInjector-MiuiHomeConfig").also {
-            it.register(IntentFilter("io.github.a13e300.myinjector.UPDATE_MIUI_HOME_CONFIG"), receiver) {
-                handler?.post { publishConfig() }
-            }
-        }
+        remoteConfig.start()
         runCatching {
             findClass("com.android.server.am.ActivityManagerService").hookBefore(
                 "preStartProcess", String::class.java, Intent::class.java, Integer.TYPE
@@ -187,40 +179,12 @@ class MiuiHomeRuntime : IHook() {
         logI("MiuiHome native command ${request.operation}: ${request.packageName}/${request.userId}")
     }.onFailure { logE("MiuiHome native command", it) }
 
-    private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            runCatching {
-                val credential = intent.getParcelableExtraCompat("EXTRA_CREDENTIAL", PendingIntent::class.java)
-                if (credential?.creatorPackage != BuildConfig.APPLICATION_ID) return
-                val bytes = intent.getByteArrayExtra("EXTRA_CONFIG") ?: return
-                val updated = MiuiHomeConfig.parseFrom(bytes)
-                handler?.post {
-                    runCatching {
-                        val output = configFile.startWrite()
-                        try {
-                            output.write(bytes)
-                            configFile.finishWrite(output)
-                        } catch (error: Throwable) {
-                            configFile.failWrite(output)
-                            throw error
-                        }
-                        config = updated
-                        publishConfig()
-                        logI("MiuiHome native config updated: $updated")
-                    }.onFailure { logE("MiuiHome native config persistence", it) }
-                }
-            }.onFailure { logE("MiuiHome native config", it) }
-        }
-    }
-
     override fun onUnhook(): Boolean {
+        remoteConfig.close()
         ready = false
         publishConfig()
-        broadcasts?.unregister(receiver)
-        broadcasts?.stop()
         handler?.removeCallbacksAndMessages(null)
         worker?.quitSafely()
-        broadcasts = null
         worker = null
         handler = null
         return true

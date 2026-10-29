@@ -1,11 +1,9 @@
 package io.github.a13e300.myinjector.system_server
 
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
@@ -32,19 +30,15 @@ import io.github.a13e300.myinjector.logD
 import io.github.a13e300.myinjector.logE
 import io.github.a13e300.myinjector.logI
 import io.github.a13e300.myinjector.logW
-import java.io.File
 import java.lang.Long
-import java.util.UUID
 import kotlin.Boolean
 import kotlin.Int
 import kotlin.String
 import kotlin.Suppress
 import kotlin.also
 import kotlin.getValue
-import kotlin.io.inputStream
 import kotlin.io.startsWith
 import kotlin.io.use
-import kotlin.io.writeBytes
 import kotlin.lazy
 import kotlin.let
 import kotlin.onFailure
@@ -64,83 +58,51 @@ fun matchSimple(p: String, s: String?): Boolean {
 }
 
 class SystemServerHandler : IHook() {
-    companion object {
-        private const val CONFIG_PATH = "/data/misc"
-        private const val CONFIG_PREFIX = "my_injector_system_"
-
+    @Volatile private var config = SystemServerConfig.getDefaultInstance()
+    private val configLock = Any()
+    private var hooksReady = false
+    private val remoteConfig = io.github.a13e300.myinjector.config.RemoteConfig(
+        "system", io.github.a13e300.myinjector.config.HookConfigs::system,
+    ) { updated ->
+        synchronized(configLock) {
+            val old = config
+            config = updated
+            if (hooksReady) {
+                if (old.xSpace != updated.xSpace) setXSpace(updated.xSpace)
+                if (old.bypassShellDexOptRestriction != updated.bypassShellDexOptRestriction)
+                    hookMiui12DexOptRestriction()
+            }
+        }
     }
-
-    private lateinit var config: SystemServerConfig
-    private lateinit var broadcastManager: BroadcastManager
     private val miuiHomeRuntime = MiuiHomeRuntime()
-
 
     override fun onHook() {
         logI("hook system")
-        config = readConfig()
-        logI("config for system server: $config")
-        hookMiui12DexOptRestriction()
-        hookNoWakePath()
-        hookNoMiuiIntent()
-        hookClipboardWhitelist()
-        hookFixSync()
-        setXSpace(config.xSpace)
-        hookForceNewTask()
-        hookStatusBarAppearance()
-        hookNoSwipeToKill()
-        hookHyperOSAvoidMoveToFront()
-        broadcastManager = BroadcastManager("MyInjector-SystemServer")
-        runConfigListener()
+        remoteConfig.start()
+        synchronized(configLock) {
+            hookMiui12DexOptRestriction()
+            hookNoWakePath()
+            hookNoMiuiIntent()
+            hookClipboardWhitelist()
+            hookFixSync()
+            setXSpace(config.xSpace)
+            hookForceNewTask()
+            hookStatusBarAppearance()
+            hookNoSwipeToKill()
+            hookHyperOSAvoidMoveToFront()
+            hooksReady = true
+        }
         subHook(miuiHomeRuntime)
     }
 
     override fun onUnhook(): Boolean {
+        remoteConfig.close()
         miuiHomeRuntime.onUnhook()
-        broadcastManager.unregister(receiver)
-        broadcastManager.stop()
-        setXSpace(false)
+        synchronized(configLock) {
+            hooksReady = false
+            setXSpace(false)
+        }
         return true
-    }
-
-    private fun findOrCreateConfigFile(): File {
-        val dir = File(CONFIG_PATH)
-        var file: File? = null
-        dir.listFiles()?.let { files ->
-            for (f in files) {
-                if (f.name.startsWith(CONFIG_PREFIX) && f.isFile) {
-                    if (file == null) {
-                        file = f
-                    } else {
-                        f.delete()
-                    }
-                }
-            }
-        }
-
-        if (file == null) {
-            file = File(dir, "${CONFIG_PREFIX}${UUID.randomUUID()}")
-            logI("findOrCreateConfigFile: created config $file")
-            file.createNewFile()
-        }
-
-        return file
-    }
-
-    private fun readConfig(): SystemServerConfig {
-        val dir = File(CONFIG_PATH)
-        dir.listFiles()?.let { files ->
-            for (f in files) {
-                if (f.name.startsWith(CONFIG_PREFIX) && f.isFile) {
-                    runCatching {
-                        return f.inputStream().use { SystemServerConfig.parseFrom(it) }
-                    }.onFailure {
-                        logE("findConfig: remove bad config", it)
-                        f.delete()
-                    }
-                }
-            }
-        }
-        return SystemServerConfig.getDefaultInstance()
     }
 
     private fun hookNoWakePath() = runCatching {
@@ -360,38 +322,6 @@ class SystemServerHandler : IHook() {
     }.onFailure {
         logE("hookNoSwipeToKill err", it)
     }
-
-    private fun runConfigListener() {
-        broadcastManager.register(
-            IntentFilter("io.github.a13e300.myinjector.UPDATE_SYSTEM_CONFIG"),
-            receiver
-        )
-    }
-
-    private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            intent ?: return
-            runCatching {
-                if (!isCallerTrusted(intent)) return
-                val oldXSpace = config.xSpace
-                val oldBypassShellDexopt = config.bypassShellDexOptRestriction
-                intent.getByteArrayExtra("EXTRA_CONFIG")?.let {
-                    config = SystemServerConfig.parseFrom(it)
-                    findOrCreateConfigFile().writeBytes(it)
-                    logI("onReceive: update config $config")
-                }
-                if (oldXSpace != config.xSpace) {
-                    setXSpace(config.xSpace)
-                }
-                if (oldBypassShellDexopt != config.bypassShellDexOptRestriction) {
-                    hookMiui12DexOptRestriction()
-                }
-            }.onFailure {
-                logE("onReceive: ", it)
-            }
-        }
-    }
-
 
     @SuppressLint("InlinedApi")
     private fun hookStatusBarAppearance() = runCatching {
