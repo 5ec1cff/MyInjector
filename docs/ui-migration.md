@@ -98,3 +98,12 @@ python3 scripts/check_settings_ui.py --serial emulator-5556 --insets-only
 键盘展开时折叠标题及返回导航。测试直接比较列表、标题文字与系统 Insets 的边界，同时确认标题栏背景从窗口顶部开始绘制，
 截图保存在 app/build/reports/ui-smoke/insets-*.png。
 x86_64 模拟器使用移除 arm64 native 库后重新签名的临时 debug 测试包；交付包保持完整 release。
+
+## 搜索栏吸顶
+
+模块首页与二级设置页使用 Compose `LazyColumn.stickyHeader`：搜索栏随列表上移，
+到折叠标题栏下方后固定。搜索栏使用页面底色遮挡从下方滚过的内容，保留上下留白、
+原有搜索状态和键盘避让。注入弹窗不受影响。
+
+`check_settings_ui.py --sticky-search-only` 使用 debug 测试 Activity 的长列表验证两个页面从初始位置滚动吸顶、
+继续滚动时位置不变，以及吸顶后的搜索与清除操作；`--insets-only` 回归键盘布局。

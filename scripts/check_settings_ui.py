@@ -14,6 +14,7 @@ parser.add_argument('--out', type=Path, default=Path('app/build/reports/ui-smoke
 parser.add_argument('--resource-context-package', help='仅加载此已安装包的资源，复现无 Application 的 Context')
 parser.add_argument('--dialogs-only', action='store_true')
 parser.add_argument('--insets-only', action='store_true', help='验证状态栏和键盘开关后的列表边界')
+parser.add_argument('--sticky-search-only', action='store_true', help='验证首页及二级页面搜索栏滚动吸顶')
 parser.add_argument('--scope-only', action='store_true', help='验证作用域开关与独立设置入口')
 parser.add_argument('--service-state-only', action='store_true', help='回归首页缓存入口的异步服务状态更新')
 args = parser.parse_args()
@@ -66,6 +67,54 @@ def start(activity):
     ) else []
     adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity, *extra)
 
+
+if args.sticky_search_only:
+    def bounds(node):
+        return tuple(map(int, re.findall(r'\d+', node.get('bounds'))))
+
+    def geometry(list_id):
+        root = tree()
+        def tagged(tag):
+            return next(n for n in root.iter('node') if n.get('resource-id') == tag)
+        return bounds(tagged('settings_search_header')), bounds(tagged(list_id)), bounds(tagged('settings_top_bar'))
+
+    def scroll_up(list_id):
+        _, content, _ = geometry(list_id)
+        x = (content[0] + content[2]) // 2
+        height = content[3] - content[1]
+        adb('shell', 'input', 'swipe', str(x), str(content[1] + height * 4 // 5),
+            str(x), str(content[1] + height // 5), '350')
+
+    def check_pinned(list_id, name):
+        header, content, _ = geometry(list_id)
+        assert header[1] > content[1], '搜索栏应从列表原位置开始滚动'
+        for _ in range(3):
+            scroll_up(list_id)
+        header, content, bar = geometry(list_id)
+        assert abs(header[1] - content[1]) <= 1, ('搜索栏没有吸顶', header, content)
+        assert header[1] >= bar[3], ('搜索栏被标题栏遮挡', header, bar)
+        scroll_up(list_id)
+        after, _, _ = geometry(list_id)
+        assert after == header, ('继续滚动后搜索栏位置改变', header, after)
+        capture(name)
+
+    # 固定长列表，避免当前设备安装应用太少、滚动到底仍无法到达吸顶位置。
+    activity = '.ui.SettingsStateTestActivity'
+    adb('shell', 'am', 'force-stop', package)
+    adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity,
+        '--ez', 'connected', 'true', '--ez', 'scope_test', 'true', '--ez', 'scroll_test', 'true')
+    check_pinned('settings_home', 'sticky-search-home')
+    start(activity)
+    tap('系统框架')
+    check_pinned('section_system', 'sticky-search-section')
+    tap('搜索此页设置')
+    adb('shell', 'input', 'text', 'FORCENEWTASKRULES')
+    adb('shell', 'input', 'keyevent', '4')
+    locate('强制 NEW_TASK 规则')
+    tap('清除搜索')
+    locate('搜索此页设置')
+    print('PASS: 首页及二级页搜索栏随列表上移、吸顶后保持位置且可继续搜索', flush=True)
+    sys.exit(0)
 
 if args.insets_only:
     def bounds(node):

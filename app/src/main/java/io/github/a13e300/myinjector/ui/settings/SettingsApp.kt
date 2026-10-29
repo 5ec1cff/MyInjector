@@ -197,7 +197,9 @@ private fun HomePage(
             }
             Spacer(Modifier.height(16.dp))
         }
-        item("search") { SettingsSearchField(query, { query = it }, "搜索应用或系统组件") }
+        stickyHeader(key = "search") {
+            SettingsSearchHeader(query, { query = it }, "搜索应用或系统组件")
+        }
         if (apps == null) {
             item("loading") { LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp)) }
         } else if (visibleApps.isEmpty()) {
@@ -341,9 +343,8 @@ private fun SectionPage(
                 Text("应用内设置")
             }
         }
-        item("search") {
-            SettingsSearchField(query, { query = it }, "搜索此页设置")
-            Spacer(Modifier.height(12.dp))
+        stickyHeader(key = "search") {
+            SettingsSearchHeader(query, { query = it }, "搜索此页设置")
         }
         if (visible.isEmpty()) item("empty") { Text("没有匹配的设置", Modifier.padding(20.dp)) }
         itemsIndexed(visible, key = { _, it -> it.key }) { index, item ->
@@ -357,6 +358,16 @@ private fun SectionPage(
                     is SettingsItemSpec.Action -> onAction(item)
                 }
             }
+        }
+    }
+}
+
+/** 由 LazyColumn 负责吸顶；不透明背景遮住从搜索栏下方滚过的列表内容。 */
+@Composable
+private fun SettingsSearchHeader(query: String, onQueryChange: (String) -> Unit, hint: String) {
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.testTag("settings_search_header")) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            SettingsSearchField(query, onQueryChange, hint)
         }
     }
 }

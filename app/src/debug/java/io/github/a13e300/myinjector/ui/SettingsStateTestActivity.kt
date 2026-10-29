@@ -46,7 +46,10 @@ class SettingsStateTestActivity : ComponentActivity() {
                             ScopeApplication("com.android.settings", "A SysApp Settings", true),
                             ScopeApplication("org.telegram.messenger", "Z SysApp Telegram", true),
                         ) else emptyList()
-                        (components + applications).sortedWith(ScopeCatalog.applicationOrder).map {
+                        val scrollApps = if (intent.getBooleanExtra("scroll_test", false)) List(24) {
+                            ScopeApplication("test.app.$it", "Test App $it", it % 2 == 0)
+                        } else emptyList()
+                        (components + applications + scrollApps).sortedWith(ScopeCatalog.applicationOrder).map {
                             AppSettingsDestination(it, ImageBitmap(48, 48))
                         }
                     },
