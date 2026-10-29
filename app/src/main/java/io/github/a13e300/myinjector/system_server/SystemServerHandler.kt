@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector.system_server
 
 import android.annotation.SuppressLint
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
@@ -36,9 +35,7 @@ import kotlin.Int
 import kotlin.String
 import kotlin.Suppress
 import kotlin.also
-import kotlin.getValue
 import kotlin.io.startsWith
-import kotlin.io.use
 import kotlin.lazy
 import kotlin.let
 import kotlin.onFailure

@@ -1,7 +1,6 @@
 package io.github.a13e300.myinjector
 
 import android.annotation.SuppressLint
-import android.app.ActivityThread
 import android.app.INotificationManager
 import android.content.ComponentName
 import android.content.Context
@@ -11,7 +10,6 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
-import android.os.Build
 import android.os.ServiceManager
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
@@ -28,7 +26,6 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjS
-import io.github.a13e300.myinjector.arch.getParcelableExtraCompat
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllNopIf

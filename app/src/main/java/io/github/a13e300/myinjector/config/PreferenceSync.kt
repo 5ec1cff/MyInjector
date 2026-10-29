@@ -21,7 +21,7 @@ internal class PreferenceSync(private val cache: SharedPreferences) {
         val original = remote.all
         val batch: Map<String, Pair<String, Any>> = synchronized(lock) {
             // 导入缺失项时先写入 outbox；即使 commit 失败后 remote 缓存已改变，也会重试。
-            if (!original.containsKey(SettingsSchema.VERSION_KEY)) {
+            if (!original.containsKey(SettingsSchema.VERSION_KEY) && !cache.getBoolean("__migrated:$group", false)) {
                 val editor = cache.edit()
                 for ((key, default) in defaults) {
                     if (!original.containsKey(key) && !cache.contains(pendingKey(key))) {
@@ -43,7 +43,7 @@ internal class PreferenceSync(private val cache: SharedPreferences) {
         checkCurrent()
         val saved = remote.all
         synchronized(lock) {
-            val local = cache.edit()
+            val local = cache.edit().putBoolean("__migrated:$group", true)
             for ((key, default) in defaults) {
                 val token = cache.getString(pendingKey(key), null)
                 val sent = batch[key]?.first

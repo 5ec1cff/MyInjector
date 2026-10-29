@@ -55,6 +55,31 @@ class PreferenceSyncTest {
         assertFalse(local.getBoolean(key, true))
     }
 
+    @Test fun clearingRemoteDoesNotResurrectPreviouslyMigratedCache() {
+        val local = MemoryPrefs(mutableMapOf(key to true))
+        val sync = PreferenceSync(local)
+        sync.sync("miuihome", MemoryPrefs())
+        val cleared = MemoryPrefs()
+        sync.sync("miuihome", cleared)
+        assertFalse(cleared.contains(key))
+        assertFalse(local.getBoolean(key, true))
+        assertFalse(sync.hasPending())
+    }
+
+    @Test fun serviceChangeAfterCommitRetainsOutboxForNewService() {
+        val local = MemoryPrefs()
+        val sync = PreferenceSync(local)
+        sync.put(key, true)
+        assertThrows(IllegalStateException::class.java) {
+            sync.sync("miuihome", MemoryPrefs()) { error("service changed") }
+        }
+        assertTrue(sync.hasPending())
+        val replacement = MemoryPrefs()
+        sync.sync("miuihome", replacement)
+        assertTrue(replacement.getBoolean(key, false))
+        assertFalse(sync.hasPending())
+    }
+
     @Test fun schemaExactlyMatchesEditableCatalog() {
         val items = io.github.a13e300.myinjector.ui.settings.moduleSettingsSections()
             .flatMap { it.items }

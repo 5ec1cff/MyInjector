@@ -12,7 +12,7 @@ XposedPrefsSubscription token;
 XposedPrefsChangedFn callback;
 void *callbackData;
 int values[]{1, 0, 1};
-bool wrongType = false, failSnapshot = false;
+bool wrongType = false, failSnapshot = false, failSubscribe = true;
 unsigned subscribed = 0, unsubscribed = 0, fetched = 0, released = 0, groupsReleased = 0;
 uint32_t published = 0;
 unsigned retriesWoken = 0;
@@ -41,6 +41,7 @@ XposedStatus value(const XposedPrefsSnapshot *s, XposedStringView key, XposedPre
 }
 XposedStatus subscribe(XposedRemotePrefs *p, XposedPrefsChangedFn cb, void *data, XposedPrefsSubscription **out) {
     assert(p == &prefs);
+    if (failSubscribe) return XPOSED_STATUS_SERVICE_ERROR;
     ++subscribed;
     callback = cb;
     callbackData = data;
@@ -63,6 +64,9 @@ int main() {
     api.unsubscribe_remote_preferences = [](XposedPrefsSubscription *s) { assert(s == &token); ++unsubscribed; };
     assert(miuihome::InitializeRemotePreferences(&api, [](uint32_t mask) { published = mask; }, [] { ++retriesWoken; }));
     miuihome::RetryRemotePreferences();
+    assert(published == 0 && subscribed == 0 && miuihome::RemotePreferencesRetryPending());
+    failSubscribe = false;
+    miuihome::RetryRemotePreferences();
     assert(published == 5 && subscribed == 1 && !miuihome::RemotePreferencesRetryPending());
     auto initialFetches = fetched;
     miuihome::RetryRemotePreferences();
@@ -72,7 +76,7 @@ int main() {
     assert(published == 2); // 回调返回前已经发布，不只是唤醒 worker。
     failSnapshot = true;
     notify();
-    assert(published == 2 && miuihome::RemotePreferencesRetryPending() && retriesWoken == 1);
+    assert(published == 2 && miuihome::RemotePreferencesRetryPending() && retriesWoken == 2);
     failSnapshot = false;
     values[0] = 1;
     miuihome::RetryRemotePreferences();

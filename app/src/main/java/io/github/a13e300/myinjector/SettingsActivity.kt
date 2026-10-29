@@ -3,8 +3,8 @@ package io.github.a13e300.myinjector
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import io.github.a13e300.myinjector.ui.InjectorTheme
@@ -12,7 +12,6 @@ import io.github.a13e300.myinjector.ui.settings.AppSettingsDestination
 import io.github.a13e300.myinjector.ui.settings.SettingsApp
 import io.github.a13e300.myinjector.ui.settings.SettingsItemSpec
 import android.annotation.SuppressLint
-import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -40,8 +39,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
-import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.AbsListView
 import android.widget.BaseAdapter
