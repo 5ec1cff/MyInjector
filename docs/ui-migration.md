@@ -77,3 +77,23 @@ python3 scripts/check_settings_ui.py --serial emulator-5554 --service-state-only
 导航容器裁剪越界内容，不执行额外的尺寸动画；保留原有页面保存状态与系统动画缩放行为。未新增动画库，也未改动其他窗口。
 
 Android 15 模拟器已通过模块导航、持久化、搜索和编辑入口回归，以及按钮返回、左右侧手势返回、手势取消检查。录屏及事件时间位于 `app/build/reports/navigation-motion/`，已检查过渡中间帧；debug 构建与 4 个单元测试通过。
+
+## 状态栏与软键盘避让
+
+模块设置页保持 edge-to-edge。导航栈外层统一消费顶部及横向 safeDrawing 边距，
+将标题和过渡内容限制在状态栏、刘海之外；TopAppBar 不重复添加边距。
+Scaffold 使用底部 safeDrawing（包含 IME）计算内容 PaddingValues，内容根节点应用并消费
+这些边距，使列表视口随键盘缩小，底部导航栏与键盘边距不累加。Activity 显式使用
+adjustResize，避免系统平移整个窗口时把标题推到状态栏后面。
+
+仅修改模块 Activity 的布局，不改变注入弹窗及其他窗口。复用 Compose WindowInsets，
+不监听键盘高度或手工计算状态栏像素。回归命令：
+
+```sh
+python3 scripts/check_settings_ui.py --serial emulator-5556 --insets-only
+```
+
+已在模拟器验证首页、系统框架二级页的键盘避让、关闭后的高度恢复、
+键盘展开时折叠标题及返回导航。测试直接比较列表、标题栏与系统 Insets 的边界，
+截图保存在 app/build/reports/ui-smoke/insets-*.png。
+x86_64 模拟器使用移除 arm64 native 库后重新签名的临时 debug 测试包；交付包保持完整 release。

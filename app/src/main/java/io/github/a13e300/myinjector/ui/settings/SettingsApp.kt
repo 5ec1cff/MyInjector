@@ -84,7 +84,10 @@ internal fun SettingsApp(
 
     NavDisplay(
         backStack = routes, onBack = ::navigateBack,
-        modifier = Modifier.fillMaxSize().clipToBounds().background(MaterialTheme.colorScheme.background)
+        // 固定安全区域包住整个导航栈，标题折叠和页面过渡都不能进入状态栏/刘海。
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .clipToBounds()
             .semantics { testTagsAsResourceId = true },
         sizeTransform = null,
         transitionSpec = { settingsPageTransition(true, direction) },
@@ -98,8 +101,11 @@ internal fun SettingsApp(
                 val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                 Scaffold(
                     modifier = Modifier.nestedScroll(behavior.nestedScrollConnection),
+                    // safeDrawing 包含 IME；列表的可用高度随键盘变化，底部取最大值而非重复累加。
+                    contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
                     topBar = {
                         LargeTopAppBar(
+                            modifier = Modifier.testTag("settings_top_bar"),
                             title = { Text(section?.title?.toString() ?: "MyInjector", fontWeight = FontWeight.Bold) },
                             navigationIcon = {
                                 if (section != null) {
@@ -109,10 +115,11 @@ internal fun SettingsApp(
                                 }
                             },
                             scrollBehavior = behavior,
+                            windowInsets = WindowInsets(0, 0, 0, 0),
                         )
                     },
                 ) { padding ->
-                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding), contentAlignment = Alignment.TopCenter) {
                         if (section == null) {
                             HomePage(
                                 sections, apps, currentServiceConnected, currentSyncStatus, currentScope, currentScopeToggle,

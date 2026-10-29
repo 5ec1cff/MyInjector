@@ -13,6 +13,7 @@ parser.add_argument('--serial', required=True)
 parser.add_argument('--out', type=Path, default=Path('app/build/reports/ui-smoke'))
 parser.add_argument('--resource-context-package', help='仅加载此已安装包的资源，复现无 Application 的 Context')
 parser.add_argument('--dialogs-only', action='store_true')
+parser.add_argument('--insets-only', action='store_true', help='验证状态栏和键盘开关后的列表边界')
 parser.add_argument('--scope-only', action='store_true', help='验证作用域开关与独立设置入口')
 parser.add_argument('--service-state-only', action='store_true', help='回归首页缓存入口的异步服务状态更新')
 args = parser.parse_args()
@@ -65,6 +66,56 @@ def start(activity):
     ) else []
     adb('shell', 'am', 'start', '-W', '-n', package + '/' + activity, *extra)
 
+
+if args.insets_only:
+    def bounds(node):
+        return tuple(map(int, re.findall(r'\d+', node.get('bounds'))))
+
+    def frame(kind):
+        output = adb('shell', 'dumpsys', 'window', 'displays').decode()
+        pattern = (r'type=(?:ITYPE_' + kind.upper() + '|' + kind + r')\b[^\n]*?'
+                   r'frame=\[(\d+),\s*(\d+)\]\[(\d+),\s*(\d+)\][^\n]*?visible=true')
+        matches = re.findall(pattern, output)
+        assert matches, '未找到可见 Insets: ' + kind
+        return tuple(map(int, matches[0]))
+
+    def check_layout(list_id, keyboard=False):
+        root = tree()
+        bar = next(n for n in root.iter('node') if n.get('resource-id') == 'settings_top_bar')
+        content = next(n for n in root.iter('node') if n.get('resource-id') == list_id)
+        status_bottom = frame('statusBars')[3] if 'ITYPE_STATUS_BAR' not in adb('shell', 'dumpsys', 'window', 'displays').decode() else frame('status_bar')[3]
+        assert bounds(bar)[1] >= status_bottom, ('标题栏进入状态栏', bounds(bar), status_bottom)
+        if keyboard:
+            keyboard_top = frame('ime')[1]
+            assert bounds(content)[3] <= keyboard_top, ('列表被键盘覆盖', bounds(content), keyboard_top)
+        return bounds(content)
+
+    start('.SettingsActivity')
+    home_before = check_layout('settings_home')
+    tap('搜索应用或系统组件')
+    home_keyboard = check_layout('settings_home', True)
+    assert home_keyboard[3] < home_before[3]
+    capture('insets-home-ime')
+    adb('shell', 'input', 'swipe', '540', '1200', '540', '520', '350')
+    check_layout('settings_home', True)
+    capture('insets-home-collapsed-ime')
+    adb('shell', 'input', 'keyevent', '4')
+    assert check_layout('settings_home')[3] == home_before[3]
+    start('.SettingsActivity')
+    tap('系统框架')
+    section_before = check_layout('section_system')
+    tap('搜索此页设置')
+    section_keyboard = check_layout('section_system', True)
+    assert section_keyboard[3] < section_before[3]
+    adb('shell', 'input', 'swipe', '540', '1200', '540', '520', '350')
+    check_layout('section_system', True)
+    capture('insets-section-ime')
+    adb('shell', 'input', 'keyevent', '4')
+    assert check_layout('section_system')[3] == section_before[3]
+    tap('返回首页')
+    check_layout('settings_home')
+    print('PASS: 首页/二级页键盘避让、收起恢复、折叠标题和返回导航安全边界', flush=True)
+    sys.exit(0)
 
 if args.scope_only:
     activity = '.ui.SettingsStateTestActivity'
