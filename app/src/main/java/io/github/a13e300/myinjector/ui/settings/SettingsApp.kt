@@ -84,9 +84,9 @@ internal fun SettingsApp(
 
     NavDisplay(
         backStack = routes, onBack = ::navigateBack,
-        // 固定安全区域包住整个导航栈，标题折叠和页面过渡都不能进入状态栏/刘海。
+        // 横向避开刘海；顶部交给标题栏，让其背景覆盖状态栏、文字仍处于安全区。
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .clipToBounds()
             .semantics { testTagsAsResourceId = true },
         sizeTransform = null,
@@ -115,7 +115,7 @@ internal fun SettingsApp(
                                 }
                             },
                             scrollBehavior = behavior,
-                            windowInsets = WindowInsets(0, 0, 0, 0),
+                            windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
                         )
                     },
                 ) { padding ->

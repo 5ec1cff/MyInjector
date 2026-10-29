@@ -84,7 +84,11 @@ if args.insets_only:
         bar = next(n for n in root.iter('node') if n.get('resource-id') == 'settings_top_bar')
         content = next(n for n in root.iter('node') if n.get('resource-id') == list_id)
         status_bottom = frame('statusBars')[3] if 'ITYPE_STATUS_BAR' not in adb('shell', 'dumpsys', 'window', 'displays').decode() else frame('status_bar')[3]
-        assert bounds(bar)[1] >= status_bottom, ('标题栏进入状态栏', bounds(bar), status_bottom)
+        # 标题栏背景延伸到状态栏，标题文字与返回按钮仍在安全区域内。
+        titles = [n for n in bar.iter('node') if n.get('text') in ('MyInjector', '系统框架')]
+        assert titles, '未找到标题文字'
+        assert all(bounds(n)[1] >= status_bottom for n in titles), ('标题文字进入状态栏', status_bottom)
+        assert bounds(bar)[1] == 0, ('标题栏背景未延伸到状态栏', bounds(bar))
         if keyboard:
             keyboard_top = frame('ime')[1]
             assert bounds(content)[3] <= keyboard_top, ('列表被键盘覆盖', bounds(content), keyboard_top)

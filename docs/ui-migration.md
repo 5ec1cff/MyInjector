@@ -80,8 +80,9 @@ Android 15 模拟器已通过模块导航、持久化、搜索和编辑入口回
 
 ## 状态栏与软键盘避让
 
-模块设置页保持 edge-to-edge。导航栈外层统一消费顶部及横向 safeDrawing 边距，
-将标题和过渡内容限制在状态栏、刘海之外；TopAppBar 不重复添加边距。
+模块设置页保持 edge-to-edge。导航栈外层消费横向 safeDrawing 边距，
+顶部 safeDrawing 由 Material 3 TopAppBar 自身消费：背景覆盖状态栏，标题文字与返回按钮避开状态栏和刘海。
+展开、折叠及提起态的背景色均由同一个 TopAppBar 绘制，避免顶部出现页面底色与标题栏的色带分界。
 Scaffold 使用底部 safeDrawing（包含 IME）计算内容 PaddingValues，内容根节点应用并消费
 这些边距，使列表视口随键盘缩小，底部导航栏与键盘边距不累加。Activity 显式使用
 adjustResize，避免系统平移整个窗口时把标题推到状态栏后面。
@@ -94,6 +95,6 @@ python3 scripts/check_settings_ui.py --serial emulator-5556 --insets-only
 ```
 
 已在模拟器验证首页、系统框架二级页的键盘避让、关闭后的高度恢复、
-键盘展开时折叠标题及返回导航。测试直接比较列表、标题栏与系统 Insets 的边界，
+键盘展开时折叠标题及返回导航。测试直接比较列表、标题文字与系统 Insets 的边界，同时确认标题栏背景从窗口顶部开始绘制，
 截图保存在 app/build/reports/ui-smoke/insets-*.png。
 x86_64 模拟器使用移除 arm64 native 库后重新签名的临时 debug 测试包；交付包保持完整 release。
