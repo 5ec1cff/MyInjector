@@ -83,7 +83,9 @@ private fun blurCode(bridge: DexKitBridge, method: MethodData): BlurCode {
 }
 
 private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
-    namedProfileBlur(bridge)?.let { return it }
+    namedProfileBlur(bridge)?.let {
+        return it + findProfileMusicMembers(bridge, bridge.getFieldData(it.getValue("blurMusicView")))
+    }
     val found = linkedMapOf<String, String>()
     fun save(key: String, method: MethodData?) {
         found[key] = method?.descriptor.orEmpty()
@@ -283,6 +285,7 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
         }
     }
     save("blurMusicView", music)
+    found.putAll(findProfileMusicMembers(bridge, music))
     val suggestion = blur.fields.singleOrNull { it.type.superClass?.name == "android.widget.FrameLayout" }
     save("blurSuggestionView", suggestion)
     for ((key, view) in listOf("music" to music, "suggestion" to suggestion)) {
@@ -298,6 +301,24 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
         save("${key}DrawingBlur", disable)
     }
     return found
+}
+
+/** 从实际绘制调用中找背景画笔，排除图标、箭头、描边和渐变专用画笔。 */
+private fun findProfileMusicMembers(bridge: DexKitBridge, music: FieldData?): Map<String, String> {
+    if (music == null) return listOf("musicOnDraw", "musicBackgroundPaint", "musicParentExpanded").associateWith { "" }
+    val draw = music.type.methods.single {
+        it.name == "onDraw" && it.paramTypeNames == listOf("android.graphics.Canvas")
+    }
+    val background = scanTelegramDex(bridge, draw).calls.filter {
+        it.method.descriptor == "Landroid/graphics/Paint;->getAlpha()I"
+    }.mapNotNull { it.receiver?.field }.distinctBy { it.descriptor }.single()
+    val expanded = music.type.methods.single {
+        it.name == "setParentExpanded" && it.paramTypeNames == listOf("float")
+    }.usingFields.single {
+        it.usingType == FieldUsingType.Write && it.field.className == music.typeName && it.field.typeName == "float"
+    }.field
+    return mapOf("musicOnDraw" to draw.descriptor, "musicBackgroundPaint" to background.descriptor,
+        "musicParentExpanded" to expanded.descriptor)
 }
 
 // A missing optional member is cached as an empty ObfsInfo so warm starts skip DexKit.
@@ -340,6 +361,9 @@ internal fun profileAvatarBlurMembers(creator: ObfsTableCreator): Map<String, Ob
         "blurMusicView",
         "blurSuggestionView",
         "musicDrawingBlur",
+        "musicOnDraw",
+        "musicBackgroundPaint",
+        "musicParentExpanded",
         "suggestionDrawingBlur",
     )
     return keys.associateWith { key ->

@@ -6,11 +6,13 @@ import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
+import io.github.a13e300.myinjector.arch.callOrig
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookNopIf
+import io.github.a13e300.myinjector.arch.hookReplace
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
 import java.lang.reflect.Field
@@ -271,6 +273,15 @@ class DisableProfileAvatarBlur : MyDynHook("disableProfileAvatarBlur") {
             memberMethods.getValue("blurDraw").hookNopIf(::isEnabled)
         }
         hookProfileActionsView()
+        memberMethods["musicOnDraw"]?.let { draw ->
+            draw.hookReplace(cond = ::isEnabled) { param ->
+                val paint = readAs<Paint>(param.thisObject, "musicBackgroundPaint")
+                val expanded = readAs<Float>(param.thisObject, "musicParentExpanded")
+                withProfileMusicBackground(paint, expanded) {
+                    draw.callOrig(param.thisObject, *param.args)
+                }
+            }
+        }
 
         /*
          * move shadow up

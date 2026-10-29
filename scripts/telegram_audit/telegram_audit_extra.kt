@@ -60,7 +60,17 @@ private fun auditProfileBlurMembers(bridge: DexKitBridge, members: Map<String, S
         check(setter.usingFields.any { it.field.descriptor == blurActions.descriptor })
     }
     members.getValue("blurMusicView").takeIf { it.isNotEmpty() }?.let {
-        check(bridge.getFieldData(it)!!.typeName != actions.typeName)
+        val music = bridge.getFieldData(it)!!
+        check(music.typeName != actions.typeName)
+        val draw = bridge.getMethodData(members.getValue("musicOnDraw"))!!
+        val paint = bridge.getFieldData(members.getValue("musicBackgroundPaint"))!!
+        val expanded = bridge.getFieldData(members.getValue("musicParentExpanded"))!!
+        check(draw.className == music.typeName && draw.paramTypeNames == listOf("android.graphics.Canvas"))
+        check(paint.className == music.typeName && paint.typeName == "android.graphics.Paint")
+        check(expanded.className == music.typeName && expanded.typeName == "float")
+        check(scanTelegramDex(bridge, draw).calls.any { call ->
+            call.method.name == "drawRoundRect" && call.args.lastOrNull()?.field?.descriptor == paint.descriptor
+        })
     }
     println("Profile blur: ${candidates.size} gradient candidates; actions=${actions.descriptor}")
 }

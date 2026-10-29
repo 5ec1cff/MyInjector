@@ -52,3 +52,21 @@ python3 scripts/check_telegram_apks.py \
 ```
 
 debug、release 构建及已有单元测试通过。本次设备操作仅提取 APK，实际绘制与头像展开效果需安装修复版并重启 Telegram 后验证。
+
+## 展开头像时音乐卡片的浅色背景
+
+关闭个人资料页配色后，音乐卡片使用浅色背景；头像展开到 0.8 时原生逻辑改为白字。禁用头像模糊后，这层浅色背景仍然存在，因此出现白底白字。这是既有绘制行为，与 13.1.1 的字段识别问题独立。
+
+在音乐视图原生 `onDraw` 外包裹背景修正：展开进度达到 0.8 且背景亮度较高时，临时用 `0x66000000`（40% 不透明度的黑色）绘制背景，保留原生文字、图标、布局和显示动画。绘制结束通过 finally 恢复背景颜色、alpha 和 Shader，避免收起、主题切换、关闭功能或热更新后留下修改。深色卡片不改色。
+
+成员定位复用现有 DexKit 数据流扫描，从 `Paint.getAlpha` 和 `setParentExpanded` 写入定位真正的背景画笔与展开进度，排除图标、描边和渐变专用画笔。适配缓存版本升至 5。四个 APK（官方 13.1.1、AyuGram、exteraGram、NaGram）均通过 39 组静态检查，新增检查确认该画笔实际用于圆角背景绘制。
+
+Android 15 模拟器的 debug 测试使用生产绘制函数和真实 Paint／Canvas，验证展开边界与背景像素、展开后收起、深色背景、主题变化、Shader 恢复、异常和嵌套绘制恢复。入口仅存在于 debug：
+
+```sh
+adb -s emulator-5554 shell am start -W \
+  -n io.github.a13e300.myinjector/.ui.ProfileMusicPaintTestActivity
+adb -s emulator-5554 logcat -d -s ProfileMusicPaintTest:I '*:S'
+```
+
+debug、release 构建和已有单元测试通过；实际宿主账号的头像与音乐卡片效果仍需安装修复版后验证。
