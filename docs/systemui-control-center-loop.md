@@ -26,6 +26,11 @@ VelocityTracker.getXVelocity() 仅在该触摸调用内、且 tracker 是这个�
 触摸方法显式反优化，避免 ART 内联绕过 setProgress/getXVelocity Hook。
 
 方向状态保持到原生 setSwitching(false)，因此动画中重新按下仍使用当前方向及剩余进度。
+连续快速滑动有一条额外路径：在原生 onInterceptTouchEvent 已允许接管新横向手势后，
+如果上一段尚在切换、并且新手势朝当前 toCtrl 目标页的外侧继续滑动，先完成上一段到其目标端点，
+恢复正常几何参数，再让原生 onTouchEvent 按新的起点初始化下一段。
+此处按当前有效距离（包含上一段的镜像）判断，而非上一段 fromCtrl，保证普通/镜像切换连续交替。
+向回拖动中断动画、原有拖动尚未结束、纵向手势或位移未达阈值时，仍使用原生的中断续拖。
 动画完成后恢复距离和触发偏移。资源重算、异常与模块卸载时取消进度动画、收束到最近端点，
 通过原生页面收尾后恢复几何参数。卸载清理在 SystemUI 主线程执行；恢复未完成时不允许卸载。
 
@@ -146,4 +151,5 @@ pRaw < 0 或 pRaw > 1：进入 Folme.afterFrictionValue 的越界阻尼
 - `ControlCenter-getAllowParentInterceptSwitchEvent.smali`：主包向插件查询手势交接条件。
 
 `ShadeLoopGeometryTest` 覆盖 LTR/RTL、两个起点的正常/越界方向、速度反号、完整平移及触发偏移镜像、
-恢复、纵向/模糊手势阈值和非法数值。配置测试核对默认关闭、远端解析及 UI/同步范围一致。
+恢复、纵向/模糊手势阈值和非法数值，并覆盖动画未结束时连续同向切换，以及反向拖回时保留原生处理。
+配置测试核对默认关闭、远端解析及 UI/同步范围一致。

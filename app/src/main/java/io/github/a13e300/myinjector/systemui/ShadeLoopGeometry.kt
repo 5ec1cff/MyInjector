@@ -6,6 +6,10 @@ import kotlin.math.abs
 internal data class ShadeLoopGeometry(val distance: Float, val notificationShift: Float, val controlShift: Float) {
     fun mirrored() = ShadeLoopGeometry(-distance, -notificationShift, -controlShift)
 
+    fun shouldFinishBeforeNextDrag(
+        switching: Boolean, dragging: Boolean, targetControl: Boolean, dx: Float, dy: Float, slop: Float,
+    ): Boolean = switching && !dragging && isOutward(targetControl, dx, dy, slop)
+
     fun isOutward(fromControl: Boolean, dx: Float, dy: Float, slop: Float): Boolean {
         if (!distance.isFinite() || distance == 0f || !notificationShift.isFinite() || !controlShift.isFinite() ||
             !dx.isFinite() || !dy.isFinite() ||

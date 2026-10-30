@@ -36,6 +36,7 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
     private val sessions = IdentityHashMap<Any, Session>()
     private val touch = ThreadLocal<Touch?>()
     private val hooks = mutableListOf<Unhook>()
+    @Volatile private var installed = false
     private var failed = false
     private var closed = false
     private var recovering = false
@@ -62,8 +63,14 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
         val switching = Xposed.findMethodExact(controller, "setSwitching", arrayOf(boolType))
         Xposed.findMethodExact(controller, "getControlCenterExpanded", emptyArray())
         Xposed.findMethodExact(controller, "getNotificationExpanded", emptyArray())
+        Xposed.findMethodExact(controller, "isSwitchable", emptyArray())
         val resources = controller.declaredMethods.single { it.name.startsWith("updateResources") && it.parameterCount == 0 }
         val onTouch = Xposed.findMethodExact(window, "onTouchEvent", arrayOf(MotionEvent::class.java))
+        val intercept = Xposed.findMethodExact(window, "onInterceptTouchEvent", arrayOf(MotionEvent::class.java))
+        val interactionHandler = Xposed.findField(window, "mInteractionEventHandler").type
+        val windowController = Xposed.findField(interactionHandler, "this\$0").type
+        val touchHandler = Xposed.findField(windowController, "mShadeTouchHandler").type
+        check(Xposed.findField(touchHandler, "shadeSwitchControllerImpl").type == controller)
 
         try {
             hooks += progress.hookBefore { param ->
@@ -82,6 +89,11 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
             hooks += resources.hookBefore { param ->
                 safely { finish(param.thisObject) }
             }
+            hooks += intercept.hookAfter { param ->
+                if (param.throwable == null && param.result == true) {
+                    safely { finishBeforeNextDrag(param.thisObject, param.args[0] as MotionEvent) }
+                }
+            }
             // 最后才启用触摸上下文，避免热重载安装过程中出现半套方向处理。
             hooks += onTouch.hook(
                 before = { param ->
@@ -98,6 +110,7 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
             )
             // 保证触摸原方法仍调用已 Hook 的 setProgress / getXVelocity，避免 ART 内联绕过。
             onTouch.deoptimize()
+            installed = true
             logD("notification/control-center loop hooks installed")
         } catch (error: Throwable) {
             hooks.asReversed().forEach { it.unhook() }
@@ -106,8 +119,36 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
         }
     }
 
+    /** 原生接管新手势后，向目标页外续划需要先收尾上一段，否则会沿旧方向进入阻尼区。 */
+    private fun finishBeforeNextDrag(window: Any, event: MotionEvent) {
+        if (!installed || closed || failed || !enabled() || event.actionMasked != MotionEvent.ACTION_MOVE) return
+        val controller = window.getObj("mInteractionEventHandler").getObj("this\$0")
+            .getObj("mShadeTouchHandler").getObj("shadeSwitchControllerImpl") ?: return
+        if (!controller.getObjAs<Boolean>("switchIntercepted") ||
+            !controller.getObjAs<Boolean>("switching") || controller.getObjAs<Boolean>("dragging")) return
+        if (controller.call("isSwitchable") != true) return
+        val targetControl = controller.getObjAs<Boolean>("toCtrl")
+        val geometry = geometry(controller)
+        if (geometry.shouldFinishBeforeNextDrag(true, false, targetControl,
+                event.rawX - controller.getObjAs<Float>("initX"),
+                event.rawY - controller.getObjAs<Float>("initY"), slop(controller, event))) {
+            finishAt(controller, targetControl)
+        }
+    }
+
+    private fun geometry(controller: Any) = ShadeLoopGeometry(controller.getObjAs("switchDistance"),
+        controller.getObj("notification").getObjAs("triggerShifting"),
+        controller.getObj("controlCenter").getObjAs("triggerShifting"))
+
+    private fun slop(controller: Any, event: MotionEvent): Float {
+        val slop = controller.getObjAs<Float>("touchSlop")
+        return if (event.classification == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE) {
+            slop * controller.getObjAs<Float>("slopMultiplier")
+        } else slop
+    }
+
     private fun beginIfOutward(animator: Any) {
-        if (closed || failed || !enabled()) return
+        if (!installed || closed || failed || !enabled()) return
         val event = touch.get()?.event ?: return
         if (event.actionMasked != MotionEvent.ACTION_MOVE) return
         val controller = animator.getObj("this\$0") ?: return
@@ -117,16 +158,11 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
         // 只会在原生通过 isSwitchable、父级接管及横向阈值检查后，初始化 p=0/1 的首帧进入。
         val notification = controller.getObj("notification")!!
         val control = controller.getObj("controlCenter")!!
-        val geometry = ShadeLoopGeometry(controller.getObjAs("switchDistance"),
-            notification.getObjAs("triggerShifting"), control.getObjAs("triggerShifting"))
-        var slop = controller.getObjAs<Float>("touchSlop")
-        if (event.classification == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE) {
-            slop *= controller.getObjAs<Float>("slopMultiplier")
-        }
+        val geometry = geometry(controller)
         val fromControl = controller.getObjAs<Boolean>("fromCtrl")
         if (!geometry.isOutward(fromControl,
                 event.rawX - controller.getObjAs<Float>("initX"),
-                event.rawY - controller.getObjAs<Float>("initY"), slop)) return
+                event.rawY - controller.getObjAs<Float>("initY"), slop(controller, event))) return
         val controlExpanded = controller.call("getControlCenterExpanded") as Boolean
         val notificationExpanded = controller.call("getNotificationExpanded") as Boolean
         if (controlExpanded == notificationExpanded || controlExpanded != fromControl) return
@@ -154,17 +190,23 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
     /** 资源重算、错误或卸载时立即收束到最近端点，再交给原生关闭另一页并恢复几何参数。 */
     private fun finish(controller: Any) {
         val session = sessions[controller] ?: return
+        finishAt(controller, session.animator.getObjAs<Float>("_progress") < 0.5f)
+    }
+
+    private fun finishAt(controller: Any, toControl: Boolean) {
+        val animator = controller.getObj("progressAnimator")!!
+        val notification = controller.getObj("notification")!!
+        val control = controller.getObj("controlCenter")!!
         try {
             controller.setObj("dragging", true)
-            session.animator.getObj("anim").call("cancel")
-            val toControl = session.animator.getObjAs<Float>("_progress") < 0.5f
+            animator.getObj("anim").call("cancel")
             controller.setObj("toCtrl", toControl)
-            session.animator.call("setProgress", if (toControl) 0f else 1f, false)
-            session.notification.call("setTriggerAppeared", !toControl, false)
-            session.control.call("setTriggerAppeared", toControl, false)
+            animator.call("setProgress", if (toControl) 0f else 1f, false)
+            notification.call("setTriggerAppeared", !toControl, false)
+            control.call("setTriggerAppeared", toControl, false)
             controller.setObj("dragging", false)
             controller.setObj("progressAnimating", false)
-            session.notification.setObj("slideAnimating", false)
+            notification.setObj("slideAnimating", false)
             controller.call("setSwitching", false)
         } finally {
             controller.setObj("dragging", false)
@@ -200,6 +242,7 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
 
     fun close(): Boolean {
         fun cleanup() {
+            installed = false
             closed = true
             finishAll()
             check(sessions.isEmpty()) { "shade loop geometry has not been restored" }

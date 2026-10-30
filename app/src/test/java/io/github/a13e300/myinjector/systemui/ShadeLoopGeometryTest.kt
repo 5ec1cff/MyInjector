@@ -4,6 +4,41 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ShadeLoopGeometryTest {
+    @Test fun consecutiveSameDirectionDragsFinishEveryPreviousLegBeforeStartingTheNext() {
+        for (distance in listOf(1000f, -1000f)) {
+            val original = ShadeLoopGeometry(distance, -200f, 200f)
+            for (dx in listOf(-500f, 500f)) {
+                for (initialControl in listOf(false, true)) {
+                    var fromControl = initialControl
+                    repeat(6) {
+                        val current = if (original.isOutward(fromControl, dx, 0f, 20f)) original.mirrored() else original
+                        val targetControl = !fromControl
+                        // 上一段尚未结束时继续同方向划动：对其目标页而言已是越界方向。
+                        assertTrue(current.shouldFinishBeforeNextDrag(true, false, targetControl, dx, 0f, 20f))
+                        val next = if (original.isOutward(targetControl, dx, 0f, 20f)) original.mirrored() else original
+                        val start = if (targetControl) 0f else 1f
+                        assertEquals(0.5f, start + dx / next.distance, 0f)
+                        fromControl = targetControl
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun reversingAnAnimationAndExistingDragsKeepNativeContinuation() {
+        for (distance in listOf(1000f, -1000f)) {
+            val geometry = ShadeLoopGeometry(distance, -200f, 200f)
+            for (targetControl in listOf(false, true)) {
+                val outward = if (targetControl) -distance / 2 else distance / 2
+                assertFalse(geometry.shouldFinishBeforeNextDrag(true, false, targetControl, -outward, 0f, 20f))
+                assertFalse(geometry.shouldFinishBeforeNextDrag(false, false, targetControl, outward, 0f, 20f))
+                assertFalse(geometry.shouldFinishBeforeNextDrag(true, true, targetControl, outward, 0f, 20f))
+                assertFalse(geometry.shouldFinishBeforeNextDrag(true, false, targetControl, outward, 800f, 20f))
+                assertFalse(geometry.shouldFinishBeforeNextDrag(true, false, targetControl, outward, 0f, 600f))
+            }
+        }
+    }
+
     @Test fun onlyOutwardGesturesAreMirroredInLtrAndRtl() {
         for (distance in listOf(1000f, -1000f)) {
             val geometry = ShadeLoopGeometry(distance, -200f, 200f)
