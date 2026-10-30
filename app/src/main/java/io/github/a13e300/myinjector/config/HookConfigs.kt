@@ -148,6 +148,7 @@ object HookConfigs {
             .setShowNotificationDetail(prefs.getBoolean("showNotificationDetail", false))
             .setFixWhiteSplash(prefs.getBoolean("fixWhiteSplash", false))
             .setLoopNotificationControlCenter(prefs.getBoolean("loopNotificationControlCenter", false))
+            .setTopPullSwitchNotificationControlCenter(prefs.getBoolean("topPullSwitchNotificationControlCenter", false))
             .build()
     }
 

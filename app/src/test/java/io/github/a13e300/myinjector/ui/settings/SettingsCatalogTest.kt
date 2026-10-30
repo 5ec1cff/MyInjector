@@ -12,6 +12,7 @@ class SettingsCatalogTest {
             "overrideStatusBarRules", "noSwipeToKillLockedProcess", "noSwipeToKillNoRestrictProcess",
             "bypassShellDexOptRestriction", "fixHyperOSAvoidMoveToFront", "showNotificationDetail",
             "noDndNotification", "alwaysExpandNotification", "fixWhiteSplash", "loopNotificationControlCenter",
+            "topPullSwitchNotificationControlCenter",
             "miuiHomeOpenAospSettings", "miuiHomeDragKill", "miuiHomeDisablePreLaunch",
         )
         assertEquals(expected, all.map { it.key }.toSet())
