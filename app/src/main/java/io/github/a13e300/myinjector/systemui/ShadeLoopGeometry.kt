@@ -4,6 +4,11 @@ import kotlin.math.abs
 
 /** p=0 为控制中心，p=1 为通知；原生距离的符号已经包含 RTL。 */
 internal data class ShadeLoopGeometry(val distance: Float, val notificationShift: Float, val controlShift: Float) {
+    companion object {
+        fun animationDirection(nativeDirection: Int, mirrored: Boolean): Int =
+            if (mirrored) -nativeDirection else nativeDirection
+    }
+
     fun mirrored() = ShadeLoopGeometry(-distance, -notificationShift, -controlShift)
 
     fun shouldFinishBeforeNextDrag(

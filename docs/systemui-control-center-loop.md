@@ -25,6 +25,17 @@ VelocityTracker.getXVelocity() 仅在该触摸调用内、且 tracker 是这个�
 使原生快速松手的 RTL/LTR 判定与镜像距离一致；其他控件及调用不变。
 触摸方法显式反优化，避免 ART 内联绕过 setProgress/getXVelocity Hook。
 
+页面整体平移与子项的阶梯动画是两条路径。通知项的
+MiuiPanelAnimValueObjectImpl.slideNotificationCenter(index, appeared, direction, animated, listener)
+使用 `(index + 1) * 200 * direction` 计算横向偏移；插件 SpreadRowsAnimator.slideControlCenter
+使用 `row * 200 * direction`（动画分支另乘 RTL 符号），其回调默认传入 direction=1。
+只镜像页面距离不会改变这些偏移，因此循环时还需翻转两处 direction 参数。
+
+实现用 setTriggerAppeared 的嵌套线程上下文限定影响范围，捕获当前控制器是否处于镜像会话，
+仅在该次同步通知回调中翻转通知项与控制中心按钮的方向，不改行序、缓动、完成监听或真实 RTL。
+控制中心动画类来自插件独立 ClassLoader；在通知原生监听器前扫描当前实际实例并安装 Hook，
+按 Class 对象去重，同时处理首开、模块热重载及插件重建。通知和插件的动画调用方显式反优化。
+
 方向状态保持到原生 setSwitching(false)，因此动画中重新按下仍使用当前方向及剩余进度。
 连续快速滑动有一条额外路径：在原生 onInterceptTouchEvent 已允许接管新横向手势后，
 如果上一段尚在切换、并且新手势朝当前 toCtrl 目标页的外侧继续滑动，先完成上一段到其目标端点，
@@ -149,7 +160,10 @@ pRaw < 0 或 pRaw > 1：进入 Folme.afterFrictionValue 的越界阻尼
 - `SwitchAnimator-updateTransX.smali`：固定页面位置的字节码依据。
 - `ShadeSwitchController-isSwitchable.smali`、`Plugin-getSwitchable.smali`：既有切换限制。
 - `ControlCenter-getAllowParentInterceptSwitchEvent.smali`：主包向插件查询手势交接条件。
+- `Notification-slideNotificationCenter.smali`：通知项阶梯偏移及 direction 参数。
+- `ControlCenter-slideControlCenter.smali`、`ControlCenter-onControlCenterAppearChanged.smali`：插件阶梯偏移及固定方向入口。
 
 `ShadeLoopGeometryTest` 覆盖 LTR/RTL、两个起点的正常/越界方向、速度反号、完整平移及触发偏移镜像、
 恢复、纵向/模糊手势阈值和非法数值，并覆盖动画未结束时连续同向切换，以及反向拖回时保留原生处理。
+阶梯偏移测试覆盖通知项行距、按钮行距、RTL、正常方向不变及零偏移行保持静止。
 配置测试核对默认关闭、远端解析及 UI/同步范围一致。

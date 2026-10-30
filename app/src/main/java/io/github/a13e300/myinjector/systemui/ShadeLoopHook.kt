@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit
 /** 只扩展原生允许的反向切换，页面、手势分发和动画生命周期仍由 SystemUI 管理。 */
 internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
     private class Touch(val event: MotionEvent, val previous: Touch?)
+    private class Appearance(val previous: Appearance?, var mirrored: Boolean = false)
     private class Session(
         val animator: Any,
         val notification: Any,
@@ -35,6 +36,8 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
     // SystemUI 的触摸、动画、资源更新均在 UI 线程；跨线程卸载也派发到该线程。
     private val sessions = IdentityHashMap<Any, Session>()
     private val touch = ThreadLocal<Touch?>()
+    private val appearance = ThreadLocal<Appearance?>()
+    private val controlAnimators = mutableSetOf<Class<*>>()
     private val hooks = mutableListOf<Unhook>()
     @Volatile private var installed = false
     private var failed = false
@@ -53,13 +56,24 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
             "touchSlop", "slopMultiplier", "switchDistance", "controlCenter", "velocityTracker\$delegate",
             "progressAnimating").forEach { Xposed.findField(controller, it) }
         listOf("triggerShifting", "slideAnimating").forEach { Xposed.findField(wrapper, it) }
+        Xposed.findField(wrapper, "this\$0")
+        Xposed.findField(controller, "listeners")
         Xposed.findField(animator, "this\$0")
         Xposed.findField(animator, "_progress")
         Xposed.findField(animator, "anim")
         val progress = Xposed.findMethodExact(animator, "setProgress", arrayOf(floatType))
         Xposed.findMethodExact(animator, "setProgress", arrayOf(floatType, boolType))
-        Xposed.findMethodExact(wrapper, "setTriggerAppeared", arrayOf(boolType, boolType))
+        val triggerAppeared = Xposed.findMethodExact(wrapper, "setTriggerAppeared", arrayOf(boolType, boolType))
         Xposed.findMethodExact(wrapper, "updateTransX", emptyArray())
+        val notificationValues = findClass("com.android.systemui.shade.MiuiPanelAnimValueObjectImpl")
+        val slideNotification = notificationValues.declaredMethods.single {
+            it.name == "slideNotificationCenter" && it.parameterTypes.take(4) ==
+                listOf(Int::class.javaPrimitiveType, boolType, Int::class.javaPrimitiveType, boolType) &&
+                it.parameterCount == 5
+        }
+        val notificationAppearance = Xposed.findMethodExact(
+            findClass("com.android.systemui.shade.NotificationPanelViewControllerInjector"),
+            "onNotificationAppearChanged", arrayOf(boolType, boolType))
         val switching = Xposed.findMethodExact(controller, "setSwitching", arrayOf(boolType))
         Xposed.findMethodExact(controller, "getControlCenterExpanded", emptyArray())
         Xposed.findMethodExact(controller, "getNotificationExpanded", emptyArray())
@@ -73,6 +87,27 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
         check(Xposed.findField(touchHandler, "shadeSwitchControllerImpl").type == controller)
 
         try {
+            hooks += slideNotification.hookBefore { param ->
+                param.args[2] = ShadeLoopGeometry.animationDirection(param.args[2] as Int,
+                    appearance.get()?.mirrored == true)
+            }
+            hooks += triggerAppeared.hook(
+                before = { param ->
+                    val scope = Appearance(appearance.get())
+                    appearance.set(scope)
+                    safely {
+                        val owner = param.thisObject.getObj("this\$0")
+                        if (sessions.containsKey(owner)) {
+                            prepareControlAnimations(owner!!)
+                            scope.mirrored = sessions.containsKey(owner)
+                        }
+                    }
+                },
+                after = {
+                    val previous = appearance.get()?.previous
+                    if (previous == null) appearance.remove() else appearance.set(previous)
+                },
+            )
             hooks += progress.hookBefore { param ->
                 safely { beginIfOutward(param.thisObject) }
             }
@@ -110,12 +145,35 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
             )
             // 保证触摸原方法仍调用已 Hook 的 setProgress / getXVelocity，避免 ART 内联绕过。
             onTouch.deoptimize()
+            notificationAppearance.deoptimize()
+            switching.deoptimize()
+            controller.deoptimize("performProgressChanged")
             installed = true
             logD("notification/control-center loop hooks installed")
         } catch (error: Throwable) {
             hooks.asReversed().forEach { it.unhook() }
             hooks.clear()
             throw error
+        }
+    }
+
+    /** 插件有独立 ClassLoader；在通知回调前从原生监听器中找到实际实例，兼顾已加载及重建的插件。 */
+    private fun prepareControlAnimations(controller: Any) {
+        val listeners = controller.getObjAs<List<Any>>("listeners")
+        for (listener in listeners) {
+            val type = listener.javaClass
+            if (type.name != "miui.systemui.controlcenter.panel.main.anim.SpreadRowsAnimator" ||
+                type in controlAnimators) continue
+            val boolType = Boolean::class.javaPrimitiveType!!
+            val slide = Xposed.findMethodExact(type, "slideControlCenter",
+                arrayOf(boolType, Int::class.javaPrimitiveType!!, boolType))
+            val callback = Xposed.findMethodExact(type, "onControlCenterAppearChanged", arrayOf(boolType, boolType))
+            hooks += slide.hookBefore { param ->
+                param.args[1] = ShadeLoopGeometry.animationDirection(param.args[1] as Int,
+                    appearance.get()?.mirrored == true)
+            }
+            callback.deoptimize()
+            controlAnimators += type
         }
     }
 
@@ -248,6 +306,7 @@ internal class ShadeLoopHook(private val enabled: () -> Boolean) : IHook() {
             check(sessions.isEmpty()) { "shade loop geometry has not been restored" }
             hooks.asReversed().forEach { it.unhook() }
             hooks.clear()
+            controlAnimators.clear()
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             return try {

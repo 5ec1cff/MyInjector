@@ -4,6 +4,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ShadeLoopGeometryTest {
+    @Test fun staggeredNotificationRowsMirrorOffsetsWithoutChangingTheirSpacing() {
+        for (nativeDirection in listOf(-1, 1)) {
+            val mirrored = ShadeLoopGeometry.animationDirection(nativeDirection, true)
+            val offsets = (0..3).map { (it * 200 + 200) * mirrored }
+            assertEquals(if (nativeDirection == 1) listOf(-200, -400, -600, -800)
+                else listOf(200, 400, 600, 800), offsets)
+            val native = ShadeLoopGeometry.animationDirection(nativeDirection, false)
+            assertEquals((0..3).map { (it * 200 + 200) * nativeDirection }, (0..3).map { (it * 200 + 200) * native })
+        }
+    }
+
+    @Test fun controlRowsMirrorWithRtlAndKeepTheZeroOffsetRowStationary() {
+        for (rtlSign in listOf(-1, 1)) {
+            val native = ShadeLoopGeometry.animationDirection(1, false)
+            val mirrored = ShadeLoopGeometry.animationDirection(1, true)
+            assertEquals(listOf(0, 200, 400, 600).map { it * rtlSign },
+                (0..3).map { it * 200 * native * rtlSign })
+            assertEquals(listOf(0, -200, -400, -600).map { it * rtlSign },
+                (0..3).map { it * 200 * mirrored * rtlSign })
+        }
+    }
+
     @Test fun consecutiveSameDirectionDragsFinishEveryPreviousLegBeforeStartingTheNext() {
         for (distance in listOf(1000f, -1000f)) {
             val original = ShadeLoopGeometry(distance, -200f, 200f)
