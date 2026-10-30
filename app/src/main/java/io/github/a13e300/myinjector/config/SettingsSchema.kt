@@ -25,7 +25,8 @@ object SettingsSchema {
             "showNotificationDetail" to false,
             "noDndNotification" to false,
             "alwaysExpandNotification" to false,
-            "fixWhiteSplash" to false
+            "fixWhiteSplash" to false,
+            "loopNotificationControlCenter" to false
         ),
         "miuihome" to linkedMapOf<String, Any>(
             "miuiHomeOpenAospSettings" to false,

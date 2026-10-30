@@ -46,6 +46,9 @@ class SystemUIHandler : IHook() {
     private val pluginInitializeLock = Any()
     private var pluginHooked = false
     private val pluginInitializeHooks = mutableSetOf<Unhook>()
+    private val shadeLoop = io.github.a13e300.myinjector.systemui.ShadeLoopHook {
+        config.loopNotificationControlCenter
+    }
 
     private fun doHookDndToast(cl: ClassLoader) {
         synchronized(pluginInitializeLock) {
@@ -104,12 +107,14 @@ class SystemUIHandler : IHook() {
     override fun onHook() {
         if (loadPackageParam.packageName != "com.android.systemui") return
         remoteConfig.start()
+        subHook(shadeLoop)
         hookPlugin()
         hookNotificationInfo()
         hookSplashScreen()
     }
 
     override fun onUnhook(): Boolean {
+        if (!shadeLoop.close()) return false
         remoteConfig.close()
         removeMyView()
         return true

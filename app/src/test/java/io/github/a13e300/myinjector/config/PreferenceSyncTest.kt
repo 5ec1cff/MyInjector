@@ -86,7 +86,7 @@ class PreferenceSyncTest {
         val keys = items.filter { it is io.github.a13e300.myinjector.ui.settings.SettingsItemSpec.Switch ||
             it is io.github.a13e300.myinjector.ui.settings.SettingsItemSpec.Text }.map { it.key }.toSet()
         assertEquals(keys, SettingsSchema.defaults.keys)
-        assertEquals(22, keys.size)
+        assertEquals(23, keys.size)
     }
 }
 

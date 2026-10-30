@@ -1,0 +1,17 @@
+SERVICE com.android.systemui/.SystemUIService 37ca969 pid=6865 user=0
+  Client:
+    Dump starting: 10-30 13:12:22.461
+
+    ShadeSwitchController:
+    ----------------------------------------------------------------------------
+    ShadeSwitchController dump state:
+      switching=false
+      progressAnimating=false
+      notification.slideAnimating=false
+      controlCenter.slideAnimating=false
+      notificationExpanded=false
+      controlCenterExpanded=false
+
+    NORMAL dump took 0ms -- ShadeSwitchController
+
+    Dump took 0ms

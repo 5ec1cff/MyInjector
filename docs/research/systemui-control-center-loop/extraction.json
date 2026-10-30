@@ -1,0 +1,25 @@
+{
+  "build": "OS4.0.4.0.XPBCNXM",
+  "android": "17",
+  "apks": [
+    {
+      "package": "com.android.systemui",
+      "device_path": "/system_ext/priv-app/MiuiSystemUI/MiuiSystemUI.apk",
+      "file": "MiuiSystemUI.apk",
+      "sha256": "944425eca3f44476dbdf2c7a0f6da3bf50d77bfee3acbbbfe17e1ce87e939933",
+      "bytes": 52333704,
+      "version_name": "17.03.260226.r",
+      "version_code": 202602260
+    },
+    {
+      "package": "miui.systemui.plugin",
+      "device_path": "/product/app/MIUISystemUIPlugin/MIUISystemUIPlugin.apk",
+      "file": "MIUISystemUIPlugin.apk",
+      "sha256": "233eede47ddaa7d0d6131c9152d598b3e525f106d0f49348ce65c35139fbac15",
+      "bytes": 25240729,
+      "version_name": "18.3.2.57.0",
+      "version_code": 183025700
+    }
+  ],
+  "sdk": "37"
+}

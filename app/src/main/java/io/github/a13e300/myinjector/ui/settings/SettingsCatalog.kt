@@ -38,6 +38,7 @@ internal fun moduleSettingsSections(): List<SettingsSectionSpec> = listOf(
         SettingsItemSpec.Switch("system", "fixHyperOSAvoidMoveToFront", "修复 avoidMoveToFront", "修复 HyperOS 下快捷方式 App 拉起其他 App 后阻止该 App 拉起自身 Activity 的问题", false),
     )),
     SettingsSectionSpec("systemui", "系统界面", listOf(
+        SettingsItemSpec.Switch("systemui", "loopNotificationControlCenter", "通知与控制中心循环滑动", "允许向两侧连续切换通知与控制中心（HyperOS）", false),
         SettingsItemSpec.Switch("systemui", "showNotificationDetail", "显示通知详情（小米）", "在小米手机上，长按通知可显示详情，点击详情可打开相应的通知渠道管理界面", false),
         SettingsItemSpec.Switch("systemui", "noDndNotification", "勿扰模式无通知（小米）", "阻止小米手机上通过磁贴外的方式开关勿扰模式开关后显示 Toast 或者灵动额头", false),
         SettingsItemSpec.Switch("systemui", "alwaysExpandNotification", "总是展开通知", "以便使用按钮", false),

@@ -11,7 +11,7 @@ class SettingsCatalogTest {
             "fixSync", "xSpace", "forceNewTask", "forceNewTaskRules", "forceNewTaskDebug", "overrideStatusBar",
             "overrideStatusBarRules", "noSwipeToKillLockedProcess", "noSwipeToKillNoRestrictProcess",
             "bypassShellDexOptRestriction", "fixHyperOSAvoidMoveToFront", "showNotificationDetail",
-            "noDndNotification", "alwaysExpandNotification", "fixWhiteSplash",
+            "noDndNotification", "alwaysExpandNotification", "fixWhiteSplash", "loopNotificationControlCenter",
             "miuiHomeOpenAospSettings", "miuiHomeDragKill", "miuiHomeDisablePreLaunch",
         )
         assertEquals(expected, all.map { it.key }.toSet())

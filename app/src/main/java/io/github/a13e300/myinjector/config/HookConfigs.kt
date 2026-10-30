@@ -147,6 +147,7 @@ object HookConfigs {
             .setNoDndNotification(prefs.getBoolean("noDndNotification", false))
             .setShowNotificationDetail(prefs.getBoolean("showNotificationDetail", false))
             .setFixWhiteSplash(prefs.getBoolean("fixWhiteSplash", false))
+            .setLoopNotificationControlCenter(prefs.getBoolean("loopNotificationControlCenter", false))
             .build()
     }
 

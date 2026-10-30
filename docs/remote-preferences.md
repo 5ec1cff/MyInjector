@@ -1,6 +1,6 @@
 # 模块端配置的 remote preferences 迁移
 
-仅迁移模块 Activity 管理的 22 项设置（19 个布尔值、3 个规则字符串）。
+目前管理模块 Activity 中的 23 项设置（20 个布尔值、3 个规则字符串），包含通知与控制中心循环滑动开关。
 Telegram、Chrome、XHS 等注入设置仍按宿主原路径保存。
 
 模块通过 libxposed service 102 写入 `system`、`systemui`、`miuihome` 三个组，
@@ -31,7 +31,7 @@ HYOS 恢复使用旧 native_init 入口和配置广播：system_server 通过 Ja
 原有特权命令行为保持，预启动/AOSP 页面/Toast 不在本次存储迁移中改写。
 
 验证：迁移/远端优先、commit 失败但缓存改变、并发编辑不被旧确认覆盖、outbox 重建恢复、
-22 项配置与设置目录一致的单元测试，以及 release Kotlin 编译。
+23 项配置与设置目录一致的单元测试，以及 release Kotlin 编译。
 
 ## 本轮验证与边界
 
@@ -41,5 +41,5 @@ release APK 构建、唯一入口/元数据与 ELF/APK 16KB 对齐检查通过�
 真实桌面样本 7751 的解析与错误拒绝测试通过，解析测试不等于模块注入验收。
 
 未自动安装模块、部署框架或重启设备；需在支持旧 HYOS native 入口和 Java API/service 102 的框架上验收：
-升级保留 22 项、离线编辑杀 App 再重连、各配置即时生效、Java 热更新和桌面冷启动握手。
+升级保留配置、离线编辑杀 App 再重连、各配置即时生效、Java 热更新和桌面冷启动握手。
 小米桌面预启动、AOSP 页面及 Toast 仍维持原有行为，本轮只迁移配置；强停仍需系统框架作用域。
