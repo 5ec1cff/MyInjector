@@ -7,6 +7,8 @@ class HookConfigsTest {
     @Test fun marketDefaultsEnabledAndHonorsRemoteOptOut() {
         assertTrue(HookConfigs.market(ConfigValues(emptyMap<String, Any>())).removeSplashAd)
         assertFalse(HookConfigs.market(ConfigValues(mapOf("marketRemoveSplashAd" to false))).removeSplashAd)
+        assertTrue(HookConfigs.market(ConfigValues(emptyMap<String, Any>())).superMinimalMode)
+        assertFalse(HookConfigs.market(ConfigValues(mapOf("marketSuperMinimalMode" to false))).superMinimalMode)
     }
     @Test fun preservesRuleSyntaxAndIgnoresMalformedRows() {
         val config = HookConfigs.system(ConfigValues(mapOf(

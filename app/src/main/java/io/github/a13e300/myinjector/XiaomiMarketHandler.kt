@@ -17,6 +17,8 @@ import io.github.a13e300.myinjector.config.RemoteConfig
 import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
+import java.util.concurrent.ConcurrentHashMap
+import io.github.a13e300.myinjector.market.MarketSuperMinimalHook
 
 /** 保留广告不可用时的原生结束通知，避免主页、详情页一直等待开屏结束。 */
 class XiaomiMarketHandler : IHook() {
@@ -24,10 +26,17 @@ class XiaomiMarketHandler : IHook() {
     private var failureToast: MarketHookFailureToast? = null
     @Volatile private var config = MarketConfig()
     private val remoteConfig = RemoteConfig("market", HookConfigs::market, { config = it })
+    private val failures = ConcurrentHashMap.newKeySet<String>()
+    private val superMinimal = MarketSuperMinimalHook({ config.superMinimalMode }) { reportFailure("超级极简模式", it) }
 
     override fun onHook() {
         if (loadPackageParam.processName != "com.xiaomi.market") return
         remoteConfig.start()
+        runCatching { installSplash() }.onFailure { reportFailure("移除开屏广告", it) }
+        subHook(superMinimal)
+    }
+
+    private fun installSplash() {
         val manager = findClass("com.xiaomi.market.ui.splash.SplashManager")
         val canShow = Xposed.findMethodExact(manager, "canShowSplash", arrayOf(Activity::class.java))
         val cover = Xposed.findMethodExact(manager, "shownSplashCoverIfNeed",
@@ -55,15 +64,31 @@ class XiaomiMarketHandler : IHook() {
     }
 
     override fun onHookError(t: Throwable) {
+        reportFailure("初始化", t)
+    }
+
+    private fun reportFailure(feature: String, error: Throwable) {
+        failures.add(feature)
+        logE("market feature failed: $feature", error)
+        if (failureToast != null) return
         // 通知入口使用框架生命周期，不依赖已经定位失败的商店类。
         runCatching {
             failureToast = MarketHookFailureToast {
-                if (config.removeSplashAd) "MyInjector：应用商店开屏广告 Hook 失败，请查看日志" else null
+                val enabledFailures = failures.filter {
+                    when (it) {
+                        "移除开屏广告" -> config.removeSplashAd
+                        "超级极简模式" -> config.superMinimalMode
+                        else -> true
+                    }
+                }
+                if (enabledFailures.isEmpty()) null
+                else "MyInjector：${enabledFailures.joinToString("、")} Hook 失败，请查看日志"
             }.also { it.install() }
         }.onFailure { logE("install market hook failure toast", it) }
     }
 
     override fun onUnhook(): Boolean {
+        superMinimal.close()
         failureToast?.close()
         failureToast = null
         remoteConfig.close()

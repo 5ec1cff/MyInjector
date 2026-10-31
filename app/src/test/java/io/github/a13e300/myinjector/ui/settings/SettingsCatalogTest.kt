@@ -14,6 +14,7 @@ class SettingsCatalogTest {
             "noDndNotification", "alwaysExpandNotification", "fixWhiteSplash", "loopNotificationControlCenter",
             "topPullSwitchNotificationControlCenter",
             "marketRemoveSplashAd",
+            "marketSuperMinimalMode",
             "miuiHomeOpenAospSettings", "miuiHomeDragKill", "miuiHomeDisablePreLaunch",
         )
         assertEquals(expected, all.map { it.key }.toSet())

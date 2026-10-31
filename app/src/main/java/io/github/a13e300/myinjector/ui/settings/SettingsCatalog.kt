@@ -47,6 +47,7 @@ internal fun moduleSettingsSections(): List<SettingsSectionSpec> = listOf(
     )),
     SettingsSectionSpec("market", "应用商店", listOf(
         SettingsItemSpec.Switch("market", "marketRemoveSplashAd", "移除开屏广告", "跳过应用商店冷启动、后台返回及外部详情开屏广告", true),
+        SettingsItemSpec.Switch("market", "marketSuperMinimalMode", "超级极简模式", "极简模式下只保留“我的”，隐藏底栏，并将原生搜索框放到“我的”顶部；重启应用商店后生效", true),
     )),
     SettingsSectionSpec("miuihome", "小米桌面", listOf(
         SettingsItemSpec.Switch("miuihome", "miuiHomeOpenAospSettings", "打开原生应用信息", "最近任务长按应用菜单里的设置按钮时打开原生应用信息页", false),
