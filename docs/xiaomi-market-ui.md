@@ -44,6 +44,12 @@ ViewStub、主题、文字与监听器初始化，再将这个控件放入“我
 折叠资格关闭，更新数据和修改折叠状态时统一使用原生 `PageCollapseState.Expand`，
 同时隐藏果园推广入口。原生升级按钮、更新状态、上下文菜单与忽略记录保持可用。
 
+旧页的 `isCollapseState()` 虽然名称包含 Collapse，实际只在 `Expand` 时返回 true
+（`WhenMappings` 把 `Expand` 映射为 1）。`updateData()` 使用该返回值决定是否保留完整数据，
+并在完整展开时把 `foldButtonVisible` 设为 false。
+初版错误地将此方法强制返回 false，导致列表仍被截取、展开按钮仍显示，点击后也无法展开。
+修复后不再 Hook 此判断，仅在数据更新前设置原生 `Expand` 状态，让原生逻辑同时处理完整列表与按钮。
+
 新页的 `recommend/upgradepage` 响应与本地升级列表由不同数据路径产生。
 `onRefreshPageData` 接收推荐组件，将其记录到 `mRecommendComponentList`，然后合并或追加到列表。
 本功能在该出口清空推荐组件，并重新用原生 `buildComponentList()` 构建升级页，
@@ -66,6 +72,7 @@ release Kotlin 编译及 JVM 测试通过，完整真机布局、搜索点击、
 
 - `MineTitleBar-onFinishInflate.smali`、`TabInfo-getNativeMineFragment.smali`：原生我的页与标题栏初始化。
 - `AdSwitch-isUpdateListRecommendSupported.smali`：旧升级页推荐资格。
-- `UpdateListRvAdapter-isCollapseState.smali`：旧页折叠状态。
+- `UpdateListRvAdapter-isCollapseState.smali`、`UpdateListRvAdapter-WhenMappings.smali`：旧页状态判断实际在 Expand 时返回 true。
+- `UpdateListRvAdapter-updateData.smali`：完整数据与截断数据的选择，以及展开按钮显示条件。
 - `UpdateComponentManager-buildFoldUpdateApps.smali`：新页按折叠状态截取前两项或前三项。
 - `UpdateListV2Fragment-onRefreshPageData.smali`：新页合并推荐组件的入口。

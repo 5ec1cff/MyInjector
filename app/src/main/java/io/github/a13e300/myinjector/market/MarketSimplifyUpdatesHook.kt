@@ -39,7 +39,6 @@ internal class MarketSimplifyUpdatesHook(
         val oldFold = Xposed.findMethodExact(adapter, "setCollapseRequired", arrayOf(bool))
         val oldSetState = Xposed.findMethodExact(adapter, "setPageCollapseState", arrayOf(oldState))
         val oldUpdate = Xposed.findMethodExact(adapter, "updateData", arrayOf(List::class.java))
-        val oldIsFold = Xposed.findMethodExact(adapter, "isCollapseState", emptyArray())
         val oldRequiresFold = Xposed.findMethodExact(adapter, "getCollapseRequired", emptyArray())
         val oldOrchard = Xposed.findMethodExact(adapter, "shouldShowOrchardGuide", emptyArray())
         val oldRecommend = Xposed.findMethodExact(adapter, "setRecommendData", arrayOf(findClass("com.xiaomi.market.viewmodels.RecommendGroupResult")))
@@ -54,12 +53,13 @@ internal class MarketSimplifyUpdatesHook(
             recommendations.forEach { hooks += it.hookConstantIf(false, ::active) }
             hooks += oldFold.hookBefore { if (active()) it.args[0] = false }
             hooks += oldSetState.hookBefore { if (active()) it.args[0] = oldExpand }
-            hooks += oldIsFold.hookConstantIf(false, ::active)
             hooks += oldRequiresFold.hookConstantIf(false, ::active)
             hooks += oldOrchard.hookConstantIf(false, ::active)
             hooks += oldRecommend.hookNopIf(::active)
             hooks += oldUpdate.hookBefore { param -> safely {
                 param.thisObject.setObj("collapseRequired", false)
+                // isCollapseState() 实际在 Expand 时返回 true；保留原生判断，
+                // updateData 才会使用全部数据，并将 foldButtonVisible 设为 false。
                 param.thisObject.setObj("pageCollapseState", oldExpand)
             } }
             hooks += setState.hookBefore { if (active()) it.args[0] = newExpand }
