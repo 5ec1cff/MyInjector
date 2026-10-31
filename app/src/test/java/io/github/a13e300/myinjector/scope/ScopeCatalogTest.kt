@@ -18,6 +18,7 @@ class ScopeCatalogTest {
         assertTrue(scope.containsAll(ScopeCatalog.settingsApps))
         assertTrue(scope.containsAll(ScopeCatalog.components.values))
         assertFalse("com.telegram.plus" in scope)
+        assertTrue("com.xiaomi.market" in scope)
     }
     @Test fun classifiesSystemAndUpdatedSystemAppsFromApplicationInfo() {
         assertTrue(ScopeCatalog.isSystemApp(android.content.pm.ApplicationInfo.FLAG_SYSTEM))

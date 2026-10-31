@@ -75,6 +75,7 @@ class Entry : XposedModule() {
                 "com.xingin.xhs" -> XhsHandler
                 "com.miui.gallery" -> MiuiGalleryHandler()
                 "tv.danmaku.bili" -> BiliHandler()
+                "com.xiaomi.market" -> XiaomiMarketHandler()
                 else -> return
             }
         }
