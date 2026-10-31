@@ -9,6 +9,15 @@ class HookConfigsTest {
         assertFalse(HookConfigs.market(ConfigValues(mapOf("marketRemoveSplashAd" to false))).removeSplashAd)
         assertTrue(HookConfigs.market(ConfigValues(emptyMap<String, Any>())).superMinimalMode)
         assertFalse(HookConfigs.market(ConfigValues(mapOf("marketSuperMinimalMode" to false))).superMinimalMode)
+        assertTrue(HookConfigs.market(ConfigValues(emptyMap<String, Any>())).simplifyUpdates)
+        assertFalse(HookConfigs.market(ConfigValues(mapOf("marketSimplifyUpdates" to false))).simplifyUpdates)
+    }
+    @Test fun marketOptionsAreIndependent() {
+        val config = HookConfigs.market(ConfigValues(mapOf("marketRemoveSplashAd" to false,
+            "marketSuperMinimalMode" to true, "marketSimplifyUpdates" to false)))
+        assertFalse(config.removeSplashAd)
+        assertTrue(config.superMinimalMode)
+        assertFalse(config.simplifyUpdates)
     }
     @Test fun preservesRuleSyntaxAndIgnoresMalformedRows() {
         val config = HookConfigs.system(ConfigValues(mapOf(

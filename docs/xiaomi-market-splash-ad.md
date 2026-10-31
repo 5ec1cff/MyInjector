@@ -86,7 +86,7 @@ APK 与定向反编译保留在工作目录 `analysis/xiaomi-splash-ads/`，不�
 目标类/方法缺失、签名校验失败或安装失败，均记录 `MyInjector` 错误日志和堆栈。
 
 失败后通过框架 `Instrumentation.callActivityOnResume` 等待首个商店页面进入前台，
-显示“MyInjector：应用商店开屏广告 Hook 失败，请查看日志”的 Toast。
+显示包含失败功能名称及查看日志提示的 Toast，开屏、超级极简模式、升级页精简各自独立记录失败。
 随后复用 `Application.ActivityLifecycleCallbacks`，每次从后台重新打开再提示一次，
 同一次前台会话中的页面切换和旋转不重复提醒。后台初始化不直接弹 Toast。
 通知入口不依赖商店内部类，Toast 的异常单独记录，避免影响宿主启动。

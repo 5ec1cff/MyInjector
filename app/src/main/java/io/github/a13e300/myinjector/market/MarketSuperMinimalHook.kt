@@ -21,6 +21,7 @@ import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.setObjS
 import io.github.a13e300.myinjector.bridge.Unhook
 import io.github.a13e300.myinjector.bridge.Xposed
+import io.github.a13e300.myinjector.logD
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
@@ -38,10 +39,11 @@ internal class MarketSuperMinimalHook(
     private val searches = WeakHashMap<View, SearchState>()
     private val wrappers = mutableListOf<WeakReference<Any>>()
     private val layoutListeners = WeakHashMap<View, View.OnLayoutChangeListener>()
-    private var closed = false
-    private var failed = false
+    @Volatile private var closed = false
+    @Volatile private var failed = false
     private lateinit var elder: Class<*>
     private lateinit var pageType: Class<*>
+    private lateinit var tabTags: Class<*>
     private lateinit var searchType: Class<*>
 
     override fun onHook() {
@@ -49,6 +51,8 @@ internal class MarketSuperMinimalHook(
         Xposed.findField(elder, "INSTANCE")
         Xposed.findMethodExact(elder, "isElderMode", emptyArray())
         pageType = findClass("com.xiaomi.market.model.PageConfig")
+        tabTags = findClass("com.xiaomi.market.model.TabTag")
+        Xposed.findMethodExact(tabTags, "isNativeMineTab", arrayOf(String::class.java))
         searchType = findClass("com.xiaomi.market.widget.MainSearchContainer")
         val main = findClass("com.xiaomi.market.business_ui.main.MarketTabActivity")
         val wrapper = findClass("com.xiaomi.market.ui.DoubleTabProxyActivityWrapper")
@@ -68,11 +72,15 @@ internal class MarketSuperMinimalHook(
         val padding = Xposed.findMethodExact(mine, "initBottomPadding", emptyArray())
         val mineCreated = Xposed.findMethodExact(mine, "onViewCreated", arrayOf(View::class.java, Bundle::class.java))
         try {
-            hooks += updateTabs.hookAfter { param -> if (param.throwable == null) safely { preparePage(param.thisObject) } }
+            hooks += updateTabs.hookAfter { param -> if (param.throwable == null) safely {
+                // PageConfig 也用于其他页面；只跟踪已经由主 Activity 认领的实例。
+                if (isPrepared(param.thisObject)) preparePage(param.thisObject)
+            } }
             // 缓存中的 PageConfig 不一定重新解析；在主页创建包装器前也处理一次。
             hooks += getPage.hookAfter { param -> if (param.throwable == null) safely { param.result?.let(::preparePage) } }
             hooks += onCreate.hook(
                 before = { param -> safely {
+                    if (!main.isInstance(param.thisObject.getObj("mActivity"))) return@safely
                     val page = param.thisObject.getObj("mPageConfig") ?: return@safely
                     preparePage(page)
                     if (pages.containsKey(page)) {
@@ -89,7 +97,8 @@ internal class MarketSuperMinimalHook(
                     }
                 } },
                 after = { param -> if (param.throwable == null) safely {
-                    if (pages.containsKey(param.thisObject.getObj("mPageConfig"))) hideBottom(param.thisObject)
+                    if (main.isInstance(param.thisObject.getObj("mActivity")) &&
+                        isPrepared(param.thisObject.getObj("mPageConfig"))) hideBottom(param.thisObject)
                 } },
             )
             hooks += titleHeight.hookAfter { param -> if (param.throwable == null) safely {
@@ -110,6 +119,7 @@ internal class MarketSuperMinimalHook(
                     root.layoutParams = params
                 }
             } }
+            logD("market super minimal hooks installed")
         } catch (error: Throwable) {
             hooks.asReversed().forEach { it.unhook() }
             hooks.clear()
@@ -118,6 +128,8 @@ internal class MarketSuperMinimalHook(
     }
 
     private fun active() = !closed && !failed && enabled() && elder.getObjS("INSTANCE").call("isElderMode") == true
+
+    private fun isPrepared(page: Any?) = synchronized(this) { pages.containsKey(page) }
 
     @Synchronized private fun preparePage(page: Any) {
         val current = page.getObjAs<List<Any>>("tabs")
@@ -128,15 +140,17 @@ internal class MarketSuperMinimalHook(
         }
         pages.remove(page)
         if (!active()) return
-        val mine = current.singleOrNull { it.call("getTag") == "native_market_mine" } ?: error("native mine tab missing")
+        val mine = current.singleOrNull { tabTags.callS("isNativeMineTab", it.call("getTag")) == true }
+            ?: error("native mine tab missing")
+        val mineTag = mine.call("getTag") as String
         val clone = mine.call("deepClone")!!
         clone.setObj("defaultSelected", true)
         val tabs = arrayListOf(clone)
         pages[page] = PageState(current, tabs, page.getObj("defaultSelectedPageTag"),
             page.getObj("defaultBackToPageTag"), pageType.getObjS("defaultSelectedBottomTabIndex") as Int)
         page.setObj("tabs", tabs)
-        page.setObj("defaultSelectedPageTag", "native_market_mine")
-        page.setObj("defaultBackToPageTag", "native_market_mine")
+        page.setObj("defaultSelectedPageTag", mineTag)
+        page.setObj("defaultBackToPageTag", mineTag)
         pageType.setObjS("defaultSelectedBottomTabIndex", 0)
     }
 
@@ -146,6 +160,8 @@ internal class MarketSuperMinimalHook(
             page.setObj("defaultSelectedPageTag", state.selected)
             page.setObj("defaultBackToPageTag", state.back)
             pageType.setObjS("defaultSelectedBottomTabIndex", state.index)
+            page.call("initDefaultSelectedTab")
+            page.call("initDefaultBackPageTag")
         }
         pages.remove(page)
     }
@@ -213,7 +229,7 @@ internal class MarketSuperMinimalHook(
         closed = true
         hooks.asReversed().forEach { it.unhook() }
         hooks.clear()
-        val cleanup = Runnable {
+        val cleanup = Runnable { runCatching {
             layoutListeners.forEach { (view, listener) -> view.removeOnLayoutChangeListener(listener) }
             layoutListeners.clear()
             synchronized(this) { pages.entries.map { it.key to it.value } }.forEach { (page, state) -> restorePage(page, state) }
@@ -227,7 +243,7 @@ internal class MarketSuperMinimalHook(
                 if (!it.isFinishing && !it.isDestroyed) it.recreate()
             }
             wrappers.clear()
-        }
+        }.onFailure(failure) }
         if (Looper.myLooper() == Looper.getMainLooper()) cleanup.run() else Handler(Looper.getMainLooper()).post(cleanup)
     }
 }

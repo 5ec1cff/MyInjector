@@ -7,6 +7,20 @@ import org.junit.Test
 class PreferenceSyncTest {
     private val key = "miuiHomeDragKill"
 
+    @Test fun marketDefaultsArePublishedAndRemoteOptOutIsPreserved() {
+        val cache = MemoryPrefs()
+        val remote = MemoryPrefs()
+        val sync = PreferenceSync(cache)
+        sync.sync("market", remote)
+        val keys = listOf("marketRemoveSplashAd", "marketSuperMinimalMode", "marketSimplifyUpdates")
+        keys.forEach { assertEquals(true, remote.persisted[it]) }
+        remote.edit().putBoolean("marketSuperMinimalMode", false).commit()
+        sync.sync("market", remote)
+        assertFalse(cache.getBoolean("marketSuperMinimalMode", true))
+        assertTrue(cache.getBoolean("marketRemoveSplashAd", false))
+        assertTrue(cache.getBoolean("marketSimplifyUpdates", false))
+    }
+
     @Test fun migratesLegacyButPreservesExistingRemoteValues() {
         val local = MemoryPrefs(mutableMapOf(key to true, "miuiHomeOpenAospSettings" to true))
         val remote = MemoryPrefs(mutableMapOf(key to false))
@@ -86,7 +100,7 @@ class PreferenceSyncTest {
         val keys = items.filter { it is io.github.a13e300.myinjector.ui.settings.SettingsItemSpec.Switch ||
             it is io.github.a13e300.myinjector.ui.settings.SettingsItemSpec.Text }.map { it.key }.toSet()
         assertEquals(keys, SettingsSchema.defaults.keys)
-        assertEquals(26, keys.size)
+        assertEquals(27, keys.size)
     }
 }
 

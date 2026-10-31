@@ -31,7 +31,8 @@ object SettingsSchema {
         ),
         "market" to linkedMapOf<String, Any>(
             "marketRemoveSplashAd" to true,
-            "marketSuperMinimalMode" to true
+            "marketSuperMinimalMode" to true,
+            "marketSimplifyUpdates" to true
         ),
         "miuihome" to linkedMapOf<String, Any>(
             "miuiHomeOpenAospSettings" to false,

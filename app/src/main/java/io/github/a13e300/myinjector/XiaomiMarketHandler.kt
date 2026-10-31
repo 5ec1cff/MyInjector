@@ -19,6 +19,7 @@ import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import io.github.a13e300.myinjector.market.MarketSuperMinimalHook
+import io.github.a13e300.myinjector.market.MarketSimplifyUpdatesHook
 
 /** 保留广告不可用时的原生结束通知，避免主页、详情页一直等待开屏结束。 */
 class XiaomiMarketHandler : IHook() {
@@ -28,12 +29,14 @@ class XiaomiMarketHandler : IHook() {
     private val remoteConfig = RemoteConfig("market", HookConfigs::market, { config = it })
     private val failures = ConcurrentHashMap.newKeySet<String>()
     private val superMinimal = MarketSuperMinimalHook({ config.superMinimalMode }) { reportFailure("超级极简模式", it) }
+    private val simplifyUpdates = MarketSimplifyUpdatesHook({ config.simplifyUpdates }) { reportFailure("简化应用升级页面", it) }
 
     override fun onHook() {
         if (loadPackageParam.processName != "com.xiaomi.market") return
         remoteConfig.start()
         runCatching { installSplash() }.onFailure { reportFailure("移除开屏广告", it) }
         subHook(superMinimal)
+        subHook(simplifyUpdates)
     }
 
     private fun installSplash() {
@@ -60,14 +63,14 @@ class XiaomiMarketHandler : IHook() {
             hooks.clear()
             throw error
         }
-        logD("market cold, foreground and detail splash ads disabled")
+        logD("market splash hooks installed; enabled=${config.removeSplashAd}")
     }
 
     override fun onHookError(t: Throwable) {
         reportFailure("初始化", t)
     }
 
-    private fun reportFailure(feature: String, error: Throwable) {
+    @Synchronized private fun reportFailure(feature: String, error: Throwable) {
         failures.add(feature)
         logE("market feature failed: $feature", error)
         if (failureToast != null) return
@@ -78,6 +81,7 @@ class XiaomiMarketHandler : IHook() {
                     when (it) {
                         "移除开屏广告" -> config.removeSplashAd
                         "超级极简模式" -> config.superMinimalMode
+                        "简化应用升级页面" -> config.simplifyUpdates
                         else -> true
                     }
                 }
@@ -89,6 +93,7 @@ class XiaomiMarketHandler : IHook() {
 
     override fun onUnhook(): Boolean {
         superMinimal.close()
+        simplifyUpdates.close()
         failureToast?.close()
         failureToast = null
         remoteConfig.close()

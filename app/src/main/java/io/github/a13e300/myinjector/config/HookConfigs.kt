@@ -155,6 +155,7 @@ object HookConfigs {
     fun market(prefs: ConfigValues) = MarketConfig(
         removeSplashAd = prefs.getBoolean("marketRemoveSplashAd", true),
         superMinimalMode = prefs.getBoolean("marketSuperMinimalMode", true),
+        simplifyUpdates = prefs.getBoolean("marketSimplifyUpdates", true),
     )
 
     fun miuiHome(prefs: ConfigValues): MiuiHomeConfig {

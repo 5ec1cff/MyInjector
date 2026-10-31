@@ -4,4 +4,5 @@ package io.github.a13e300.myinjector.config
 data class MarketConfig(
     val removeSplashAd: Boolean = true,
     val superMinimalMode: Boolean = true,
+    val simplifyUpdates: Boolean = true,
 )

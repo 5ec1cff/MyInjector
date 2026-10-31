@@ -15,6 +15,7 @@ class SettingsCatalogTest {
             "topPullSwitchNotificationControlCenter",
             "marketRemoveSplashAd",
             "marketSuperMinimalMode",
+            "marketSimplifyUpdates",
             "miuiHomeOpenAospSettings", "miuiHomeDragKill", "miuiHomeDisablePreLaunch",
         )
         assertEquals(expected, all.map { it.key }.toSet())
