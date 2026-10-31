@@ -7,10 +7,13 @@ import android.os.Bundle
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.hookAfter
-import io.github.a13e300.myinjector.arch.hookConstant
-import io.github.a13e300.myinjector.arch.hookNop
+import io.github.a13e300.myinjector.arch.hookConstantIf
+import io.github.a13e300.myinjector.arch.hookNopIf
 import io.github.a13e300.myinjector.bridge.Unhook
 import io.github.a13e300.myinjector.bridge.Xposed
+import io.github.a13e300.myinjector.config.HookConfigs
+import io.github.a13e300.myinjector.config.MarketConfig
+import io.github.a13e300.myinjector.config.RemoteConfig
 import java.lang.reflect.Modifier
 import java.util.Collections
 import java.util.WeakHashMap
@@ -19,9 +22,12 @@ import java.util.WeakHashMap
 class XiaomiMarketHandler : IHook() {
     private val hooks = mutableListOf<Unhook>()
     private var failureToast: MarketHookFailureToast? = null
+    @Volatile private var config = MarketConfig()
+    private val remoteConfig = RemoteConfig("market", HookConfigs::market, { config = it })
 
     override fun onHook() {
         if (loadPackageParam.processName != "com.xiaomi.market") return
+        remoteConfig.start()
         val manager = findClass("com.xiaomi.market.ui.splash.SplashManager")
         val canShow = Xposed.findMethodExact(manager, "canShowSplash", arrayOf(Activity::class.java))
         val cover = Xposed.findMethodExact(manager, "shownSplashCoverIfNeed",
@@ -35,13 +41,14 @@ class XiaomiMarketHandler : IHook() {
 
         try {
             // 不直接跳过 tryAdSplash：任务会沿原生 false 分支调用 onSplashEnd 并通知页面继续。
-            hooks += canShow.hookConstant(false)
+            hooks += canShow.hookConstantIf(false) { config.removeSplashAd }
             // 封面先于异步资格判断设置；同步阻止它，避免无广告也短暂显示全屏遮罩。
-            hooks += cover.hookNop()
+            hooks += cover.hookNopIf { config.removeSplashAd }
             // 外部进入详情页时，在置 isRequesting 及注册等待任务之前走原生无广告分支。
-            hooks += canRequest.hookConstant(false)
+            hooks += canRequest.hookConstantIf(false) { config.removeSplashAd }
         } catch (error: Throwable) {
-            onUnhook()
+            hooks.asReversed().forEach { it.unhook() }
+            hooks.clear()
             throw error
         }
         logD("market cold, foreground and detail splash ads disabled")
@@ -50,13 +57,16 @@ class XiaomiMarketHandler : IHook() {
     override fun onHookError(t: Throwable) {
         // 通知入口使用框架生命周期，不依赖已经定位失败的商店类。
         runCatching {
-            failureToast = MarketHookFailureToast().also { it.install() }
+            failureToast = MarketHookFailureToast {
+                if (config.removeSplashAd) "MyInjector：应用商店开屏广告 Hook 失败，请查看日志" else null
+            }.also { it.install() }
         }.onFailure { logE("install market hook failure toast", it) }
     }
 
     override fun onUnhook(): Boolean {
         failureToast?.close()
         failureToast = null
+        remoteConfig.close()
         hooks.asReversed().forEach { it.unhook() }
         hooks.clear()
         return true
@@ -64,7 +74,7 @@ class XiaomiMarketHandler : IHook() {
 }
 
 /** 初始化可能发生在后台；等到页面真正恢复前台，再提示每次前台会话一次。 */
-private class MarketHookFailureToast : Application.ActivityLifecycleCallbacks, AutoCloseable {
+private class MarketHookFailureToast(private val message: () -> String?) : Application.ActivityLifecycleCallbacks, AutoCloseable {
     private var bootstrap: Unhook? = null
     private var application: Application? = null
     private val started = Collections.newSetFromMap(WeakHashMap<Activity, Boolean>())
@@ -96,8 +106,9 @@ private class MarketHookFailureToast : Application.ActivityLifecycleCallbacks, A
 
     override fun onActivityResumed(activity: Activity) {
         if (closed || !pending || activity.isFinishing || activity.isDestroyed) return
+        val text = message() ?: return
         runCatching {
-            Toast.makeText(activity, "MyInjector：应用商店开屏广告 Hook 失败，请查看日志", Toast.LENGTH_LONG).show()
+            Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
             pending = false
         }.onFailure { logE("show market hook failure toast", it) }
     }

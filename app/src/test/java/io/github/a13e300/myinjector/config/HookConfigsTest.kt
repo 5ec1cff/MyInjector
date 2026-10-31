@@ -4,6 +4,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HookConfigsTest {
+    @Test fun marketDefaultsEnabledAndHonorsRemoteOptOut() {
+        assertTrue(HookConfigs.market(ConfigValues(emptyMap<String, Any>())).removeSplashAd)
+        assertFalse(HookConfigs.market(ConfigValues(mapOf("marketRemoveSplashAd" to false))).removeSplashAd)
+    }
     @Test fun preservesRuleSyntaxAndIgnoresMalformedRows() {
         val config = HookConfigs.system(ConfigValues(mapOf(
             "forceNewTaskRules" to "src/.Source:dst/.Target:ir,nd\nbroken\n*:dst",

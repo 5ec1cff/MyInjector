@@ -45,6 +45,9 @@ internal fun moduleSettingsSections(): List<SettingsSectionSpec> = listOf(
         SettingsItemSpec.Switch("systemui", "alwaysExpandNotification", "总是展开通知", "以便使用按钮", false),
         SettingsItemSpec.Switch("systemui", "fixWhiteSplash", "修复纯白 Splash", "夜间模式将具有纯白背景的 Splash 变为黑色", false),
     )),
+    SettingsSectionSpec("market", "应用商店", listOf(
+        SettingsItemSpec.Switch("market", "marketRemoveSplashAd", "移除开屏广告", "跳过应用商店冷启动、后台返回及外部详情开屏广告", true),
+    )),
     SettingsSectionSpec("miuihome", "小米桌面", listOf(
         SettingsItemSpec.Switch("miuihome", "miuiHomeOpenAospSettings", "打开原生应用信息", "最近任务长按应用菜单里的设置按钮时打开原生应用信息页", false),
         SettingsItemSpec.Switch("miuihome", "miuiHomeDragKill", "划卡强杀进程", "最近任务卡片拖动悬停 700ms 后继续划动时强制停止应用进程", false),

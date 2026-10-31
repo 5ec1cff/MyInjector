@@ -9,7 +9,8 @@ internal data class ScopeApplication(val packageName: String, val label: String,
 }
 
 object ScopeCatalog {
-    val components = mapOf("system" to "system", "systemui" to "com.android.systemui", "miuihome" to "com.miui.home")
+    val components = mapOf("system" to "system", "systemui" to "com.android.systemui",
+        "miuihome" to "com.miui.home", "market" to "com.xiaomi.market")
     val settingsApps = setOf(
         "com.xingin.xhs", "com.kiwibrowser.browser", "com.android.chrome",
         "org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.messenger.beta",

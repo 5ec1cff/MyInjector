@@ -7,9 +7,16 @@
 `689f2738267ad6afe58a62440b1e593670ce487c88f1ce4f5afa7848a26f2110`。
 APK 与定向反编译保留在工作目录 `analysis/xiaomi-splash-ads/`，不提交 APK。
 
-模块新增应用商店作用域与 `XiaomiMarketHandler`。在模块主页启用应用商店作用域后，
-重新启动应用商店生效。系统应用分组及图标继续按 PackageManager 的结果显示。
+模块新增应用商店作用域与 `XiaomiMarketHandler`。在模块主页进入应用商店的模块设置，
+启用作用域并管理各功能。配置存储于模块 `market` 组 remote prefs，不写入商店的偏好文件。
+“移除开屏广告”默认开启，关闭后后续广告资格检查使用原生结果。
+系统应用分组及图标继续按 PackageManager 的结果显示。
 只在应用商店主进程安装 Hook，卸载模块时移除全部 Hook。
+
+新版复核样本为 `4.129.s.00`（`40007700`），SHA-256：
+`bb35fb49833309548a36ae1528a047794fca49680eda132f4a0d9f30a5c0b80b`。
+从设备重新提取；主进程日志出现 `market cold, foreground and detail splash ads disabled`，
+证明这三个开屏入口按原类名成功安装，未进行动态反混淆。
 
 ## 原生流程
 
