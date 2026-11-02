@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -37,6 +38,7 @@ import io.github.a13e300.myinjector.ui.modernInjectedButton
 import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
 import io.github.a13e300.myinjector.ui.showModernInjectedDialog
 import io.github.a13e300.myinjector.ui.InjectedDialogContext
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class ExtractVideoLink : MyDynHook("extractVideoLink") {
@@ -143,7 +145,10 @@ class ExtractVideoLink : MyDynHook("extractVideoLink") {
 
             private var lastX: Int = 0
             private var lastY: Int = 0
-            private var positionChanged = false
+            private var downX: Int = 0
+            private var downY: Int = 0
+            private val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+            private var dragging = false
 
             private fun restorePosition() {
                 val metrics = activity.resources.displayMetrics
@@ -167,17 +172,30 @@ class ExtractVideoLink : MyDynHook("extractVideoLink") {
                 if (isAttachedToWindow) wm.updateViewLayout(this, lp)
             }
 
+            // 开始拖动后由 ViewGroup 取消子按钮的触摸，避免抬手时触发点击。
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean =
+                dragging || super.onInterceptTouchEvent(ev)
+
+            override fun onTouchEvent(event: MotionEvent): Boolean =
+                dragging || super.onTouchEvent(event)
+
             override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
                 when (ev.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         lastX = ev.rawX.toInt()
                         lastY = ev.rawY.toInt()
-                        positionChanged = false
+                        downX = lastX
+                        downY = lastY
+                        dragging = false
                     }
 
                     MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
                         val curX = ev.rawX.toInt()
                         val curY = ev.rawY.toInt()
+                        if (!dragging) {
+                            dragging = abs(curX - downX) > touchSlop || abs(curY - downY) > touchSlop
+                        }
+                        if (!dragging) return super.dispatchTouchEvent(ev)
                         val dx = curX - lastX
                         val dy = curY - lastY
                         lastX = curX
@@ -186,12 +204,11 @@ class ExtractVideoLink : MyDynHook("extractVideoLink") {
                         // x/y 是窗口偏移，不能累加 getLocationOnScreen 中的系统栏偏移。
                         lp.x = (lp.x + dx).coerceIn(0, (metrics.widthPixels - winWidth).coerceAtLeast(0))
                         lp.y = (lp.y + dy).coerceIn(0, (metrics.heightPixels - winHeight).coerceAtLeast(0))
-                        if (dx != 0 || dy != 0) positionChanged = true
 
                         wm.updateViewLayout(this, lp)
                     }
                 }
-                if (positionChanged &&
+                if (dragging &&
                     (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL)
                 ) {
                     savePosition()
