@@ -22,6 +22,13 @@ class BiliApkCompatibilityTest {
                 locateBiliShare(bridge).descriptor)
             assertEquals("Lkntr/app/ad/biz/videodetail/pausedpage/h;->getEnabled()Z",
                 locateBiliPausePageConfig(bridge).descriptor)
+            assertEquals(setOf(
+                "Lcom/bilibili/ship/theseus/united/player/mediaplay/network/m;->f(Lkotlin/coroutines/jvm/internal/ContinuationImpl;)Ljava/lang/Object;",
+                "Lcom/bilibili/ship/theseus2/united/player/mediaplay/network/NetworkShowToastService;->g(Lkotlin/coroutines/jvm/internal/ContinuationImpl;)Ljava/lang/Object;",
+            ), locateBiliFreeDataGuides(bridge).map { it.descriptor }.toSet())
+            assertEquals("java.lang.String", bridge.getMethodData(
+                "Lcom/bapis/bilibili/app/view/v1/TFToast;->getTitle()Ljava/lang/String;"
+            )?.returnTypeName)
             assertEquals("Lcom/bapis/bilibili/community/service/dm/v1/KDmViewReply;->r:Ljava/util/List;",
                 locateBiliActivityMetaField(bridge).descriptor)
             assertEquals("Ltv/danmaku/bili/MainActivitySplashComponentExtKt;->d(Ltv/danmaku/bili/MainActivityV2;Ltv/danmaku/bili/splash/ad/model/SplashOrder;Z)Z",

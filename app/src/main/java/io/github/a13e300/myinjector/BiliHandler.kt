@@ -13,6 +13,7 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookConstant
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
+import io.github.a13e300.myinjector.bili.locateBiliFreeDataGuides
 import io.github.a13e300.myinjector.bili.locateBiliNewSplash
 import io.github.a13e300.myinjector.bili.locateBiliPausePageConfig
 import io.github.a13e300.myinjector.bili.locateBiliShare
@@ -111,6 +112,29 @@ class BiliHandler : IHook() {
         }.onFailure { logE("hookCloudTvOverlay (Theseus2)", it) }
     }
 
+    private fun hookFreeDataGuide(creator: ObfsTableCreator) {
+        runCatching {
+            val methods = creator.obfsTable.filterKeys { it.startsWith("freeDataGuide_") }.values
+                .ifEmpty {
+                    locateBiliFreeDataGuides(creator.bridge).also { entries ->
+                        entries.forEachIndexed { i, method -> creator.obfsTable["freeDataGuide_$i"] = method }
+                        creator.changed = true
+                    }
+                }
+            val unit = findClass("kotlin.Unit").getObjS("INSTANCE")!!
+            methods.forEach { info ->
+                // 在免流开通引导请求前结束，不拦截流量警告或已开通免流的状态提示。
+                hooks += DexMethod(info.descriptor).getMethodInstance(classLoader).hookConstant(unit)
+                logD("bili free data guide blocked: ${info.descriptor}")
+            }
+        }.onFailure { logE("hookFreeDataGuide (Theseus)", it) }
+        runCatching {
+            // 旧 PlayerNetworkService 混合处理普通提醒和推广，空标题只跳过 TFToast 推广视图。
+            hooks += findClass("com.bapis.bilibili.app.view.v1.TFToast")
+                .hookConstant("getTitle", constant = "")
+        }.onFailure { logE("hookFreeDataGuide (legacy)", it) }
+    }
+
     private fun filterActivityMeta(metas: List<*>): List<*> {
         val kept = metas.filterNot { raw ->
             raw is String && runCatching { JSONObject(raw).optInt("id") == 10011 }.getOrDefault(false)
@@ -169,6 +193,7 @@ class BiliHandler : IHook() {
             hookShare(creator)
             hookAd(creator)
             hookPauseAd(creator)
+            hookFreeDataGuide(creator)
             hookCloudTvOverlay(creator)
             hookSplashAd(creator)
             creator.persist()

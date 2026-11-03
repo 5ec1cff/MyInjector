@@ -37,6 +37,18 @@ internal fun locateBiliPausePageConfig(bridge: DexKitBridge): ObfsInfo = bridge.
     }
 }.single().toObfsInfo()
 
+internal fun locateBiliFreeDataGuides(bridge: DexKitBridge): List<ObfsInfo> {
+    val methods = bridge.findMethod {
+        matcher {
+            usingEqStrings("freedata.mobile_free_data_toast_times", "pref_key_free_data_guide_toast_show_times")
+            paramTypes("kotlin.coroutines.jvm.internal.ContinuationImpl")
+            returnType("java.lang.Object")
+        }
+    }
+    check(methods.isNotEmpty()) { "No free data guide entry found" }
+    return methods.map { it.toObfsInfo() }
+}
+
 internal fun locateBiliSplash(bridge: DexKitBridge): ObfsInfo = bridge.findMethod {
     matcher { usingEqStrings("show splash id = ", "ADSplashFragment") }
 }.single().toObfsInfo()
