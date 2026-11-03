@@ -23,6 +23,7 @@ class HistoricalNewsOption : MyDynHook("historicalNewsOption") {
             DexMethod(it.value.descriptor).getMethodInstance(classLoader).apply { isAccessible = true }
         }
         val searchSender = methods.getValue("searchSender")
+        val anchoredSearch = AnchoredMessageSearch(classLoader, chatClass, ::isEnabled, ::onHookError)
         fun invoke(key: String, chat: Any, vararg args: Any?) {
             val method = methods.getValue(key)
             if (Modifier.isStatic(method.modifiers)) method.invoke(null, chat, *args)
@@ -53,7 +54,7 @@ class HistoricalNewsOption : MyDynHook("historicalNewsOption") {
                         val args = searchSender.parameterTypes.filter { it != chatClass }.map {
                             if (it.isInstance(sender)) sender else null
                         }.toTypedArray()
-                        invoke("searchSender", chat, *args)
+                        anchoredSearch.fromMessage(chat, message) { invoke("searchSender", chat, *args) }
                         invoke("showSearchList", chat, true)
                     }
                 },
