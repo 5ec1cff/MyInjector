@@ -171,9 +171,32 @@ internal class AnchoredMessageSearch(
 
     private fun changeFilters(chat: Any, filters: MessageSearchFilters, date: LocalDate?) {
         val context = contexts[chat] ?: return
+        val media = chat.call("getMediaDataController")!!
+        val anchor = if (filters.type != context.filters.type) {
+            sessions[media]?.takeIf { it.chat === chat }?.currentAnchor() ?: currentSearchAnchor(chat, media)
+        } else null
         cancelDate(context)
         context.filters = filters
-        if (date == null) restart(context) else jumpToDate(context, filters.jumpTime(date))
+        if (date == null) restart(context, anchor) else jumpToDate(context, filters.jumpTime(date))
+    }
+
+    private fun currentSearchAnchor(chat: Any, media: Any): SearchMessageKey? {
+        val view = fields.getValue("list").get(chat) as? ViewGroup
+        val adapter = fields.getValue("adapter").get(chat)
+        var message: Any? = null
+        if (view?.isShown == true && !view.isLayoutRequested && adapter != null) {
+            val layout = methods.getValue("getLayout").invoke(view)
+            if (layout != null) {
+                val first = methods.getValue("first").invoke(layout) as Int
+                message = (fields.getValue("results").get(adapter) as List<*>).getOrNull(first)
+            }
+        }
+        // In chat view, use the result selected by native search arrows.
+        if (message == null) {
+            message = (media.getObj("searchResultMessages") as List<*>).getOrNull(media.getObj("lastReturnedNum") as Int)
+        }
+        return message?.let { SearchMessageKey(it.call("getDialogId") as Long, it.call("getId") as Int) }
+            ?.takeIf { it.id > 0 }
     }
 
     private fun jumpToDate(context: SearchContext, time: Int) {
@@ -255,6 +278,9 @@ internal class AnchoredMessageSearch(
         fun layout() = list()?.let { methods.getValue("getLayout").invoke(it) }
         private fun id(m: Any) = m.call("getId") as Int
         private fun dialog(m: Any) = m.call("getDialogId") as Long
+        fun currentAnchor(): SearchMessageKey =
+            (if (!first) currentSearchAnchor(chat, media) else null) ?: SearchMessageKey(anchorDialog, anchorId)
+
         fun mask(): Int {
             val position = media.getObj("lastReturnedNum") as Int
             return (if (!olderEnd || position < messages.lastIndex) 1 else 0) or

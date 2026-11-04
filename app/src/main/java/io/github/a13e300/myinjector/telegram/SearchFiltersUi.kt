@@ -95,7 +95,7 @@ internal class SearchFiltersUi(
         AlertDialog.Builder(button.context).setTitle("消息类型")
             .setSingleChoiceItems(types.map { it.title }.toTypedArray(), current.type.ordinal) { dialog, index ->
                 dialog.dismiss()
-                update(chat, current.copy(type = types[index]))
+                if (types[index] != current.type) update(chat, current.copy(type = types[index]))
             }.setNegativeButton("取消", null).show()
     }
 
