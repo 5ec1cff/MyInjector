@@ -2,12 +2,15 @@ package io.github.a13e300.myinjector.telegram
 
 import android.app.AlertDialog
 import android.app.DatePickerDialog
+import android.util.TypedValue
+import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.PopupMenu
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.call
+import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import org.luckypray.dexkit.wrap.DexField
@@ -28,6 +31,7 @@ internal class SearchFiltersUi(
     private val buttons = WeakHashMap<View, WeakReference<Any>>()
     private val chats = WeakHashMap<Any, Unit>()
     private val loader = requireNotNull(chatClass.classLoader)
+    private val androidUtilities = loader.loadClass("org.telegram.messenger.AndroidUtilities")
     private val creator = TelegramHandler.creator
     private val found by lazy { findSearchControls(creator.bridge, chatClass.name) }
     private val members = listOf("create", "calendar", "visible", "showList", "sender").associateWith { key ->
@@ -71,10 +75,21 @@ internal class SearchFiltersUi(
     fun showResults(chat: Any) { showList.invoke(chat, true) }
     fun forget(chat: Any) { chats.remove(chat) }
 
+    private fun dialogContext(button: View): ContextThemeWrapper {
+        val context = ContextThemeWrapper(button.context, 0)
+        // Telegram's theme can differ from Android's night mode.
+        androidUtilities.callS("checkAndroidTheme", context, true)
+        val dialogTheme = TypedValue()
+        check(context.theme.resolveAttribute(android.R.attr.alertDialogTheme, dialogTheme, true))
+        // Do not copy the host's light popup text style into the dark theme.
+        val theme = button.resources.newTheme().apply { applyStyle(dialogTheme.resourceId, true) }
+        return ContextThemeWrapper(button.context, theme)
+    }
+
     private fun showMenu(button: View, chat: Any) {
         val current = options(chat) ?: return
         button.context.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(button.windowToken, 0)
-        PopupMenu(button.context, button).apply {
+        PopupMenu(dialogContext(button), button).apply {
             menu.add(0, 0, 0, "消息类型：${current.type.title}")
             menu.add(0, 1, 1, "时间范围：${current.dates.title}")
             menu.add(0, 2, 2, "跳到日期")
@@ -92,7 +107,7 @@ internal class SearchFiltersUi(
 
     private fun chooseType(button: View, chat: Any, current: MessageSearchFilters) {
         val types = SearchMessageType.values()
-        AlertDialog.Builder(button.context).setTitle("消息类型")
+        AlertDialog.Builder(dialogContext(button)).setTitle("消息类型")
             .setSingleChoiceItems(types.map { it.title }.toTypedArray(), current.type.ordinal) { dialog, index ->
                 dialog.dismiss()
                 if (types[index] != current.type) update(chat, current.copy(type = types[index]))
@@ -100,7 +115,7 @@ internal class SearchFiltersUi(
     }
 
     private fun chooseRange(button: View, chat: Any, current: MessageSearchFilters) {
-        AlertDialog.Builder(button.context).setTitle("时间范围：${current.dates.title}")
+        AlertDialog.Builder(dialogContext(button)).setTitle("时间范围：${current.dates.title}")
             .setItems(arrayOf("设置起止日期", "仅设置开始日期", "仅设置结束日期", "清除时间范围")) { _, which ->
                 when (which) {
                     0 -> pickDate(button, "开始日期", current.dates.start ?: LocalDate.now()) { start ->
@@ -122,7 +137,7 @@ internal class SearchFiltersUi(
     private fun pickDate(button: View, title: String, initial: LocalDate, min: LocalDate? = null,
         max: LocalDate? = null, done: (LocalDate) -> Unit) {
         val date = initial.coerceIn(min ?: LocalDate.of(1970, 1, 2), max ?: LocalDate.now())
-        DatePickerDialog(button.context, { _, year, month, day -> done(LocalDate.of(year, month + 1, day)) },
+        DatePickerDialog(dialogContext(button), { _, year, month, day -> done(LocalDate.of(year, month + 1, day)) },
             date.year, date.monthValue - 1, date.dayOfMonth).apply {
             setTitle(title)
             datePicker.minDate = (min ?: LocalDate.of(1970, 1, 2)).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()

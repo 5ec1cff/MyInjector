@@ -20,6 +20,8 @@
 这三个入口只接入官方客户端，不替换第三方客户端已有的类型筛选。
 筛选对后续分页和关键词修改持续生效，退出搜索后清除。取消选择对话框不更改
 现有条件。没有匹配消息时仍保留入口，可修改或清除筛选。
+入口菜单、类型选择、时间范围与日期选择窗口跟随 Telegram 当前的深浅主题，
+不依赖系统是否开启深色模式。每次打开窗口时重新读取主题。
 
 ## 实现
 
@@ -39,6 +41,8 @@
 - `AnchoredSearchDeobf` 静态定位适配器、列表、滚动回调和布局管理器方法，
   不依赖混淆后的名称。
 - `SearchFiltersUi` 复用日历按钮，关闭功能时继续执行原生日历点击逻辑。
+  窗口使用独立的 `ContextThemeWrapper`，通过 Telegram 保留的
+  `AndroidUtilities.checkAndroidTheme` 选择原生浅色或深色对话框主题。
   `MessageSearchFilters` 保存消息类型、日期范围和时区，每页请求都带上
   `filter`、`min_date`、`max_date`。日期定位先用 `messages.getHistory` 的
   `offset_date` 取得附近消息 ID，再重建双向搜索窗口。
