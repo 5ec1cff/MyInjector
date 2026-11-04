@@ -76,6 +76,9 @@ private fun auditProfileBlurMembers(bridge: DexKitBridge, members: Map<String, S
 }
 
 private fun auditReflectionShapes(bridge: DexKitBridge) {
+    val media = bridge.getClassData("org.telegram.tgnet.TLRPC\$MessageMedia")!!
+    check(media.fields.single { it.name == "spoiler" }.typeName == "boolean")
+    check(bridge.getClassData("org.telegram.tgnet.TLRPC\$Message")!!.fields.single { it.name == "media" }.typeName == media.name)
     auditContactRows(bridge, (bridge.getClassData("org.telegram.ui.ActionBar.BaseFragment") ?: bridge.findClass { matcher { addField { name("fragmentView"); type("android.view.View") } } }.single()).name)
     // Validate the reflection predicates executed after the DexKit searches.
     val base = (bridge.getClassData("org.telegram.ui.ActionBar.BaseFragment") ?: bridge.findClass { matcher { addField { name("fragmentView"); type("android.view.View") } } }.single()).name

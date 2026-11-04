@@ -428,9 +428,10 @@ internal class AnchoredMessageSearch(
             val selectedMessage = messages.getOrNull(selected)
             @Suppress("UNCHECKED_CAST")
             val raw = response.getObj("messages") as List<Any>
-            // Keep cursors for every server result, including other senders.
+            // Keep cursors for every server result, including locally hidden media.
             val added = window.add(page, raw.map { it.getObj("id") as Int }).map { it.id }.toSet()
             val usable = raw.filter { (!localSender || messageSender(it) == senderId) &&
+                (!filters.type.spoilerOnly || it.getObj("media")?.getObj("spoiler") == true) &&
                 filters.dates.contains(it.getObj("date") as Int, filters.zone) &&
                 it.javaClass.name != "org.telegram.tgnet.TLRPC\$TL_messageEmpty" &&
                 it.getObj("action")?.javaClass?.name != "org.telegram.tgnet.TLRPC\$TL_messageActionHistoryClear" }

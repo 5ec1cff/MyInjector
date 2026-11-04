@@ -38,6 +38,8 @@ import org.luckypray.dexkit.result.*
 import org.luckypray.dexkit.wrap.*
 import org.luckypray.dexkit.query.enums.*
 import java.lang.reflect.Modifier
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.min
 
 typealias ObfsTable = Map<String, ObfsInfo>
@@ -57,7 +59,7 @@ class ObfsTableCreator(val bridge: DexKitBridge, base: ObfsInfo) {
 }
 ''']
 out.append(body((root / 'arch/OpcodeUtils.kt').read_text()))
-for name in ['TelegramNamedMembers', 'TelegramDexUtils', 'TelegramDexScan', 'ProfileAvatarBlurDeobf', 'ProfileActivityRowsDeobf', 'SecretMediaDeobf', 'ProfileMenuDeobf', 'InfoContainerDeobf']:
+for name in ['TelegramNamedMembers', 'AnchoredSearchDeobf', 'MessageSearchWindow', 'MessageSearchFilters', 'TelegramDexUtils', 'TelegramDexScan', 'ProfileAvatarBlurDeobf', 'ProfileActivityRowsDeobf', 'SecretMediaDeobf', 'ProfileMenuDeobf', 'InfoContainerDeobf']:
     out.append(body(source(name)))
 for name, func in [('OpenLinkDialog', 'findOpenLinkDialog'), ('EmojiStickerMenu', 'findEmojiStickerMenu'), ('CopyPrivateChatLink', 'findCopyPrivateChatLink'), ('ShowDCInProfile', 'findProfileDataCenter'), ('HistoricalNewsOption', 'findHistoricalNews'), ('RepeatMessage', 'findRepeatMessage')]:
     out.append(function(source(name), func))

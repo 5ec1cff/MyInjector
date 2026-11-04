@@ -3,9 +3,11 @@ package io.github.a13e300.myinjector.telegram
 import java.time.LocalDate
 import java.time.ZoneId
 
-internal enum class SearchMessageType(val title: String, val filter: String) {
+internal enum class SearchMessageType(val title: String, val filter: String, val spoilerOnly: Boolean = false) {
     ALL("全部消息", "Empty"), PHOTOS("图片", "Photos"), VIDEO("视频", "Video"),
-    MEDIA("图片和视频", "PhotoVideo"), FILES("文件", "Document"), VOICE("语音", "Voice"),
+    MEDIA("图片和视频", "PhotoVideo"), SPOILER_PHOTOS("防剧透图片", "Photos", true),
+    SPOILER_VIDEO("防剧透视频", "Video", true), SPOILER_MEDIA("防剧透图片和视频", "PhotoVideo", true),
+    FILES("文件", "Document"), VOICE("语音", "Voice"),
     ROUND_VIDEO("圆形视频", "RoundVideo"), MUSIC("音乐", "Music"), GIF("GIF", "Gif"),
     LINKS("链接", "Url"), POLLS("投票", "Poll"),
 }
