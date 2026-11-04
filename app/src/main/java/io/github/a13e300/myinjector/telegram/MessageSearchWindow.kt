@@ -25,6 +25,12 @@ internal class MessageSearchWindow(val peers: List<Long>, anchor: SearchMessageK
         return SearchPage(direction, peer, edge?.id ?: if (direction < 0) 1 else 0)
     }
 
+    // A page without matching senders can still move the server cursor.
+    fun nextAfterEmpty(page: SearchPage, first: Boolean): SearchPage? {
+        val direction = if (page.direction != 0) page.direction else if (initial.offset == 1) -1 else 1
+        return next(direction) ?: if (first) next(-direction) else null
+    }
+
     fun add(page: SearchPage, ids: List<Int>): List<SearchMessageKey> {
         val existing = rows.toHashSet()
         val added = ids.filter { id -> id > 0 && (page.direction == 0 || page.offset == 0 ||

@@ -228,6 +228,14 @@ internal class AnchoredMessageSearch(
         private val connections = chat.call("getConnectionsManager")!!
         private val controller = chat.call("getMessagesController")!!
         private val notification = chat.call("getNotificationCenter")!!
+        private val sender = args[7] ?: args[8]
+        // Telegram rejects from_id with a media filter in group searches.
+        private val localSender = sender != null && filters.type != SearchMessageType.ALL
+        private val senderId = sender?.let {
+            val id = it.getObj("id") as Long
+            if (loader.loadClass("org.telegram.tgnet.TLRPC\$Chat").isInstance(it)) -id else id
+        }
+        private val selfId = chat.call("getUserConfig").getObj("clientUserId") as Long
         private val anchorId = anchor.id
         private val anchorDialog = anchor.dialog
         private val peers = listOf(args[1] as Long, args[2] as Long).filter { it != 0L }.distinct()
@@ -305,8 +313,7 @@ internal class AnchoredMessageSearch(
             req.setObj("offset_id", page.offset)
             req.setObj("add_offset", page.addOffset)
             var flags = 0
-            val sender = args[7] ?: args[8]
-            if (sender != null) {
+            if (sender != null && !localSender) {
                 req.setObj("from_id", controller.javaClass.callS("getInputPeer", sender)); flags = flags or 1
             }
             val topic = args[5] as Long
@@ -330,11 +337,25 @@ internal class AnchoredMessageSearch(
                         if (failure != null || response == null) {
                             notify(resultEvent, guid, 0, mask(), 0L, selected, messages.size, false)
                             first = false
-                            Toast.makeText(list()?.context, "搜索加载失败，请重新搜索或滚动重试", Toast.LENGTH_SHORT).show()
+                            val code = failure?.getObj("code")
+                            val text = failure?.getObj("text") as? String ?: "EMPTY_RESPONSE"
+                            val description = "Telegram search failed: $code $text, filter=${filters.type}, " +
+                                "sender=${sender != null}, localSender=$localSender, " +
+                                "offset=${page.offset}, addOffset=${page.addOffset}"
+                            logE(description)
+                            error(IllegalStateException(description))
+                            Toast.makeText(list()?.context, "搜索加载失败：$text", Toast.LENGTH_LONG).show()
                         } else received(response, page)
                     }.onFailure { fail(it) }
                 }
             }
+        }
+
+        private fun messageSender(message: Any): Long {
+            val from = message.getObj("from_id")
+            if (from != null) return messageConstructor.declaringClass.callS("getPeerId", from) as Long
+            if (message.getObj("out") == true) return selfId
+            return messageConstructor.declaringClass.callS("getPeerId", message.getObj("peer_id")) as Long
         }
 
         private fun received(response: Any, page: SearchPage) {
@@ -347,10 +368,13 @@ internal class AnchoredMessageSearch(
             val selectedMessage = messages.getOrNull(selected)
             @Suppress("UNCHECKED_CAST")
             val raw = response.getObj("messages") as List<Any>
-            val usable = raw.filter { filters.dates.contains(it.getObj("date") as Int, filters.zone) &&
+            // Keep cursors for every server result, including other senders.
+            val added = window.add(page, raw.map { it.getObj("id") as Int }).map { it.id }.toSet()
+            val usable = raw.filter { (!localSender || messageSender(it) == senderId) &&
+                filters.dates.contains(it.getObj("date") as Int, filters.zone) &&
                 it.javaClass.name != "org.telegram.tgnet.TLRPC\$TL_messageEmpty" &&
                 it.getObj("action")?.javaClass?.name != "org.telegram.tgnet.TLRPC\$TL_messageActionHistoryClear" }
-            val added = window.add(page, usable.map { it.getObj("id") as Int }).map { it.id }.toSet()
+            val before = messages.size
             for (m in usable.distinctBy { it.getObj("id") }.filter { it.getObj("id") in added }) {
                 val obj = messageConstructor.newInstance(account, m, true, true)
                 obj.setObj("isPrimaryGroupMessage", true)
@@ -359,13 +383,8 @@ internal class AnchoredMessageSearch(
                 messages.add(obj)
             }
             messages.sortWith(compareBy<Any> { peers.indexOf(dialog(it)) }.thenByDescending(::id))
-            if (first && added.isEmpty() && page.direction == 0) {
-                // The date can point into a migrated peer with no matching
-                // results. Continue into its neighbour before showing empty.
-                window.next(if (anchorId == 1) -1 else 1)?.let { fetch(it); return }
-            }
-            if (page.direction != 0 && added.isEmpty()) {
-                window.next(page.direction)?.takeIf { it.peer != page.peer }?.let { fetch(it); return }
+            if (messages.size == before) {
+                window.nextAfterEmpty(page, first)?.let { fetch(it); return }
             }
             selected = selectedMessage?.let { messages.indexOf(it) }?.coerceAtLeast(0) ?: 0
             val wasFirst = first
