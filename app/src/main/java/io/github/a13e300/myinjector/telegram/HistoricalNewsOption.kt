@@ -23,7 +23,8 @@ class HistoricalNewsOption : MyDynHook("historicalNewsOption") {
             DexMethod(it.value.descriptor).getMethodInstance(classLoader).apply { isAccessible = true }
         }
         val searchSender = methods.getValue("searchSender")
-        val anchoredSearch = AnchoredMessageSearch(classLoader, chatClass, ::isEnabled, ::onHookError)
+        val anchoredSearch = AnchoredMessageSearch(classLoader, chatClass, ::isEnabled, ::onHookError,
+            loadPackageParam.packageName in setOf("org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.messenger.beta"))
         fun invoke(key: String, chat: Any, vararg args: Any?) {
             val method = methods.getValue(key)
             if (Modifier.isStatic(method.modifiers)) method.invoke(null, chat, *args)

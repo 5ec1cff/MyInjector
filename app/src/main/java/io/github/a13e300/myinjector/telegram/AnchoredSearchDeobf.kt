@@ -1,6 +1,7 @@
 package io.github.a13e300.myinjector.telegram
 
 import org.luckypray.dexkit.DexKitBridge
+import org.luckypray.dexkit.result.FieldUsingType
 
 internal fun findAnchoredSearch(bridge: DexKitBridge, chat: String): Map<String, String> {
     val refresh = bridge.findMethod { matcher {
@@ -52,4 +53,26 @@ internal fun findAnchoredSearch(bridge: DexKitBridge, chat: String): Map<String,
         "list" to list.descriptor, "scroll" to scroll.descriptor, "fullRefresh" to full.descriptor,
         "getLayout" to getLayout.descriptor, "first" to first.descriptor, "last" to last.descriptor,
         "position" to position.descriptor, "view" to view.descriptor)
+}
+
+internal fun findSearchControls(bridge: DexKitBridge, chat: String): Map<String, String> {
+    val create = bridge.findMethod { matcher {
+        declaredClass(chat); paramTypes(); returnType("void")
+        addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("msg_calendar") }
+        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SearchAsList") }
+    } }.single()
+    val calendar = viewFieldWithResource(bridge, create, "msg_calendar")
+    val history = findHistoricalNews(bridge, chat)
+    val open = bridge.getMethodData(history.getValue("openSearch"))!!
+    val update = bridge.findMethod { matcher {
+        declaredClass(chat); paramTypes("boolean"); returnType("void")
+        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("OnlyPremiumCanMessage") }
+    } }.single()
+    val written = open.usingFields.filter { it.usingType == FieldUsingType.Write }
+        .map { it.field.descriptor }.toSet()
+    val visible = update.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
+        it.className == chat && it.typeName == "boolean" && it.descriptor in written
+    }
+    return mapOf("create" to create.descriptor, "calendar" to calendar.descriptor, "visible" to visible.descriptor,
+        "showList" to history.getValue("showSearchList"), "sender" to history.getValue("searchSender"))
 }

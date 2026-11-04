@@ -19,13 +19,15 @@ import io.github.a13e300.myinjector.logE
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
 import java.lang.reflect.Proxy
+import java.time.LocalDate
 
-// Only searches opened from the message menu use this two-way result window.
+// Menu searches and filtered searches share the two-way result window.
 internal class AnchoredMessageSearch(
     private val loader: ClassLoader,
     chatClass: Class<*>,
     private val enabled: () -> Boolean,
     private val error: (Throwable) -> Unit,
+    officialControls: Boolean = false,
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private val creator = TelegramHandler.creator
@@ -53,16 +55,34 @@ internal class AnchoredMessageSearch(
     private var pending: Pair<Any, Any>? = null
     private var publishing = false
     private var scrollDirection: Int? = null
+    private class SearchContext(val chat: Any, var args: Array<Any?>) {
+        var filters = MessageSearchFilters()
+        var generation = 0
+        var dateRequest = 0
+    }
+    private val contexts = mutableMapOf<Any, SearchContext>()
+    private val controls = if (officialControls) SearchFiltersUi(chatClass, enabled,
+        { chat -> contexts[chat]?.filters }, ::changeFilters, error) else null
 
     init {
         mediaClass.declaredMethods.single { it.name == "searchMessagesInChat" && it.parameterCount >= 11 && it.parameterTypes[6] == Boolean::class.javaPrimitiveType }.hookBefore { p ->
             val arm = pending
+            val chat = arm?.first ?: controls?.chatFor(p.thisObject, p.args[3] as Int)
+            val context = chat?.let { contexts.getOrPut(it) { SearchContext(it, p.args.copyOf()) } }
+            if (context != null && p.args[0] != null) {
+                cancelDate(context)
+                context.args = p.args.copyOf()
+            }
             if (arm != null && arm.first.call("getMediaDataController") === p.thisObject && (p.args[7] != null || p.args[8] != null)) {
                 sessions.remove(p.thisObject)?.close()
-                val session = Session(arm.first, arm.second, p.thisObject, p.args.copyOf())
+                val anchor = SearchMessageKey(arm.second.call("getDialogId") as Long, arm.second.call("getId") as Int)
+                val session = Session(arm.first, anchor, p.thisObject, p.args.copyOf(), context?.filters ?: MessageSearchFilters())
                 sessions[p.thisObject] = session
                 p.result = null
                 runCatching { session.start() }.onFailure { session.fail(it) }
+            } else if (context != null && context.filters.active && p.args[0] != null && enabled()) {
+                p.result = null
+                restart(context)
             } else {
                 val session = sessions[p.thisObject]
                 if (session != null) {
@@ -86,8 +106,14 @@ internal class AnchoredMessageSearch(
         mediaClass.hookAllBefore("searchEndReached") { p -> sessions[p.thisObject]?.let { p.result = it.olderEnd } }
         mediaClass.hookAllBefore("isSearchLoading") { p -> sessions[p.thisObject]?.let { p.result = it.request != 0 } }
         mediaClass.hookAllBefore("getMask") { p -> sessions[p.thisObject]?.let { p.result = it.mask() } }
-        mediaClass.hookAllBefore("clearFoundMessageObjects") { p -> sessions.remove(p.thisObject)?.close() }
+        mediaClass.hookAllBefore("clearFoundMessageObjects") { p ->
+            sessions.remove(p.thisObject)?.close()
+            contexts.values.filter { it.chat.call("getMediaDataController") === p.thisObject && controls?.isSearching(it.chat) == false }
+                .toList().forEach { context -> cancelDate(context); contexts.remove(context.chat) }
+        }
         chatClass.hookAllBefore("onFragmentDestroy") { p ->
+            contexts.remove(p.thisObject)?.let(::cancelDate)
+            controls?.forget(p.thisObject)
             sessions.entries.filter { it.value.chat === p.thisObject }.toList().forEach { (controller, session) ->
                 sessions.remove(controller); session.close()
             }
@@ -127,14 +153,83 @@ internal class AnchoredMessageSearch(
         try { search() } finally { pending = null }
     }
 
-    private inner class Session(val chat: Any, anchor: Any, val media: Any, val args: Array<Any?>) {
+    private fun cancelDate(context: SearchContext) {
+        context.generation++
+        if (context.dateRequest != 0) context.chat.call("getConnectionsManager").call("cancelRequest", context.dateRequest, true)
+        context.dateRequest = 0
+    }
+
+    private fun restart(context: SearchContext, anchor: SearchMessageKey? = null, time: Int? = null) {
+        val media = context.chat.call("getMediaDataController")!!
+        sessions.remove(media)?.close()
+        val session = Session(context.chat, anchor ?: SearchMessageKey(context.args[1] as Long, 0), media,
+            context.args.copyOf(), context.filters, time)
+        sessions[media] = session
+        runCatching { session.start(); controls?.showResults(context.chat) }.onFailure { session.fail(it) }
+    }
+
+    private fun changeFilters(chat: Any, filters: MessageSearchFilters, date: LocalDate?) {
+        val context = contexts[chat] ?: return
+        cancelDate(context)
+        context.filters = filters
+        if (date == null) restart(context) else jumpToDate(context, filters.jumpTime(date))
+    }
+
+    private fun jumpToDate(context: SearchContext, time: Int) {
+        val chat = context.chat
+        val peers = listOf(context.args[1] as Long, context.args[2] as Long).filter { it != 0L }.distinct()
+        val generation = context.generation
+        val found = mutableListOf<Pair<SearchMessageKey, Int>>()
+        val controller = chat.call("getMessagesController")!!
+        fun seek(index: Int) {
+            val req = loader.loadClass("org.telegram.tgnet.TLRPC\$TL_messages_getHistory").getDeclaredConstructor().newInstance()
+            req.setObj("peer", controller.call("getInputPeer", peers[index]))
+            req.setObj("offset_date", time)
+            req.setObj("limit", 1)
+            context.dateRequest = sendRequest(chat, req) { response, failure ->
+                if (contexts[chat] !== context || generation != context.generation || controls?.isSearching(chat) != true || !enabled()) return@sendRequest
+                context.dateRequest = 0
+                if (failure != null || response == null) {
+                    Toast.makeText((fields.getValue("list").get(chat) as View).context, "日期定位失败，请重试", Toast.LENGTH_SHORT).show()
+                    return@sendRequest
+                }
+                @Suppress("UNCHECKED_CAST")
+                val message = (response.getObj("messages") as List<Any>).firstOrNull { (it.getObj("id") as Int) > 0 }
+                if (message != null) found += SearchMessageKey(peers[index], message.getObj("id") as Int) to (message.getObj("date") as Int)
+                if (index < peers.lastIndex) seek(index + 1)
+                else restart(context, found.maxByOrNull { it.second }?.first ?: SearchMessageKey(peers.last(), 1), time)
+            }
+        }
+        seek(0)
+    }
+
+    private fun sendRequest(chat: Any, req: Any, complete: (Any?, Any?) -> Unit): Int {
+        val callback = Proxy.newProxyInstance(loader, arrayOf(delegateClass)) { proxy, method, response ->
+            when (method.name) {
+                "run" -> { handler.post { runCatching { complete(response!![0], response[1]) }.onFailure {
+                    logE("Message search request failed", it); error(it)
+                } }; null }
+                "hashCode" -> System.identityHashCode(proxy)
+                "equals" -> response?.get(0) === proxy
+                "toString" -> "MessageSearchCallback"
+                else -> null
+            }
+        }
+        val connections = chat.call("getConnectionsManager")!!
+        val id = connections.call("sendRequest", req, callback) as Int
+        connections.call("bindRequestToGuid", id, chat.call("getClassGuid"))
+        return id
+    }
+
+    private inner class Session(val chat: Any, anchor: SearchMessageKey, val media: Any, val args: Array<Any?>,
+        private val filters: MessageSearchFilters, private val anchorTime: Int? = null) {
         val guid = args[3] as Int
         private val account = chat.call("getCurrentAccount") as Int
         private val connections = chat.call("getConnectionsManager")!!
         private val controller = chat.call("getMessagesController")!!
         private val notification = chat.call("getNotificationCenter")!!
-        private val anchorId = anchor.call("getId") as Int
-        private val anchorDialog = anchor.call("getDialogId") as Long
+        private val anchorId = anchor.id
+        private val anchorDialog = anchor.dialog
         private val peers = listOf(args[1] as Long, args[2] as Long).filter { it != 0L }.distinct()
         private val window = MessageSearchWindow(peers, SearchMessageKey(anchorDialog, anchorId))
         val messages = ArrayList<Any>()
@@ -202,7 +297,10 @@ internal class AnchoredMessageSearch(
             val req = requestClass.getDeclaredConstructor().newInstance()
             req.setObj("peer", controller.call("getInputPeer", peers[peer]))
             req.setObj("q", args[0] as? String ?: "")
-            req.setObj("filter", args.getOrNull(11) ?: loader.loadClass("org.telegram.tgnet.TLRPC\$TL_inputMessagesFilterEmpty").getDeclaredConstructor().newInstance())
+            val filter = if (filters.type == SearchMessageType.ALL) args.getOrNull(11) else null
+            req.setObj("filter", filter ?: loader.loadClass("org.telegram.tgnet.TLRPC\$TL_inputMessagesFilter${filters.type.filter}").getDeclaredConstructor().newInstance())
+            req.setObj("min_date", filters.minDate)
+            req.setObj("max_date", filters.maxDate)
             req.setObj("limit", 40)
             req.setObj("offset_id", page.offset)
             req.setObj("add_offset", page.addOffset)
@@ -224,29 +322,19 @@ internal class AnchoredMessageSearch(
                 flags = flags or 8
             }
             req.setObj("flags", flags)
-            val callback = Proxy.newProxyInstance(loader, arrayOf(delegateClass)) { proxy, method, response ->
-                if (method.name == "run") handler.post {
-                    if (!enabled() && sessions[media] === this) { sessions.remove(media); close() }
-                    if (!closed && sessions[media] === this && enabled()) {
-                        request = 0
-                        runCatching {
-                            if (response!![1] != null || response[0] == null) {
-                                notify(resultEvent, guid, 0, mask(), 0L, selected, messages.size, false)
-                                first = false
-                                Toast.makeText(list()?.context, "搜索加载失败，请重新搜索或滚动重试", Toast.LENGTH_SHORT).show()
-                            } else received(response[0]!!, page)
-                        }.onFailure { fail(it) }
-                    }
+            request = sendRequest(chat, req) { response, failure ->
+                if (!enabled() && sessions[media] === this) { sessions.remove(media); close() }
+                if (!closed && sessions[media] === this && enabled()) {
+                    request = 0
+                    runCatching {
+                        if (failure != null || response == null) {
+                            notify(resultEvent, guid, 0, mask(), 0L, selected, messages.size, false)
+                            first = false
+                            Toast.makeText(list()?.context, "搜索加载失败，请重新搜索或滚动重试", Toast.LENGTH_SHORT).show()
+                        } else received(response, page)
+                    }.onFailure { fail(it) }
                 }
-                else when (method.name) {
-                    "hashCode" -> return@newProxyInstance System.identityHashCode(proxy)
-                    "equals" -> return@newProxyInstance response?.get(0) === proxy
-                    "toString" -> return@newProxyInstance "AnchoredSearchCallback"
-                }
-                null
             }
-            request = connections.call("sendRequest", req, callback) as Int
-            connections.call("bindRequestToGuid", request, guid)
         }
 
         private fun received(response: Any, page: SearchPage) {
@@ -259,7 +347,8 @@ internal class AnchoredMessageSearch(
             val selectedMessage = messages.getOrNull(selected)
             @Suppress("UNCHECKED_CAST")
             val raw = response.getObj("messages") as List<Any>
-            val usable = raw.filter { it.javaClass.name != "org.telegram.tgnet.TLRPC\$TL_messageEmpty" &&
+            val usable = raw.filter { filters.dates.contains(it.getObj("date") as Int, filters.zone) &&
+                it.javaClass.name != "org.telegram.tgnet.TLRPC\$TL_messageEmpty" &&
                 it.getObj("action")?.javaClass?.name != "org.telegram.tgnet.TLRPC\$TL_messageActionHistoryClear" }
             val added = window.add(page, usable.map { it.getObj("id") as Int }).map { it.id }.toSet()
             for (m in usable.distinctBy { it.getObj("id") }.filter { it.getObj("id") in added }) {
@@ -270,6 +359,11 @@ internal class AnchoredMessageSearch(
                 messages.add(obj)
             }
             messages.sortWith(compareBy<Any> { peers.indexOf(dialog(it)) }.thenByDescending(::id))
+            if (first && added.isEmpty() && page.direction == 0) {
+                // The date can point into a migrated peer with no matching
+                // results. Continue into its neighbour before showing empty.
+                window.next(if (anchorId == 1) -1 else 1)?.let { fetch(it); return }
+            }
             if (page.direction != 0 && added.isEmpty()) {
                 window.next(page.direction)?.takeIf { it.peer != page.peer }?.let { fetch(it); return }
             }
@@ -279,6 +373,10 @@ internal class AnchoredMessageSearch(
                 first = false
                 selected = messages.indexOfFirst { dialog(it) == anchorDialog && id(it) == anchorId }
                 if (selected < 0) selected = messages.indexOfFirst { dialog(it) == anchorDialog && id(it) <= anchorId }.coerceAtLeast(0)
+                anchorTime?.let { time ->
+                    selected = messages.indexOfLast { (it.getObj("messageOwner").getObj("date") as Int) >= time }
+                    if (selected < 0) selected = 0
+                }
             } else if (navigation != 0) {
                 selected = (selected + navigation).coerceIn(0, messages.lastIndex.coerceAtLeast(0))
             }
