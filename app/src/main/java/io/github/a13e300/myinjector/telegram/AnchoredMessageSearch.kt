@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.call
@@ -247,6 +248,7 @@ internal class AnchoredMessageSearch(
         private var first = true
         private var selected = 0
         private var navigation = 0
+        private var cancelFillCheck: (() -> Unit)? = null
 
         fun list() = fields.getValue("list").get(chat) as? ViewGroup
         fun adapter() = fields.getValue("adapter").get(chat)
@@ -283,8 +285,39 @@ internal class AnchoredMessageSearch(
 
         fun close() {
             closed = true
+            clearFillCheck()
             if (request != 0) connections.call("cancelRequest", request, true)
             request = 0
+        }
+
+        private fun clearFillCheck() {
+            cancelFillCheck?.invoke()
+            cancelFillCheck = null
+        }
+
+        private fun fillAfterLayout() {
+            clearFillCheck()
+            val view = list() ?: return
+            val observer = view.viewTreeObserver
+            val listener = object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    if (closed || sessions[media] !== this@Session || !enabled()) {
+                        clearFillCheck()
+                        return true
+                    }
+                    if (!view.isShown || view.isLayoutRequested || view.height <= view.paddingTop + view.paddingBottom) return true
+                    clearFillCheck()
+                    // Wait for real row sizes rather than guessing a message count.
+                    if (view.childCount > 0 && !view.canScrollVertically(-1) && !view.canScrollVertically(1)) {
+                        runCatching { load(if (!olderEnd) 1 else -1) }.onFailure { fail(it) }
+                    }
+                    return true
+                }
+            }
+            cancelFillCheck = {
+                (if (observer.isAlive) observer else view.viewTreeObserver).removeOnPreDrawListener(listener)
+            }
+            observer.addOnPreDrawListener(listener)
         }
 
         fun load(direction: Int) {
@@ -301,6 +334,7 @@ internal class AnchoredMessageSearch(
         }
 
         private fun fetch(page: SearchPage) {
+            clearFillCheck()
             val peer = page.peer
             val req = requestClass.getDeclaredConstructor().newInstance()
             req.setObj("peer", controller.call("getInputPeer", peers[peer]))
@@ -404,6 +438,7 @@ internal class AnchoredMessageSearch(
             publish(jump)
             val target = if (wasFirst) selected else oldMessage?.let { messages.indexOf(it) } ?: -1
             if (target >= 0) layout()?.let { methods.getValue("position").invoke(it, target, if (wasFirst) 0 else top) }
+            fillAfterLayout()
         }
 
         private fun publish(jump: Boolean) {
