@@ -7,11 +7,11 @@ class ChannelDetailNumbers : MyDynHook("channelDetailNumbers") {
 
     override fun onHook() {
         // 频道关注者显示详细人数 3k → 3000
-        findClass("org.telegram.messenger.LocaleController").declaredMethods.single {
-            it.name == "formatShortNumber" && it.parameterTypes.size == 2
-        }.hookBefore(cond = ::isEnabled) {
-            val number = it.args[0] as Int
-            val rounded = it.args[1] as IntArray?
+        val format = telegramApiMethod(classLoader, "org.telegram.messenger.LocaleController", "formatShortNumber", "int", "int[]")
+        val numberIndex = format.parameterTypes.indexOf(Integer.TYPE)
+        format.hookBefore(cond = ::isEnabled) {
+            val number = it.args[numberIndex] as Int
+            val rounded = it.args[1 - numberIndex] as IntArray?
             if (rounded != null) {
                 rounded[0] = number
             }
