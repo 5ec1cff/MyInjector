@@ -30,9 +30,10 @@ class HistoricalNewsOption : MyDynHook("historicalNewsOption") {
             if (Modifier.isStatic(method.modifiers)) method.invoke(null, chat, *args)
             else method.invoke(chat, *args)
         }
+        val getFromPeer = telegramApiMethod(classLoader, "org.telegram.messenger.MessageObject", "getFromPeer")
         MessageMenuHook.register("historicalNewsOption", "查看历史消息", "msg_search", ::isEnabled,
             { onHookError(it) }) { chat, message ->
-            val peer = message.call("getFromPeer") ?: return@register null
+            val peer = getFromPeer.invoke(message) ?: return@register null
             val userId = (peer.getObj("user_id") as Number).toLong()
             val channelId = (peer.getObj("channel_id") as Number).toLong()
             val groupId = (peer.getObj("chat_id") as Number).toLong()
@@ -73,22 +74,21 @@ class HistoricalNewsOption : MyDynHook("historicalNewsOption") {
 internal fun findHistoricalNews(bridge: DexKitBridge, chat: String): Map<String, String> {
     val sender = bridge.findMethod { matcher {
         declaredClass(chat); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SearchFrom") }
+        usingTelegramResource(bridge, "string", "SearchFrom")
     } }.single { it.paramTypeNames.toSet() == setOf("org.telegram.tgnet.TLRPC\$User", "org.telegram.tgnet.TLRPC\$Chat") }
+    val search = telegramSearchMethod(bridge, "searchMessagesInChat")
     val open = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes("java.lang.String"); returnType("void")
-        addInvoke { declaredClass("org.telegram.messenger.MediaDataController"); name("searchMessagesInChat") }
+        addInvoke { descriptor(search.descriptor) }
     } }.single()
     val show = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes("boolean"); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SearchAsList") }
+        usingTelegramResource(bridge, "string", "SearchAsList")
     } }.single()
-    fun lookup(name: String, result: String) = bridge.findMethod { matcher {
-        declaredClass("org.telegram.messenger.MessagesController"); name(name); returnType(result); paramCount(1)
-    } }.single { it.paramTypeNames.single() in listOf("long", "java.lang.Long") }
+    fun lookup(name: String) = telegramApiMethod(bridge, "org.telegram.messenger.MessagesController", name, "java.lang.Long")
     return mapOf("searchSender" to sender.descriptor, "openSearch" to open.descriptor, "showSearchList" to show.descriptor,
-        "getUser" to lookup("getUser", "org.telegram.tgnet.TLRPC\$User").descriptor,
-        "getChat" to lookup("getChat", "org.telegram.tgnet.TLRPC\$Chat").descriptor)
+        "getUser" to lookup("getUser").descriptor,
+        "getChat" to lookup("getChat").descriptor)
 }
 
 private fun historyMembers(creator: ObfsTableCreator, chat: String): Map<String, ObfsInfo> {

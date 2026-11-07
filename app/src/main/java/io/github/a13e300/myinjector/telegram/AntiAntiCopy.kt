@@ -7,6 +7,7 @@ import io.github.a13e300.myinjector.arch.currentApplication
 import io.github.a13e300.myinjector.arch.hookAll
 import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.toObfsInfo
 
 class AntiAntiCopy : MyDynHook("antiAntiCopy") {
@@ -28,9 +29,7 @@ class AntiAntiCopy : MyDynHook("antiAntiCopy") {
                         "hasInvoice",
                         "canSelectTopics"
                     )
-                    addUsingField {
-                        descriptor("Lorg/telegram/messenger/R\$string;->ForwardsRestrictedInfoUser:I")
-                    }
+                    usingTelegramResource(bridge, "string", "ForwardsRestrictedInfoUser")
                 }
             }.single().toObfsInfo()
         }
@@ -53,12 +52,21 @@ class AntiAntiCopy : MyDynHook("antiAntiCopy") {
         val ChatActivityProcessSelectedOption = table["ChatActivityProcessSelectedOption"]!!
         val ChatActivityOpenForward = table["ChatActivityOpenForward"]!!
 
-        findClass("org.telegram.messenger.MessagesController").hookAllAfter(
-            "isChatNoForwards",
-            cond = ::isEnabled
-        ) {
-            isNoForw = it.result as Boolean
-            if (isOF) it.result = false
+        val depth = ThreadLocal.withInitial { 0 }
+        for (type in listOf("long", "org.telegram.tgnet.TLRPC\$Chat")) {
+            telegramApiMethod(classLoader, "org.telegram.messenger.MessagesController", "isChatNoForwards", type)
+                .hook(cond = ::isEnabled,
+                    before = { depth.set(depth.get() + 1) },
+                    after = {
+                        val level = depth.get()
+                        if (level == 1) depth.remove() else depth.set(level - 1)
+                        // The dialog overload calls the chat overload. Keep the
+                        // original inner result until the outer check completes.
+                        if (level == 1 && it.throwable == null) {
+                            isNoForw = it.result as Boolean
+                            if (isOF) it.result = false
+                        }
+                    })
         }
 
         val chatActivity = findClass(ChatActivityOpenForward.className)

@@ -37,10 +37,14 @@ import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.result.*
 import org.luckypray.dexkit.wrap.*
 import org.luckypray.dexkit.query.enums.*
+import org.luckypray.dexkit.query.matchers.MethodMatcher
 import java.lang.reflect.Modifier
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.WeakHashMap
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.zip.ZipFile
 import kotlin.math.min
 
 typealias ObfsTable = Map<String, ObfsInfo>
@@ -60,7 +64,7 @@ class ObfsTableCreator(val bridge: DexKitBridge, base: ObfsInfo) {
 }
 ''']
 out.append(body((root / 'arch/OpcodeUtils.kt').read_text()))
-for name in ['TelegramApiDeobf', 'TelegramNamedMembers', 'AnchoredSearchDeobf', 'MessageSearchWindow', 'MessageSearchFilters', 'TelegramDexUtils', 'TelegramDexScan', 'ProfileAvatarBlurDeobf', 'ProfileActivityRowsDeobf', 'SecretMediaDeobf', 'ProfileMenuDeobf', 'InfoContainerDeobf']:
+for name in ['TelegramFactoryFields', 'SearchStateDeobf', 'StickerStreamDeobf', 'EmojiDeobf', 'TelegramResources', 'TelegramApiDeobf', 'TelegramNamedMembers', 'AnchoredSearchDeobf', 'MessageSearchWindow', 'MessageSearchFilters', 'TelegramDexUtils', 'TelegramDexScan', 'ProfileAvatarBlurDeobf', 'ProfileActivityRowsDeobf', 'SecretMediaDeobf', 'ProfileMenuDeobf', 'InfoContainerDeobf']:
     out.append(body(source(name)))
 for name, func in [('OpenLinkDialog', 'findOpenLinkDialog'), ('EmojiStickerMenu', 'findEmojiStickerMenu'), ('CopyPrivateChatLink', 'findCopyPrivateChatLink'), ('ShowDCInProfile', 'findProfileDataCenter'), ('HistoricalNewsOption', 'findHistoricalNews'), ('RepeatMessage', 'findRepeatMessage')]:
     out.append(function(source(name), func))
@@ -132,6 +136,7 @@ for name, call in [
     ('SaveSecretImage', 'findSaveSecretImage(bridge, base.className)'),
     ('AddSubItemChannel', 'findProfileMenu(bridge)'),
     ('AddInfoContainer', 'findInfoContainer(bridge, findProfileMenu(bridge).getValue("menu"))'),
+    ('Anchored search state', 'findSearchState(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className)'),
     ('HistoricalNewsOption', 'findHistoricalNews(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className)'),
     ('RepeatMessage', 'findCopyPrivateChatLink(bridge).let { findRepeatMessage(bridge, bridge.getMethodData(it.getValue("createMenu"))!!.className, it.getValue("createMenu"), it.getValue("options")) }')
 ]:

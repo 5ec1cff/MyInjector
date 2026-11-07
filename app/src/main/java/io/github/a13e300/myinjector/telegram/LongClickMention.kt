@@ -141,9 +141,7 @@ class LongClickMention : MyDynHook("longClickMention") {
             // we locate the OnItemLongClickListener's implementation in SelfStoryViewsPage
             recyclerListViewOnItemLongClickListener = bridge.findMethod {
                 matcher {
-                    addUsingField {
-                        descriptor("Lorg/telegram/messenger/R\$string;->StoryHideFrom:I")
-                    }
+                    usingTelegramResource(bridge, "string", "StoryHideFrom")
                 }
             }.single().declaredClass!!.interfaces.single().methods.single()
         }
@@ -312,7 +310,7 @@ class LongClickMention : MyDynHook("longClickMention") {
             .parameterTypes.indexOfFirst { it == Integer.TYPE }
         require(longClickListenerOnClickPositionIdx >= 0) { "no int param found in LongClickListener: $longClickMethod" }
         val tlUser = findClass("org.telegram.tgnet.TLRPC\$TL_user")
-        val userObjectClass = findClass("org.telegram.messenger.UserObject")
+        val getFirstName = telegramApiMethod(classLoader, "org.telegram.messenger.UserObject", "getFirstName", "org.telegram.tgnet.TLRPC\$User", "boolean")
         val classURLSpanUserMention = findClass(urlSpanUserMention.className)
 
         // I'm too lazy to write dexkit for them
@@ -355,11 +353,10 @@ class LongClickMention : MyDynHook("longClickMention") {
                         val start =
                             adapter.getObjAs<Int>(mentionsAdapterResultStartPosition.memberName)
                         val len = adapter.getObjAs<Int>(mentionsAdapterResultLength.memberName)
-                        val name = userObjectClass.callS(
-                            "getFirstName",
-                            item,
-                            false
-                        )
+                        val name = getFirstName.invoke(null, *getFirstName.parameterTypes.map {
+                            val value: Any? = if (it == java.lang.Boolean.TYPE) false else item
+                            value
+                        }.toTypedArray())
                         val spannable = SpannableString("$name ")
                         val span = classURLSpanUserMention.newInst(
                             item.getObj("id").toString(),

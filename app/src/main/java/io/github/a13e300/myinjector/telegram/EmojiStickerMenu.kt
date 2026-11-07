@@ -58,8 +58,15 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
         val emojiOwner = members.getValue("emojiOwner").descriptor.takeIf { it.isNotEmpty() }?.let { field("emojiOwner") }
         val stickerOwner = members.getValue("stickerOwner").descriptor.takeIf { it.isNotEmpty() }?.let { field("stickerOwner") }
         val addText = method("addText")
+        fun add(button: Any, id: Int, label: String) {
+            if (addText.parameterCount == 2) addText.invoke(button, id, label)
+            else addText.invoke(button, id, 0, label)
+        }
         val customEmojiClass = findClass("org.telegram.tgnet.TLRPC\$TL_documentAttributeCustomEmoji")
-        val messagesController = findClass("org.telegram.messenger.MessagesController")
+        val messagesController = telegramApiClass(classLoader, "org.telegram.messenger.MessagesController")
+        val getInstance = messagesController.declaredMethods.single { java.lang.reflect.Modifier.isStatic(it.modifiers) && it.parameterTypes.contentEquals(arrayOf(Integer.TYPE)) && it.returnType == messagesController }.apply { isAccessible = true }
+        val getUser = telegramApiMethod(classLoader, "org.telegram.messenger.MessagesController", "getUser", "java.lang.Long")
+        val openProfile = messagesController.declaredMethods.single { it.parameterTypes.toSet() == setOf(classLoader.loadClass("org.telegram.tgnet.TLRPC\$User"), classLoader.loadClass("org.telegram.tgnet.TLRPC\$Chat"), telegramApiClass(classLoader, "org.telegram.ui.ActionBar.BaseFragment"), Integer.TYPE, java.lang.Boolean.TYPE) }.apply { isAccessible = true }
 
         fun showAdmin(alert: Any, stickerSet: Any?, fragment: Any?) {
             val id = stickerSet.getObj("set").getObj("id") as Long
@@ -68,10 +75,12 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
             if (id.shr(24).and(0xff) != 0L) userId += 0x100000000L
             if (fragment != null) {
                 // Messenger members and BottomSheet.currentAccount retain their names.
-                val controller = messagesController.callS("getInstance", alert.getObj("currentAccount"))
-                val user = controller.call("getUser", userId)
+                val controller = getInstance.invoke(null, alert.getObj("currentAccount"))
+                val user = getUser.invoke(controller, userId)
                 if (user != null) {
-                    controller.call("openChatOrProfileWith", user, null, fragment, 0, false)
+                    openProfile.invoke(controller, *openProfile.parameterTypes.map { t ->
+                        when { t.isInstance(user) -> user; t.isInstance(fragment) -> fragment; t == Integer.TYPE -> 0; t == java.lang.Boolean.TYPE -> false; else -> null }
+                    }.toTypedArray())
                     return
                 }
             }
@@ -82,8 +91,8 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
 
         findClass(members.getValue("header").className).hookAllCAfter(cond = ::isEnabled) { param ->
             val button = emojiOptions.get(param.thisObject) ?: return@hookAllCAfter
-            addText.invoke(button, MENU_DUMP, "Dump")
-            addText.invoke(button, MENU_GET_PROFILE, "Profile of admin")
+            add(button, MENU_DUMP, "Dump")
+            add(button, MENU_GET_PROFILE, "Profile of admin")
         }
         val emojiClick = method("emojiClick")
         emojiClick.hookBefore(cond = ::isEnabled) { param ->
@@ -135,7 +144,7 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
         }
         method("stickerInit").hookAfter(cond = ::isEnabled) { param ->
             val button = stickerOptions.get(param.thisObject) ?: return@hookAfter
-            addText.invoke(button, MENU_GET_PROFILE, "Profile of admin")
+            add(button, MENU_GET_PROFILE, "Profile of admin")
         }
         val stickerClick = method("stickerClick")
         stickerClick.hookBefore(cond = ::isEnabled) { param ->
@@ -175,13 +184,13 @@ private fun findEmojiStickerMenu(bridge: DexKitBridge, baseFragment: String): Ma
         }.descriptor
     }
     val initializers = bridge.findMethod { matcher {
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("StickersShare") }
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("CopyLink") }
+        usingTelegramResource(bridge, "string", "StickersShare")
+        usingTelegramResource(bridge, "string", "CopyLink")
     } }
     val header = initializers.single { it.isConstructor && it.declaredClass!!.fields.any { f -> f.typeName == emojiClass } }
     val init = initializers.single { it.className == stickerClass }
     val addMenu = header.invokes.distinctBy { it.descriptor }.single { it.paramTypeNames.take(2) == listOf("int", "int") && it.paramTypeNames.lastOrNull() in listOf("java.lang.String", "java.lang.CharSequence") && it.paramCount == 3 }
-    val addText = bridge.findMethod { matcher { declaredClass(addMenu.className); paramTypes("int", "java.lang.CharSequence") } }.single()
+    val addText = bridge.findMethod { matcher { declaredClass(addMenu.className); paramTypes("int", "java.lang.CharSequence") } }.singleOrNull() ?: addMenu
     fun field(c: String, type: String) = bridge.findField { matcher { declaredClass(c); type(type) } }.single()
     return mapOf(
         "emojiClick" to emoji.descriptor, "emojiOwner" to capturedOwner(emoji, emojiClass), "header" to header.className,

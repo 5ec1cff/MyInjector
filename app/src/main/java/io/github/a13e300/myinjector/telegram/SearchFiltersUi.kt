@@ -10,7 +10,6 @@ import android.widget.PopupMenu
 import android.widget.Toast
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import org.luckypray.dexkit.wrap.DexField
@@ -31,7 +30,7 @@ internal class SearchFiltersUi(
     private val buttons = WeakHashMap<View, WeakReference<Any>>()
     private val chats = WeakHashMap<Any, Unit>()
     private val loader = requireNotNull(chatClass.classLoader)
-    private val androidUtilities = loader.loadClass("org.telegram.messenger.AndroidUtilities")
+    private val checkAndroidTheme = telegramApiMethod(loader, "org.telegram.messenger.AndroidUtilities", "checkAndroidTheme", "android.content.Context", "boolean")
     private val creator = TelegramHandler.creator
     private val found by lazy { findSearchControls(creator.bridge, chatClass.name) }
     private val members = listOf("create", "calendar", "visible", "showList", "sender").associateWith { key ->
@@ -78,7 +77,7 @@ internal class SearchFiltersUi(
     private fun dialogContext(button: View): ContextThemeWrapper {
         val context = ContextThemeWrapper(button.context, 0)
         // Telegram's theme can differ from Android's night mode.
-        androidUtilities.callS("checkAndroidTheme", context, true)
+        checkAndroidTheme.invoke(null, context, true)
         val dialogTheme = TypedValue()
         check(context.theme.resolveAttribute(android.R.attr.alertDialogTheme, dialogTheme, true))
         // Do not copy the host's light popup text style into the dark theme.

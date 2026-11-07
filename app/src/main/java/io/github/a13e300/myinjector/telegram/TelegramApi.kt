@@ -3,6 +3,8 @@ package io.github.a13e300.myinjector.telegram
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import org.luckypray.dexkit.wrap.DexMethod
+import org.luckypray.dexkit.wrap.DexField
+import java.lang.reflect.Field
 import java.lang.reflect.Method
 
 internal fun telegramApiClass(loader: ClassLoader, name: String): Class<*> {
@@ -17,6 +19,13 @@ internal fun telegramApiMethod(loader: ClassLoader, owner: String, name: String,
         telegramApiMethod(bridge, owner, name, *params).toObfsInfo()
     }
     return DexMethod(info.descriptor).getMethodInstance(loader).apply { isAccessible = true }
+}
+
+internal fun telegramApiField(loader: ClassLoader, owner: String, name: String): Field {
+    val info = TelegramHandler.creator.create("Api.Field.$owner.$name") { bridge ->
+        telegramApiField(bridge, owner, name).toObfsInfo()
+    }
+    return DexField(info.descriptor).getFieldInstance(loader).apply { isAccessible = true }
 }
 
 internal class TelegramLocale(loader: ClassLoader) {

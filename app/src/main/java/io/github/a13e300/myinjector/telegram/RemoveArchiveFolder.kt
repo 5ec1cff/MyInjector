@@ -10,17 +10,14 @@ class RemoveArchiveFolder : MyDynHook("removeArchiveFolder") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.removeArchiveFolder
     override fun onHook() {
         val guard = ThreadLocal<Boolean>()
-        // MessagesController and its members are kept by Telegram's ProGuard rules.
-        findClass("org.telegram.messenger.MessagesController").hookBefore(
-            "getDialogs",
-            Integer.TYPE,
-            cond = ::isEnabled
-        ) { param ->
+        val remove = telegramApiMethod(classLoader, "org.telegram.messenger.MessagesController", "removeFolder", "int")
+        telegramApiMethod(classLoader, "org.telegram.messenger.MessagesController", "getDialogs", "int")
+            .hookBefore(cond = ::isEnabled) { param ->
             // for com.exteragram.messenger
             if (guard.get() != true) {
                 guard.set(true)
                 try {
-                    param.thisObject.call("removeFolder", 1)
+                    remove.invoke(param.thisObject, 1)
                 } finally {
                     guard.remove()
                 }

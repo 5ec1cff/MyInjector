@@ -8,10 +8,16 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookAll
+import java.lang.reflect.Field
+import org.luckypray.dexkit.wrap.DexField
+import io.github.a13e300.myinjector.arch.toObfsInfo
 import java.util.IdentityHashMap
 import java.util.concurrent.CountDownLatch
 
 class StickerLoadGuard : IHook() {
+    private lateinit var operationField: Field
+    private lateinit var stateField: Field
+    private lateinit var latchField: Field
     private val objects = IdentityHashMap<Any, Int>()
     private val lock = Object()
 
@@ -33,8 +39,8 @@ class StickerLoadGuard : IHook() {
             objects.keys.forEach { k ->
                 runCatching {
                     val cancel = runCatching {
-                        val loadOp = k.getObj("loadOperation")
-                        val state = loadOp.getObjAs<Int>("state")
+                        val loadOp = operationField.get(k)
+                        val state = stateField.getInt(loadOp)
                         if (state == 5) { // stateCancelling
                             k.call("cancel")
                             // logD("cancelled ${k.hashCode()} which stuck in state = 5")
@@ -43,7 +49,7 @@ class StickerLoadGuard : IHook() {
                             false
                         }
                     }.getOrDefault(false)
-                    if (!cancel) k.getObjAsN<CountDownLatch>("countDownLatch")?.countDown()
+                    if (!cancel) (latchField.get(k) as? CountDownLatch)?.countDown()
                 }
             }
             if (objects.isNotEmpty()) {
@@ -78,6 +84,15 @@ class StickerLoadGuard : IHook() {
     }
 
     override fun onHook() {
+        val creator = TelegramHandler.creator
+        val found by lazy { findStickerStream(creator.bridge) }
+        fun field(key: String): Field {
+            val member = creator.create("StickerStream.$key") { bridge -> bridge.getFieldData(found.getValue(key))!!.toObfsInfo() }
+            return DexField(member.descriptor).getFieldInstance(classLoader).apply { isAccessible = true }
+        }
+        operationField = field("operation")
+        stateField = field("state")
+        latchField = field("latch")
         findClass("org.telegram.messenger.AnimatedFileDrawableStream").hookAll(
             "read",
             before = { param ->

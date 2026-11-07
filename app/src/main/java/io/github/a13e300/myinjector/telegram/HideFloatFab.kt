@@ -20,7 +20,7 @@ class HideFloatFab : MyDynHook("hideFloatFab") {
                 paramTypes("android.content.Context")
                 returnType("android.view.View")
                 usingEqStrings("storyhint")
-                addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("outline_fab_story_24") }
+                usingTelegramResource(bridge, "drawable", "outline_fab_story_24")
             } }.single().toObfsInfo()
         }
         val mainButton = creator.create("DialogsFloatingButton") { bridge ->
@@ -28,7 +28,7 @@ class HideFloatFab : MyDynHook("hideFloatFab") {
                 declaredClass(createView.className)
                 paramTypes()
                 returnType("void")
-                addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("floating_check") }
+                usingTelegramResource(bridge, "drawable", "floating_check")
             } }.single()
             update.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
                 it.className == createView.className &&

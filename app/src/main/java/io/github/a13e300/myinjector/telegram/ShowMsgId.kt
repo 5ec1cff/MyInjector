@@ -43,7 +43,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
             if (called) return
             called = true
             val bridge = creator.bridge
-            val named = telegramNamedMethod(bridge, "org.telegram.ui.Cells.ChatMessageCell", "measureTime", "org.telegram.messenger.MessageObject")
+            val named = telegramNamedMethod(bridge, "org.telegram.ui.Cells.ChatMessageCell", "measureTime", telegramApiClass(bridge, "org.telegram.messenger.MessageObject"))
             if (named != null) {
                 chatMessageCellMeasureTime = named
                 fun field(name: String) = named.declaredClass!!.fields.single { it.name == name }
@@ -325,7 +325,7 @@ class ShowMsgId : MyDynHook("showMsgId") {
             if (invoke.type != InvokeType.Static) continue
             val invokeMethod =
                 bridge.getMethodDataByDexAndId(onLayout.dexId, invoke.ref) ?: continue
-            if (invokeMethod.descriptor != "Lorg/telegram/messenger/AndroidUtilities;->dp(F)I") continue
+            if (invokeMethod.descriptor != telegramApiMethod(bridge, "org.telegram.messenger.AndroidUtilities", "dp", "float").descriptor) continue
             val iput = decodeIInstanceOp(insns, poss[i + 4]) ?: continue
             if (iput.type != InstanceOpType.IPut) continue
             if (iput.ref != iget.ref) continue
@@ -348,6 +348,9 @@ class ShowMsgId : MyDynHook("showMsgId") {
         val chatMessageCellCurrentTimeString = table["chatMessageCellCurrentTimeString"]!!
         val themeChatTimePaint = table["themeChatTimePaint"]!!
         val chatMessageCellIsMegaGroup = table["chatMessageCellIsMegaGroup"]!!
+        val messageOwner = telegramApiField(classLoader, "org.telegram.messenger.MessageObject", "messageOwner")
+        val getFromChatId = telegramApiMethod(classLoader, "org.telegram.messenger.MessageObject", "getFromChatId", "org.telegram.tgnet.TLRPC\$Message")
+        val getDialogId = telegramApiMethod(classLoader, "org.telegram.messenger.MessageObject", "getDialogId")
 
         val chatTimePaint =
             findClass(themeChatTimePaint.className).getDeclaredField(themeChatTimePaint.memberName)
@@ -367,14 +370,14 @@ class ShowMsgId : MyDynHook("showMsgId") {
             var time =
                 param.thisObject.getObjAs<CharSequence>(chatMessageCellCurrentTimeString.memberName)
             val messageObject = param.args[0]
-            val owner = messageObject.getObj("messageOwner")
+            val owner = messageOwner.get(messageObject)
             val id = owner.getObjAs<Int>("id")
             val real = owner.getObjAs<Int>("realId")
             var delta = "${(if (real == 0) id else real)} "
             val isMegaGroup =
                 param.thisObject.getObjAs<Boolean>(chatMessageCellIsMegaGroup.memberName)
-            val fromChatId = messageObject.call("getFromChatId") as Long
-            val dialogId = messageObject.call("getDialogId") as Long
+            val fromChatId = getFromChatId.invoke(null, owner) as Long
+            val dialogId = getDialogId.invoke(messageObject) as Long
             if (isMegaGroup && fromChatId == dialogId) {
                 val postAuthor = owner.getObjAsN<String?>("post_author")
                 if (postAuthor != null) delta += postAuthor.replace("\n", "") + " "

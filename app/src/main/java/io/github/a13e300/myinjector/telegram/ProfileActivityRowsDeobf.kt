@@ -121,7 +121,7 @@ internal fun findProfileActivityRows(bridge: DexKitBridge, baseFragment: String)
     found["rowFields"] = rowFields.joinToString("\n") { it.descriptor }
     save("rowCount", resets.single { it.value?.number == 0 }.field)
     val bind = bridge.findMethod { matcher {
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("PhoneMobile") }
+        usingTelegramResource(bridge, "string", "PhoneMobile")
         paramCount(2); returnType("void")
         addUsingField { declaredClass(profile); type("int") }
     } }.single { it.paramTypeNames.last() == "int" }

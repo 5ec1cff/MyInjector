@@ -202,14 +202,14 @@ private fun repeatMembers(creator: ObfsTableCreator, chat: String, menu: String,
 }
 
 internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: String, options: String): Map<String, String> {
-    val message = "org.telegram.messenger.MessageObject"
-    val suggestion = "org.telegram.messenger.MessageSuggestionParams"
-    val chatArgs = "org.telegram.messenger.SendMessageChatArguments"
-    val helper = "org.telegram.messenger.SendMessagesHelper"
-    val params = "$helper\$SendMessageParams"
+    val message = telegramApiClass(bridge, "org.telegram.messenger.MessageObject")
+    val suggestion = telegramApiClass(bridge, "org.telegram.messenger.MessageSuggestionParams")
+    val chatArgs = telegramApiClass(bridge, "org.telegram.messenger.SendMessageChatArguments")
+    val helper = telegramApiClass(bridge, "org.telegram.messenger.SendMessagesHelper")
+    val params = telegramApiClass(bridge, "org.telegram.messenger.SendMessagesHelper\$SendMessageParams")
     val forward = telegramNamedMethod(bridge, chat, "forwardMessages", "java.util.ArrayList", "boolean", "boolean", "boolean", "int", "long", "long") ?: bridge.findMethod { matcher {
         declaredClass(chat); returnType("void")
-        addInvoke { declaredClass(helper); name("sendMessage") }
+        addInvoke { declaredClass(helper) }
     } }.single {
         val prefix = listOf("java.util.ArrayList", "boolean", "boolean", "boolean", "int", "long")
         it.paramTypeNames == prefix || it.paramTypeNames == prefix + listOf("long", suggestion)
@@ -220,45 +220,43 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
     } ?: forwardFields.single { it.className == chat && it.typeName == type }).descriptor
     // processSelectedOption first reads the selected album in its Retry branch;
     // the later GroupedMessages field holds the forwarding selection instead.
-    val group = bridge.getMethodData(options)!!.usingFields.first {
-        it.field.className == chat && it.field.typeName == "$message\$GroupedMessages"
+    val group = bridge.getMethodData(options)!!.usingFields.first { field ->
+        field.field.className == chat && field.field.type.fields.any { it.typeName == "java.util.ArrayList" } &&
+            field.field.type.fields.any { it.typeName == "long" } && field.field.type.fields.any { it.typeName == "boolean" }
     }.field
     fun invoked(result: String) = forward.invokes.distinctBy { it.descriptor }.single {
         it.className == chat && it.paramCount == 0 && it.returnTypeName == result
     }.descriptor
     val sticker = bridge.findMethod { matcher {
-        declaredClass(helper); name("sendSticker"); returnType("void"); paramCount(17)
+        declaredClass(helper); returnType("void"); paramCount(17)
     } }.single { it.paramTypeNames.take(6) == listOf("org.telegram.tgnet.TLRPC\$Document", "java.lang.String", "long",
         message, message, "org.telegram.tgnet.tl.TL_stories\$StoryItem") }
-    check(sticker.paramTypeNames.drop(7) == listOf("$message\$SendAnimationData", "boolean", "int", "int", "boolean",
-        "java.lang.Object", chatArgs, "long", "long", suggestion))
-    val controller = "org.telegram.messenger.MessagesController"
-    fun restriction(name: String, argument: String) = bridge.findMethod { matcher {
-        declaredClass(controller); name(name); paramTypes(argument); returnType("boolean")
-    } }.single().descriptor
+    check(sticker.paramTypeNames.drop(8) == listOf("boolean", "int", "int", "boolean", "java.lang.Object", chatArgs, "long", "long", suggestion))
+    val controller = telegramApiClass(bridge, "org.telegram.messenger.MessagesController")
+    fun restriction(name: String, argument: String) = telegramApiMethod(bridge, "org.telegram.messenger.MessagesController", name, argument).descriptor
     // updateSecretStatus owns the full-send restriction overlay, separate from
     // the composer hidden by updateBottomOverlay for read-only destinations.
     val status = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes(); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("EncryptionProcessing") }
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SendMessageRestrictedForever") }
+        usingTelegramResource(bridge, "string", "EncryptionProcessing")
+        usingTelegramResource(bridge, "string", "SendMessageRestrictedForever")
     } }.single()
     val input = status.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
         it.className == chat && (it.typeName == "org.telegram.ui.Components.ChatActivityEnterView" ||
             it.type.superClass?.name == "org.telegram.ui.Components.ChatActivityEnterView")
     }
     val statusCalls = scanTelegramDex(bridge, status).calls
-    val processing = statusCalls.first { it.args.any { arg -> arg?.resource == "EncryptionProcessing" } }
+    val processing = statusCalls.first { it.args.any { arg -> arg.isResource("EncryptionProcessing") } }
     val overlay = bridge.getClassData(chat)!!.fields.singleOrNull { it.name == "bottomOverlay" } ?: statusCalls.first { it.offset > processing.offset && it.method.name == "setVisibility" }
         .receiver!!.field!!
     check(overlay.className == chat && (overlay.typeName == "android.widget.FrameLayout" || overlay.type.superClass?.name == "android.widget.FrameLayout"))
     val bottomUpdate = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes("boolean"); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("OnlyPremiumCanMessage") }
+        usingTelegramResource(bridge, "string", "OnlyPremiumCanMessage")
     } }.single()
     val openSearch = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes("java.lang.String"); returnType("void")
-        addInvoke { declaredClass("org.telegram.messenger.MediaDataController"); name("searchMessagesInChat") }
+        addInvoke { descriptor(telegramSearchMethod(bridge, "searchMessagesInChat").descriptor) }
     } }.single()
     val searchWrites = openSearch.usingFields.filter { it.usingType == FieldUsingType.Write }
         .map { it.field.descriptor }.toSet()
@@ -274,7 +272,7 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
     val buttons = scanTelegramDex(bridge, nativeCanSend).calls.single { it.method.name == "getVisibility" }.receiver!!.field!!
     val forumReply = telegramNamedMethod(bridge, chat, "shouldDisplaySwipeToLeftToReplyInForum") ?: bottomUpdate.invokes.distinctBy { it.descriptor }.single {
         it.className == chat && it.paramCount == 0 && it.returnTypeName == "boolean" &&
-            it.invokes.any { method -> method.className == "org.telegram.messenger.ChatObject" && method.name == "canManageTopic" }
+            it.invokes.any { method -> method.descriptor == telegramApiMethod(bridge, "org.telegram.messenger.ChatObject", "canManageTopic", "int", "org.telegram.tgnet.TLRPC\$Chat", "org.telegram.tgnet.TLRPC\$TL_forumTopic").descriptor }
     }
     return mapOf(
         "input" to input.descriptor,
@@ -286,10 +284,15 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
         "forumReplyRequired" to forumReply.descriptor,
         "forward" to forward.descriptor,
         "slowMode" to invoked("boolean"),
-        "monoPeer" to bridge.findMethod { matcher {
+        "monoPeer" to if (bridge.getClassData("org.telegram.messenger.ChatObject") != null) bridge.findMethod { matcher {
             declaredClass(chat); paramTypes(); returnType("long")
             addInvoke { declaredClass("org.telegram.messenger.ChatObject"); name("isMonoForum") }
             addInvoke { declaredClass("org.telegram.messenger.ChatObject"); name("canManageMonoForum") }
+        } }.single().descriptor else bridge.findMethod { matcher {
+            declaredClass(chat); paramTypes(); returnType("long")
+            addUsingField { type("org.telegram.tgnet.TLRPC\$Chat") }
+            addInvoke { declaredClass(telegramApiClass(bridge, "org.telegram.messenger.ChatObject")); paramTypes("org.telegram.tgnet.TLRPC\$Chat") }
+            usingNumbers(24)
         } }.single().descriptor,
         "dialog" to forwardField("long"),
         "thread" to forwardField(message),
@@ -300,8 +303,8 @@ internal fun findRepeatMessage(bridge: DexKitBridge, chat: String, createMenu: S
         } }.single().descriptor,
         "chatArgs" to bridge.findMethod { matcher { declaredClass(chat); paramTypes(); returnType(chatArgs) } }.single().descriptor,
         "sendSticker" to sticker.descriptor,
-        "sendText" to bridge.findMethod { matcher { declaredClass(helper); name("sendMessage"); paramTypes(params); returnType("void") } }.single().descriptor,
-        "textParams" to bridge.findMethod { matcher { declaredClass(params); name("of"); paramTypes("java.lang.String", "long"); returnType(params) } }.single().descriptor,
+        "sendText" to bridge.findMethod { matcher { declaredClass(helper); paramTypes(params); returnType("void") } }.single().descriptor,
+        "textParams" to bridge.findMethod { matcher { declaredClass(params); paramCount(2); returnType(params) } }.single { it.paramTypeNames.sorted() == listOf("java.lang.String", "long") }.descriptor,
         "chatNoForwards" to restriction("isChatNoForwards", "org.telegram.tgnet.TLRPC\$Chat"),
         "userNoForwards" to restriction("isUserNoForwards", "long")
     )

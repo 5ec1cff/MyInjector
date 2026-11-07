@@ -218,7 +218,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
             if (located) return
             located = true
             // ProfileActivity has some keep fields, so its class name won't be obfuscated
-            // org/telegram/messenger/* are also not obfuscated because of proguard rules, so MessageController/UserConfig is visible
+            // Account service classes can also be obfuscated in newer builds.
 
 
             // numberRow
@@ -298,7 +298,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                                     onBindViewHolder.dexId,
                                     invoke2.ref
                                 ) ?: continue
-                                if (m.descriptor == "Lorg/telegram/messenger/UserConfig;->getCurrentUser()Lorg/telegram/tgnet/TLRPC\$User;") {
+                                if (m.className == telegramApiClass(bridge, "org.telegram.messenger.UserConfig") && m.paramCount == 0 && m.returnTypeName == "org.telegram.tgnet.TLRPC\$User") {
                                     status = status_meet_invoke_getCurrentUser
                                 }
                             }
@@ -345,7 +345,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                             if (iv?.type == InvokeType.Virtual) {
                                 val m =
                                     bridge.getMethodDataByDexAndId(onBindViewHolder.dexId, iv.ref)
-                                if (m?.descriptor == "Lorg/telegram/messenger/MessagesController;->getUser(Ljava/lang/Long;)Lorg/telegram/tgnet/TLRPC\$User;") {
+                                if (m?.className == telegramApiClass(bridge, "org.telegram.messenger.MessagesController") && m.paramTypeNames == listOf("java.lang.Long") && m.returnTypeName == "org.telegram.tgnet.TLRPC\$User") {
                                     hasInvokeVirtualGetUser = true
                                 }
                             }
@@ -363,7 +363,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                 // number, outside the old instruction window. Anchor the row
                 // comparison to its localized placeholder instead.
                 val code = scanTelegramDex(bridge, onBindViewHolder)
-                val placeholder = code.calls.first { call -> call.args.any { it?.resource == "NumberUnknown" } }
+                val placeholder = code.calls.first { call -> call.args.any { it.isResource("NumberUnknown") } }
                 val numberRow = code.compares.last { cmp ->
                     cmp.offset < placeholder.offset && cmp.fields.any {
                         it.className == "org.telegram.ui.ProfileActivity" && it.typeName == "int"
@@ -396,6 +396,13 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                     break
                 }
             }
+            if (theme_key_switch2TrackChecked == null) {
+                val code = scanTelegramDex(bridge, onBindViewHolder)
+                val gift = code.calls.first { it.args.any { arg -> arg.isResource("msg_input_gift") } }
+                theme_key_switch2TrackChecked = code.calls.first {
+                    it.offset > gift.offset && it.method.name == "getThemedColor" && it.args.singleOrNull()?.field?.typeName == "int"
+                }.args.single()!!.field
+            }
         }
 
         creator.create("ProfileActivityListAdapterOnBindViewHolder") {
@@ -426,8 +433,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
             if (theme_key_switch2TrackChecked == null) {
                 doLocate()
             }
-            require(theme_key_switch2TrackChecked != null) { "could not locate getNumberRowMethod" }
-            theme_key_switch2TrackChecked.toObfsInfo()
+            requireNotNull(theme_key_switch2TrackChecked) { "could not locate switch2TrackChecked theme key" }.toObfsInfo()
         }
 
     }
@@ -499,8 +505,8 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
 
         val classProfileActivity_ListAdapter =
             findClass(ProfileActivityListAdapterOnBindViewHolder.className)
-        // not obfuscated
-        val classLocaleController = findClass("org.telegram.messenger.LocaleController")
+        val locale = TelegramLocale(classLoader)
+        val clientUserId = telegramApiMethod(classLoader, "org.telegram.messenger.UserConfig", "getClientUserId")
         val profileActivityClass = findClass("org.telegram.ui.ProfileActivity")
         val profileActivityUserid =
             profileActivityClass.getDeclaredField(ProfileActivityUserId.memberName)
@@ -548,10 +554,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
             ctx.addModuleAssets(Entry.modulePath)
             val tv = textDetailCellTextViewField.get(cell) as TextView
             val phoneNumber = tv.text
-            val phoneHidden = classLocaleController.callS(
-                "getString",
-                ctx.resources.getIdentifier("PhoneHidden", "string", ctx.packageName)
-            )
+            val phoneHidden = locale.string("PhoneHidden", TelegramResources.table.id("string", "PhoneHidden"))
             if (phoneNumber == phoneHidden) {
                 return@hookAfter
             }
@@ -560,7 +563,7 @@ class HidePhoneNumber : MyDynHook("hidePhoneNumber") {
                 profileActivity,
                 "showPhoneNumber",
                 if (TelegramHandler.settings.hidePhoneNumberForSelfOnly) {
-                    val currentUserId = profileActivity.call("getUserConfig").getObj("clientUserId")
+                    val currentUserId = clientUserId.invoke(profileActivity.call("getUserConfig")) as Long
                     val userId = profileActivityUserid.getLong(profileActivity)
                     currentUserId != userId
                 } else false

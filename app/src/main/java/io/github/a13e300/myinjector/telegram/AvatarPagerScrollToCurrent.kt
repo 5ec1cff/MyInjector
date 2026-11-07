@@ -22,7 +22,7 @@ class AvatarPagerScrollToCurrent : MyDynHook("avatarPageScrollToCurrent") {
                     usingEqStrings("avatar")
                     returnType("void")
                     addInvoke {
-                        descriptor("Lorg/telegram/messenger/ImageReceiver;->getDrawable()Landroid/graphics/drawable/Drawable;")
+                        paramTypes(); returnType("android.graphics.drawable.Drawable")
                     }
                 }
             }.single {
@@ -40,7 +40,7 @@ class AvatarPagerScrollToCurrent : MyDynHook("avatarPageScrollToCurrent") {
                 matcher {
                     addCaller { descriptor(foreground.descriptor) }
                     paramTypes("int")
-                    returnType("org.telegram.messenger.ImageLocation")
+                    returnType(telegramApiClass(bridge, "org.telegram.messenger.ImageLocation"))
                 }
             }.single().toObfsInfo()
         }

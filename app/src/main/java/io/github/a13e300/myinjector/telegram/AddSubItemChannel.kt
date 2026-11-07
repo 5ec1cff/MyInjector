@@ -1,8 +1,6 @@
 package io.github.a13e300.myinjector.telegram
 
-import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.logE
 import org.luckypray.dexkit.wrap.DexField
@@ -23,13 +21,13 @@ class AddSubItemChannel : MyDynHook("addSubItemChannel") {
         val other = field("otherItem")
         val add = method("addSubItem")
         val discussionId = members.getValue("discussionId").memberName.toInt()
-        val chatObject = findClass("org.telegram.messenger.ChatObject")
-        val icon = findClass("org.telegram.messenger.R\$drawable").getObjSAs<Int>("msg_channel")
+        val isChannel = telegramApiMethod(classLoader, "org.telegram.messenger.ChatObject", "isChannel", "org.telegram.tgnet.TLRPC\$Chat")
+        val icon = TelegramResources.table.id("drawable", "msg_channel")
         method("menu").hookAfter(cond = ::isEnabled) { param ->
             if (param.throwable != null) return@hookAfter
             runCatching {
                 val currentChat = chat.get(param.thisObject) ?: return@runCatching
-                if (currentChat.getObj("megagroup") != true || chatObject.callS("isChannel", currentChat) != true) return@runCatching
+                if (currentChat.getObj("megagroup") != true || isChannel.invoke(null, currentChat) != true) return@runCatching
                 val full = info.get(param.thisObject) ?: return@runCatching
                 if ((full.getObj("linked_chat_id") as Number).toLong() == 0L) return@runCatching
                 val item = other.get(param.thisObject) ?: return@runCatching

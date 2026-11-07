@@ -63,7 +63,7 @@ class AutoUncheckSharePhoneNumber : MyDynHook("autoUncheckSharePhoneNumber") {
                 }
                 val factory = calls.last {
                     it.offset < checked.offset && it.method.returnTypeName == checked.method.className &&
-                        it.args.any { arg -> arg?.resource == "AddContactShareNumber" }
+                        it.args.any { arg -> arg.isResource("AddContactShareNumber") }
                 }
                 fun writtenField(method: MethodData, type: String) = method.usingFields
                     .filter { it.usingType == FieldUsingType.Write }.map { it.field }.distinctBy { it.descriptor }

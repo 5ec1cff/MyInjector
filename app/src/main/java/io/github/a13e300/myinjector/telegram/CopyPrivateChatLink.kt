@@ -9,7 +9,6 @@ import android.widget.TextView
 import io.github.a13e300.myinjector.arch.ObfsInfo
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.logE
@@ -47,12 +46,11 @@ class CopyPrivateChatLink : MyDynHook("copyPrivateChatLink") {
         method("createMenu").hook(cond = ::isEnabled,
             before = { activeMenu.set(MenuState(it.thisObject)) },
             after = { activeMenu.remove() })
-        val strings = findClass("org.telegram.messenger.R\$string")
-        val copyId = strings.getObjSAs<Int>("Copy")
-        val copyLinkId = strings.getObjSAs<Int>("CopyLink")
-        val linkIcon = findClass("org.telegram.messenger.R\$drawable").getObjSAs<Int>("msg_link")
-        val getString = findClass("org.telegram.messenger.LocaleController").getDeclaredMethod(
-            "getString", String::class.java, Integer.TYPE)
+        val copyId = TelegramResources.table.id("string", "Copy")
+        val copyLinkId = TelegramResources.table.id("string", "CopyLink")
+        val linkIcon = TelegramResources.table.id("drawable", "msg_link")
+        val locale = TelegramLocale(classLoader)
+        val messageOwner = telegramApiField(classLoader, "org.telegram.messenger.MessageObject", "messageOwner")
         method("popupAdd").hookAfter(cond = ::isEnabled) { param ->
             val state = activeMenu.get() ?: return@hookAfter
             if (currentUser.get(state.chat) == null) {
@@ -63,7 +61,7 @@ class CopyPrivateChatLink : MyDynHook("copyPrivateChatLink") {
             if (++state.added != 2) return@hookAfter
             activeMenu.remove()
             val layout = layoutField.get(param.thisObject) as LinearLayout
-            val copyText = getString.invoke(null, "Copy", copyId) as String
+            val copyText = locale.string("Copy", copyId)
             var first = -1
             var copy = -1
             for (i in 0 until layout.childCount) {
@@ -86,14 +84,15 @@ class CopyPrivateChatLink : MyDynHook("copyPrivateChatLink") {
                 }
             }.toTypedArray()
             val item = constructor.newInstance(*args) as View
-            val label = getString.invoke(null, "CopyLink", copyLinkId)
+            val label = locale.string("CopyLink", copyLinkId)
             setText.invoke(item, *setText.parameterTypes.map {
-                if (it == Integer.TYPE) linkIcon else label
+                val value: Any = if (it == Integer.TYPE) linkIcon else label
+                value
             }.toTypedArray())
             layout.addView(item, position)
             item.setOnClickListener { view ->
                 runCatching {
-                    val message = selectedObject.get(state.chat).getObj("messageOwner")
+                    val message = messageOwner.get(selectedObject.get(state.chat))
                     val id = message.getObj("id")
                     val dialogId = message.getObj("dialog_id")
                     view.context.getSystemService(ClipboardManager::class.java)
@@ -128,7 +127,7 @@ private fun findCopyPrivateChatLink(bridge: DexKitBridge): Map<String, String> {
     } }.single()
     // processSelectedOption starts by returning if selectedObject == null.
     val selected = options.usingFields.first().field
-    check(selected.className == createMenu.className && selected.typeName == "org.telegram.messenger.MessageObject")
+    check(selected.className == createMenu.className && selected.typeName == telegramApiClass(bridge, "org.telegram.messenger.MessageObject"))
     val user = bridge.findField { matcher { declaredClass(createMenu.className); type("org.telegram.tgnet.TLRPC\$User"); addReadMethod { descriptor(createMenu.descriptor) } } }.single()
     val popup = createMenu.invokes.distinctBy { it.descriptor }.single {
         it.name == "addView" && it.paramTypeNames == listOf("android.view.View") &&

@@ -4,9 +4,11 @@ import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.result.FieldUsingType
 
 internal fun findAnchoredSearch(bridge: DexKitBridge, chat: String): Map<String, String> {
+    val endReached = telegramSearchMethod(bridge, "searchEndReached")
+    val loadMore = telegramSearchMethod(bridge, "loadMoreSearchMessages")
     val refresh = bridge.findMethod { matcher {
         paramTypes(); returnType("void")
-        addInvoke { declaredClass("org.telegram.messenger.MediaDataController"); name("searchEndReached") }
+        addInvoke { descriptor(endReached.descriptor) }
     } }.single()
     val adapter = refresh.className
     val item = bridge.findMethod { matcher { declaredClass(adapter); paramTypes("int"); returnType("java.lang.Object") } }.single()
@@ -14,7 +16,7 @@ internal fun findAnchoredSearch(bridge: DexKitBridge, chat: String): Map<String,
     val count = bridge.findMethod { matcher { declaredClass(adapter); paramTypes(); returnType("int") } }.single()
     val scroll = bridge.findMethod { matcher {
         returnType("void"); paramCount(3)
-        addInvoke { declaredClass("org.telegram.messenger.MediaDataController"); name("loadMoreSearchMessages") }
+        addInvoke { descriptor(loadMore.descriptor) }
     } }.single()
     val loaded = scroll.usingFields.map { it.field }.distinctBy { it.descriptor }.single { it.className == adapter && it.typeName == "int" }
     val countFields = count.usingFields.map { it.field }.distinctBy { it.descriptor }
@@ -23,7 +25,11 @@ internal fun findAnchoredSearch(bridge: DexKitBridge, chat: String): Map<String,
     val create = bridge.findMethod { matcher { declaredClass(chat); name("createView"); paramTypes("android.content.Context") } }.single()
     val adapterField = scroll.usingFields.map { it.field }.distinctBy { it.descriptor }.single { it.className == chat && it.typeName == adapter }
     val last = scroll.invokes.distinctBy { it.descriptor }.single { m -> m.paramCount == 0 && m.returnTypeName == "int" &&
-        m.invokes.any { it.paramTypeNames == listOf("int", "int", "boolean", "boolean") && it.returnTypeName == "android.view.View" } }
+        scanTelegramDex(bridge, m).calls.any {
+            it.method.paramTypeNames == listOf("int", "int", "boolean", "boolean") &&
+                it.method.returnTypeName == "android.view.View" && it.args[1]?.number == -1 &&
+                it.args[2]?.number == 0 && it.args[3]?.number == 1
+        } }
     val layout = last.declaredClass!!
     val createCalls = scanTelegramDex(bridge, create).calls
     val setAdapter = createCalls.single { it.method.paramTypeNames == listOf(full.className) &&
@@ -58,15 +64,15 @@ internal fun findAnchoredSearch(bridge: DexKitBridge, chat: String): Map<String,
 internal fun findSearchControls(bridge: DexKitBridge, chat: String): Map<String, String> {
     val create = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes(); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("msg_calendar") }
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SearchAsList") }
+        usingTelegramResource(bridge, "drawable", "msg_calendar")
+        usingTelegramResource(bridge, "string", "SearchAsList")
     } }.single()
     val calendar = viewFieldWithResource(bridge, create, "msg_calendar")
     val history = findHistoricalNews(bridge, chat)
     val open = bridge.getMethodData(history.getValue("openSearch"))!!
     val update = bridge.findMethod { matcher {
         declaredClass(chat); paramTypes("boolean"); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("OnlyPremiumCanMessage") }
+        usingTelegramResource(bridge, "string", "OnlyPremiumCanMessage")
     } }.single()
     val written = open.usingFields.filter { it.usingType == FieldUsingType.Write }
         .map { it.field.descriptor }.toSet()

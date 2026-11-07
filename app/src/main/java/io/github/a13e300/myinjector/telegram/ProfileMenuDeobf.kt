@@ -9,12 +9,12 @@ import org.luckypray.dexkit.wrap.DexMethod
 internal fun findProfileMenu(bridge: DexKitBridge): Map<String, String> {
     val menu = bridge.findMethod { matcher {
         paramTypes("boolean"); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("ViewDiscussion") }
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SearchMembers") }
+        usingTelegramResource(bridge, "string", "ViewDiscussion")
+        usingTelegramResource(bridge, "string", "SearchMembers")
     } }.single()
     val code = scanTelegramDex(bridge, menu)
     val discussion = code.calls.single { call ->
-        call.args.any { it?.resource == "ViewDiscussion" } && call.receiver?.field?.className == menu.className
+        call.args.any { it.isResource("ViewDiscussion") } && call.receiver?.field?.className == menu.className
     }
     check(discussion.method.paramTypeNames.take(2) == listOf("int", "int") && discussion.method.paramCount == 3)
     fun field(type: String) = bridge.findField { matcher { declaredClass(menu.className); type(type) } }.single().descriptor

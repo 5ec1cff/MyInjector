@@ -83,22 +83,22 @@ private fun secretCode(bridge: DexKitBridge, method: MethodData): SecretCode {
 private fun findSaveSecretImage(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
     namedSecretMedia(bridge)?.let { return it }
     val fill = bridge.findMethod { matcher {
-        paramTypes("org.telegram.messenger.MessageObject", "java.util.ArrayList", "java.util.ArrayList", "java.util.ArrayList")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("SaveToGallery") }
+        paramTypes(telegramApiClass(bridge, "org.telegram.messenger.MessageObject"), "java.util.ArrayList", "java.util.ArrayList", "java.util.ArrayList")
+        usingTelegramResource(bridge, "string", "SaveToGallery")
     } }.single()
     val chat = fill.declaredClass!!
-    val type = fill.invokes.single { it.className == chat.name && it.paramTypeNames == listOf("org.telegram.messenger.MessageObject") && it.returnTypeName == "int" }
+    val type = fill.invokes.single { it.className == chat.name && it.paramTypeNames == listOf(telegramApiClass(bridge, "org.telegram.messenger.MessageObject")) && it.returnTypeName == "int" }
     val options = chat.findMethod { matcher { paramTypes("int"); returnType("void"); usingEqStrings("tel:", "canSelectTopics", "messagesCount") } }.single()
     val selected = options.usingFields.first().field
-    check(selected.typeName == "org.telegram.messenger.MessageObject" && selected.className == chat.name)
+    check(selected.typeName == telegramApiClass(bridge, "org.telegram.messenger.MessageObject") && selected.className == chat.name)
     val open = bridge.findMethod { matcher { paramCount(6); addCaller { declaredClass(chat.name) } } }.single {
-        it.paramTypeNames.take(5) == listOf("org.telegram.messenger.MessageObject", chat.name, "long", "long", "long")
+        it.paramTypeNames.take(5) == listOf(telegramApiClass(bridge, "org.telegram.messenger.MessageObject"), chat.name, "long", "long", "long")
     }
     val pv = open.declaredClass!!
     val instance = pv.methods.single { it.paramCount == 0 && it.returnTypeName == pv.name && Modifier.isStatic(it.modifiers) && it.invokes.any { m -> m.isConstructor && m.className == pv.name } }
     val parent = pv.findMethod { matcher {
         paramCount(3); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("msg_gallery") }
+        usingTelegramResource(bridge, "drawable", "msg_gallery")
     } }.single { it.paramTypeNames.take(2) == listOf("android.app.Activity", baseFragment) }
     val theme = chat.methods.single { it.paramCount == 0 && it.returnTypeName == parent.paramTypeNames[2] }
     val caller = open.callers.single { it.className == chat.name }
@@ -115,7 +115,9 @@ private fun findSaveSecretImage(bridge: DexKitBridge, baseFragment: String): Map
         it.className == chat.name && it.typeName == "long" && it.descriptor != migration.descriptor
     }
     val parentCode = secretCode(bridge, parent)
-    val galleryWrite = parentCode.writes.single { it.result?.fields?.getOrNull(1)?.descriptor == "Lorg/telegram/messenger/R\$drawable;->msg_gallery:I" }
+    val parentScan = scanTelegramDex(bridge, parent)
+    val galleryCall = parentScan.calls.single { it.args.any { arg -> arg.isResource("msg_gallery") } }
+    val galleryWrite = parentCode.writes.single { it.result?.position == galleryCall.offset }
     // The gallery separator is the next gap created on the same menu after msg_gallery.
     val gapWrite = parentCode.writes.first {
         it.position > galleryWrite.position && it.result?.method?.className == galleryWrite.result!!.method.className &&
@@ -125,7 +127,7 @@ private fun findSaveSecretImage(bridge: DexKitBridge, baseFragment: String): Map
     val switch = pv.findMethod { matcher {
         paramTypes("int", "boolean", "boolean", "boolean")
         addUsingField { descriptor("Lorg/telegram/tgnet/TLRPC\$Message;->noforwards:Z") }
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("AttachDocument") }
+        usingTelegramResource(bridge, "string", "AttachDocument")
     } }.single()
     return mapOf("fill" to fill.descriptor, "messageType" to type.descriptor, "options" to options.descriptor,
         "selected" to selected.descriptor, "open" to open.descriptor, "instance" to instance.descriptor,

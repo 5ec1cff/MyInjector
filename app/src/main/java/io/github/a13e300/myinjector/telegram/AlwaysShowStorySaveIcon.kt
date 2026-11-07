@@ -44,9 +44,7 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
 
             val peerStoriesViewCustomPopupMenuOnCreate = bridge.findMethod {
                 matcher {
-                    addUsingField {
-                        descriptor("Lorg/telegram/messenger/R\$drawable;->msg_link2:I")
-                    }
+                    usingTelegramResource(bridge, "drawable", "msg_link2")
                     addUsingField {
                         declaredClass(peerStoriesViewUpdatePosition.className)
                         type("boolean")
@@ -169,6 +167,13 @@ class AlwaysShowStorySaveIcon : MyDynHook("alwaysShowStorySaveIcon") {
                 if (sgetField.descriptor != "Lorg/telegram/messenger/R\$drawable;->msg_link2:I") continue
                 peerStoriesAllowShareLink = igetField
                 break
+            }
+            if (peerStoriesAllowShareLink == null) {
+                val code = scanTelegramDex(bridge, peerStoriesViewCustomPopupMenuOnCreate)
+                val link = code.calls.first { it.args.any { arg -> arg.isResource("msg_link2") } }
+                peerStoriesAllowShareLink = code.compares.last { cmp ->
+                    cmp.offset < link.offset && cmp.fields.any { it.className == peerStoriesViewUpdatePosition.className && it.typeName == "boolean" }
+                }.fields.single { it.className == peerStoriesViewUpdatePosition.className && it.typeName == "boolean" }
             }
         }
 

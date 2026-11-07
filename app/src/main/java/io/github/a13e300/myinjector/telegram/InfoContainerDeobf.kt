@@ -19,19 +19,32 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
         it.field.className == menu.className && it.value?.bundleKey == "topic_id"
     }.field.descriptor
     val profileCode = scanTelegramDex(bridge, menu)
-    val editVisible = profileCode.writes.first { it.field.className == menu.className && it.field.typeName == "boolean" }.field
+    val profileView = bridge.findMethod { matcher {
+        declaredClass(menu.className); name("createView"); paramTypes("android.content.Context")
+    } }.single()
+    val editItem = scanTelegramDex(bridge, profileView).writes.filter {
+        it.field.className == menu.className && it.value.isResource("group_edit_profile")
+    }.map { it.field }.distinctBy { it.descriptor }.single()
+    val written = profileCode.writes.map { it.field.descriptor }.toSet()
+    // Newer builds move button visibility into an animated helper.
+    val visibilityCode = listOf(profileCode) + menu.invokes.filter {
+        it.className == menu.className && it.usingFields.any { f -> f.field.descriptor == editItem.descriptor }
+    }.map { scanTelegramDex(bridge, it) }
+    val editVisible = visibilityCode.flatMap { code -> code.calls.mapNotNull { call ->
+        if (call.receiver?.field?.descriptor != editItem.descriptor && call.args.none { it?.field?.descriptor == editItem.descriptor }) return@mapNotNull null
+        code.compares.lastOrNull { cmp -> cmp.offset < call.offset && cmp.fields.any { it.typeName == "boolean" } }
+            ?.fields?.singleOrNull { it.className == menu.className && it.typeName == "boolean" && it.descriptor in written }
+    }
+    }.distinctBy { it.descriptor }.single()
     found["editVisible"] = editVisible.descriptor
-    val editItem = profileCode.calls.filter { it.method.name == "setVisibility" && it.receiver?.field?.className == menu.className }
-        .filter { call -> profileCode.compares.lastOrNull { cmp -> cmp.offset < call.offset && cmp.fields.any { it.typeName == "boolean" } }
-            ?.fields?.any { it.descriptor == editVisible.descriptor } == true }
-        .map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single()
     found["editItem"] = editItem.descriptor
-    found["setIcon"] = bridge.findMethod { matcher { declaredClass(editItem.typeName); name("setIcon"); paramTypes("int"); returnType("void") } }.single().descriptor
+    found["setIcon"] = generateSequence(editItem.type) { it.superClass }.flatMap { it.methods }
+        .first { it.name == "setIcon" && it.paramTypeNames == listOf("int") && it.returnTypeName == "void" }.descriptor
 
     val update = bridge.findMethod { matcher {
         paramTypes("boolean", "boolean"); returnType("void")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("ChannelAdministrators") }
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("ChannelBlacklist") }
+        usingTelegramResource(bridge, "string", "ChannelAdministrators")
+        usingTelegramResource(bridge, "string", "ChannelBlacklist")
     } }.single()
     found["updateFields"] = update.descriptor
     val edit = update.className
@@ -42,7 +55,7 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     fun cell(resource: String, code: TgDexCode): FieldData = bridge.getClassData(edit)!!.fields.singleOrNull {
         it.name == mapOf("ChannelAdministrators" to "adminCell", "ChannelBlacklist" to "blockCell", "EventLog" to "logCell")[resource]
     } ?: code.calls.filter {
-        it.receiver?.field?.className == edit && it.args.any { arg -> arg?.resource == resource }
+        it.receiver?.field?.className == edit && it.args.any { arg -> arg.isResource(resource) }
     }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single()
     val admin = cell("ChannelAdministrators", updateCode)
     found["adminCell"] = admin.descriptor
@@ -55,7 +68,7 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
             call.receiver?.field?.className == edit
     }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single().descriptor
     val typeCell = updateCode.calls.filter { call ->
-        call.receiver?.field?.className == edit && call.args.any { it?.resource in listOf("ChannelType", "GroupType") }
+        call.receiver?.field?.className == edit && call.args.any { it.isResource("ChannelType") || it.isResource("GroupType") }
     }.map { it.receiver!!.field!! }.distinctBy { it.descriptor }.single()
     val typeContainerField = createCode.calls.filter { call ->
         call.method.name == "addView" && call.args.firstOrNull()?.field?.descriptor == typeCell.descriptor &&
@@ -70,24 +83,38 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
     }.args.first()!!.field!!.descriptor
     found["editChat"] = bridge.findField { matcher { declaredClass(edit); type("org.telegram.tgnet.TLRPC\$Chat") } }.single().descriptor
     // Reuse the native TextCell overload. R8 inserts/reorders the animated flag.
-    found["setAdminText"] = updateCode.calls.first { it.receiver?.field?.descriptor == admin.descriptor && it.args.any { arg -> arg?.resource == "ChannelAdministrators" } }.method.descriptor
+    found["setAdminText"] = updateCode.calls.first { it.receiver?.field?.descriptor == admin.descriptor && it.args.any { arg -> arg.isResource("ChannelAdministrators") } }.method.descriptor
 
     val usersCreate = bridge.findMethod { matcher {
         name("createView"); paramTypes("android.content.Context"); returnType("android.view.View")
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("ChannelSearchException") }
+        usingTelegramResource(bridge, "string", "ChannelSearchException")
     } }.single()
     found["usersCreate"] = usersCreate.descriptor
     val users = usersCreate.className
     found["usersDiscard"] = bridge.findMethod { matcher {
         declaredClass(users); paramTypes("boolean"); returnType("boolean")
         for (resource in listOf("UserRestrictionsApplyChanges", "ChannelSettingsChangedAlert", "GroupSettingsChangedAlert")) {
-            addUsingField { declaredClass("org.telegram.messenger.R\$string"); name(resource) }
+            usingTelegramResource(bridge, "string", resource)
         }
     } }.single().descriptor
     val usersCreateCode = scanTelegramDex(bridge, usersCreate)
+    found["doneOwner"] = ""
     for ((key, resource) in mapOf("searchItem" to "outline_header_search", "doneItem" to "ic_ab_done")) {
-        found[key] = (bridge.getClassData(users)!!.fields.singleOrNull { it.name == key }?.descriptor ?: usersCreateCode.writes.filter { it.field.className == users && it.value?.resource == resource }
-            .map { it.field }.distinctBy { it.descriptor }.single().descriptor)
+        val own = bridge.getClassData(users)!!.fields.singleOrNull { it.name == key }
+            ?: usersCreateCode.writes.filter { it.field.className == users && it.value.isResource(resource) }
+                .map { it.field }.distinctBy { it.descriptor }.singleOrNull()
+        if (own != null) found[key] = own.descriptor
+        else {
+            check(key == "doneItem")
+            // SimpleActionBar now owns the text Done button itself.
+            val call = usersCreateCode.calls.distinctBy { it.method.descriptor }.single {
+                it.receiver?.field?.name == "simpleActionBar" && it.method.paramTypeNames == listOf("java.lang.String") &&
+                    it.method.returnType?.superClass?.name in listOf("android.widget.FrameLayout", "android.view.View")
+            }
+            found["doneOwner"] = call.receiver!!.field!!.descriptor
+            found[key] = call.method.usingFields.map { it.field }.distinctBy { it.descriptor }
+                .single { it.typeName == call.method.returnTypeName }.descriptor
+        }
     }
     val constructor = bridge.findMethod { matcher { declaredClass(users); name("<init>"); paramTypes("android.os.Bundle") } }.single()
     found["usersType"] = scanTelegramDex(bridge, constructor).writes.single { it.field.className == users && it.value?.bundleKey == "type" }.field.descriptor
@@ -143,7 +170,7 @@ internal fun findInfoContainer(bridge: DexKitBridge, profileMenu: String): Map<S
 
 internal val infoContainerMethodKeys = listOf("setIcon", "updateFields", "editCreate", "setAdminText", "usersCreate", "usersDiscard", "updateRows")
 private val infoContainerKeys = infoContainerMethodKeys + listOf("profileTopic", "editVisible", "editItem", "adminCell", "blockCell", "logCell",
-    "infoContainer", "settingsTopSection", "editChat", "searchItem", "doneItem", "usersType", "usersChat", "rowCount", "rowFields",
+    "infoContainer", "settingsTopSection", "editChat", "searchItem", "doneItem", "doneOwner", "usersType", "usersChat", "rowCount", "rowFields",
     "recentActionsRow", "addNewSectionRow", "participantsDivider2Row", "removedUsersRow")
 
 internal fun infoContainerMembers(creator: ObfsTableCreator, menu: String): Map<String, ObfsInfo> {
@@ -151,6 +178,7 @@ internal fun infoContainerMembers(creator: ObfsTableCreator, menu: String): Map<
     return infoContainerKeys.associateWith { key -> creator.create("InfoContainer.$key") {
         val descriptor = found.getValue(key)
         when {
+            descriptor.isEmpty() -> ObfsInfo("", "")
             key == "rowFields" -> ObfsInfo("", "", descriptor)
             key in infoContainerMethodKeys -> {
                 val method = DexMethod(descriptor)

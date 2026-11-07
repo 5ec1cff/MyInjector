@@ -5,7 +5,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
-import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.bridge.Unhook
@@ -60,7 +59,6 @@ internal object MessageMenuHook {
             it.parameterCount == 4 && it.parameterTypes.count { type -> type == java.lang.Boolean.TYPE } == 2 &&
                 it.parameterTypes.contains(Context::class.java) && it.parameterTypes.contains(provider.returnType)
         }.apply { isAccessible = true }
-        val drawable = loader.loadClass("org.telegram.messenger.R\$drawable")
         val activeMenu = ThreadLocal<ArrayDeque<MenuState>>()
         val installed = mutableListOf<Unhook>()
         try {
@@ -95,7 +93,7 @@ internal object MessageMenuHook {
                             }
                         }.toTypedArray()
                         val item = constructor.newInstance(*args) as View
-                        val icon = drawable.getObjSAs<Int>(entry.icon)
+                        val icon = TelegramResources.table.id("drawable", entry.icon)
                         setText.invoke(item, *setText.parameterTypes.map {
                             val value: Any = if (it == Integer.TYPE) icon else entry.title
                             value

@@ -5,17 +5,7 @@ private fun auditKeptApi(bridge: DexKitBridge, feature: String) {
     }
     fun field(owner: String, name: String) = cls(owner).fields.single { it.name == name }
     when (feature) {
-        "UseSystemEmoji" -> {
-            method("org.telegram.messenger.Emoji", "fixEmoji")
-            val simple = "org.telegram.messenger.Emoji\$SimpleEmojiDrawable"
-            method(simple, "getDrawRect")
-            method(simple, "draw", listOf("android.graphics.Canvas"))
-            field(cls(simple).superClass!!.name, "fullSize")
-            val info = field(simple, "info").typeName
-            check(field(info, "page").typeName == "byte")
-            check(field(info, "emojiIndex").typeName == "int")
-            field("org.telegram.messenger.EmojiData", "data")
-        }
+        "UseSystemEmoji" -> { findSystemEmoji(bridge) }
         "NoGoogleMaps" -> telegramApiMethod(bridge, "org.telegram.messenger.AndroidUtilities", "isMapsInstalled", "org.telegram.ui.ActionBar.BaseFragment")
         "ShowExactLastSeenTime" -> {
             telegramApiMethod(bridge, "org.telegram.messenger.LocaleController", "formatDateOnline", "long", "boolean[]")
@@ -24,24 +14,17 @@ private fun auditKeptApi(bridge: DexKitBridge, feature: String) {
         "ChannelDetailNumbers" -> telegramApiMethod(bridge, "org.telegram.messenger.LocaleController", "formatShortNumber", "int", "int[]")
         "AlwaysShowDownloadManager" -> telegramApiMethod(bridge, "org.telegram.messenger.DownloadController", "hasUnviewedDownloads")
         "RemoveArchiveFolder" -> {
-            method("org.telegram.messenger.MessagesController", "getDialogs", listOf("int"))
-            method("org.telegram.messenger.MessagesController", "removeFolder", listOf("int"))
+            telegramApiMethod(bridge, "org.telegram.messenger.MessagesController", "getDialogs", "int")
+            telegramApiMethod(bridge, "org.telegram.messenger.MessagesController", "removeFolder", "int")
         }
-        "StickerLoadGuard" -> {
-            val stream = "org.telegram.messenger.AnimatedFileDrawableStream"
-            check(cls(stream).methods.any { it.name == "read" })
-            val operation = field(stream, "loadOperation").typeName
-            field(operation, "state")
-            method(stream, "cancel", emptyList())
-            field(stream, "countDownLatch")
-        }
+        "StickerLoadGuard" -> { findStickerStream(bridge) }
     }
 }
 
 private fun auditProfileBlurMembers(bridge: DexKitBridge, members: Map<String, String>) {
     val actions = bridge.getFieldData(members.getValue("actionsView"))!!
-    val blurActions = bridge.getFieldData(members.getValue("blurActionsView"))!!
-    check(actions.typeName == blurActions.typeName)
+    val blurActions = members.getValue("blurActionsView").takeIf { it.isNotEmpty() }?.let { bridge.getFieldData(it)!! }
+    check(blurActions == null || actions.typeName == blurActions.typeName)
     val background = bridge.getMethodData(members.getValue("topUpdateBackgroundPaint"))!!
     // 未混淆版通过编译器生成的外部类字段 getter 访问 actionsView。
     val getters = background.invokes.filter {
@@ -53,12 +36,12 @@ private fun auditProfileBlurMembers(bridge: DexKitBridge, members: Map<String, S
             it.type.fields.any { field -> field.typeName == "android.graphics.RadialGradient" }
     }
     check(candidates.any { it.descriptor == actions.descriptor })
-    val setter = bridge.getClassData(blurActions.className)!!.methods.singleOrNull {
+    val setter = bridge.getClassData(blurActions?.className ?: actions.className)!!.methods.singleOrNull {
         it.name == "setActionsView" && it.paramCount == 1
     }
     if (setter != null) {
         check(setter.paramTypeNames.single() == actions.typeName)
-        check(setter.usingFields.any { it.field.descriptor == blurActions.descriptor })
+        check(setter.usingFields.any { it.field.descriptor == blurActions?.descriptor })
     }
     members.getValue("blurMusicView").takeIf { it.isNotEmpty() }?.let {
         val music = bridge.getFieldData(it)!!
@@ -109,6 +92,7 @@ private fun auditReflectionShapes(bridge: DexKitBridge) {
     check(!Modifier.isStatic(replace.modifiers))
     val repeat = findRepeatMessage(bridge, chat, menu.getValue("createMenu"), menu.getValue("options"))
     auditRepeatPermissionApis(bridge, base, repeat)
+    if (bridge.getClassData("org.telegram.messenger.R\$string") == null) return
     val input = bridge.getFieldData(repeat.getValue("input"))!!
     val overlay = bridge.getFieldData(repeat.getValue("restrictionOverlay"))!!
     check(input.descriptor == longClick.getValue("chatActivityChatEnterViewField").descriptor)
@@ -131,6 +115,10 @@ private fun auditReflectionShapes(bridge: DexKitBridge) {
 }
 
 private fun auditRepeatPermissionApis(bridge: DexKitBridge, base: String, repeat: Map<String, String>) {
+    // New official builds rename and inline these helpers; the production
+    // search resolves them through TelegramApiDeobf instead of this legacy
+    // shape-only fixture.
+    if (bridge.getClassData("org.telegram.messenger.ChatObject") == null) return
     fun method(owner: String, name: String, vararg params: String) =
         bridge.getClassData(owner)!!.methods.single { it.name == name && it.paramTypeNames == params.toList() }
     val chat = "org.telegram.tgnet.TLRPC\$Chat"

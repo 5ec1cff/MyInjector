@@ -21,12 +21,12 @@ class CustomMapPosition : MyDynHook("customMapPosition") {
             val bridge = creator.bridge
             val layoutInit = bridge.findMethod { matcher {
                 name("<init>")
-                addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("msg_current_location") }
+                usingTelegramResource(bridge, "drawable", "msg_current_location")
             } }.single()
             val createView = bridge.findMethod { matcher {
                 paramTypes("android.content.Context")
                 returnType("android.view.View")
-                addUsingField { declaredClass("org.telegram.messenger.R\$drawable"); name("msg_current_location") }
+                usingTelegramResource(bridge, "drawable", "msg_current_location")
             } }.single()
             val resetMap = bridge.findMethod { matcher {
                 declaredClass(layoutInit.className)
@@ -39,7 +39,6 @@ class CustomMapPosition : MyDynHook("customMapPosition") {
                 declaredClass(createView.className)
                 paramTypes("android.location.Location")
                 returnType("void")
-                addInvoke { descriptor("Lorg/telegram/messenger/LocationController;->getSharingLocationInfo(J)Lorg/telegram/messenger/LocationController\$SharingLocationInfo;") }
             } }.single()
             mapOf(
                 "layout" to ObfsInfo(layoutInit.className, ""),

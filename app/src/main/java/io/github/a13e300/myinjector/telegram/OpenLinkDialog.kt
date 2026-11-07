@@ -106,15 +106,16 @@ class OpenLinkDialog : MyDynHook("openLinkDialog") {
 
 private fun findOpenLinkDialog(bridge: DexKitBridge): Map<String, String> {
     namedOpenLink(bridge)?.let { return it }
+    val shouldShow = telegramApiMethod(bridge, "org.telegram.messenger.AndroidUtilities", "shouldShowUrlInAlert", "java.lang.String")
     val external = bridge.findMethod { matcher {
-        addInvoke { declaredClass("org.telegram.messenger.SendMessagesHelper"); name("requestUrlAuth") }
-        addInvoke { declaredClass("org.telegram.messenger.AndroidUtilities"); name("shouldShowUrlInAlert") }
-    } }.single()
+        returnType("void")
+        addInvoke { descriptor(shouldShow.descriptor) }
+    } }.single { it.paramCount >= 5 && it.paramTypeNames.take(3) == listOf("int", "java.lang.String", "android.text.style.CharacterStyle") }
     check(external.paramTypeNames.take(3) == listOf("int", "java.lang.String", "android.text.style.CharacterStyle"))
     check(external.paramTypeNames[4] == "boolean")
     val alert = bridge.findMethod { matcher {
         paramCount(10)
-        addUsingField { declaredClass("org.telegram.messenger.R\$string"); name("OpenUrlTitle") }
+        usingTelegramResource(bridge, "string", "OpenUrlTitle")
     } }.single()
     check(alert.paramTypeNames.take(7) == listOf("android.content.Context", "java.lang.String", "boolean", "boolean", "boolean", "boolean", "long"))
     val openFull = alert.invokes.single { it.paramCount == 10 && it.paramTypeNames.take(2) == listOf("android.content.Context", "android.net.Uri") }
@@ -133,7 +134,7 @@ private fun findOpenLinkDialog(bridge: DexKitBridge): Map<String, String> {
     // unused; recognize both layouts without relying on obfuscated names.
     val neutral = setters.singleOrNull { it.descriptor !in used }
         ?: scanTelegramDex(bridge, alert).calls.single { call ->
-            call.method.descriptor in setters.map { it.descriptor } && call.args.first()?.resource == "Copy"
+            call.method.descriptor in setters.map { it.descriptor } && call.args.first().isResource("Copy")
         }.method
     val neutralFields = neutral.usingFields.filter { it.usingType == FieldUsingType.Write }.map { it.field }.distinctBy { it.descriptor }
     val text = neutralFields.single { it.typeName == "java.lang.CharSequence" }

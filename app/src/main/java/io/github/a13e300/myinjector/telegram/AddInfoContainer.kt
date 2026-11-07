@@ -22,22 +22,20 @@ class AddInfoContainer : MyDynHook("addInfoContainer") {
         fun method(descriptor: String) = DexMethod(descriptor).getMethodInstance(classLoader).apply { isAccessible = true }
         fun field(descriptor: String) = DexField(descriptor).getFieldInstance(classLoader).apply { isAccessible = true }
         val methods = infoContainerMethodKeys.associateWith { method(members.getValue(it).descriptor) }
-        val fields = (members.keys - infoContainerMethodKeys.toSet() - "rowFields")
+        val fields = (members.keys - infoContainerMethodKeys.toSet() - "rowFields").filter { members.getValue(it).descriptor.isNotEmpty() }
             .associateWith { field(members.getValue(it).descriptor) }
         val rowFields = members.getValue("rowFields").descriptor.lines().map(::field)
         val hiddenRows = listOf("recentActionsRow", "addNewSectionRow", "participantsDivider2Row", "removedUsersRow").map { fields.getValue(it) }.toSet()
         val currentChat = field(profile.getValue("currentChat").descriptor)
-        val chatObject = findClass("org.telegram.messenger.ChatObject")
-        val drawables = findClass("org.telegram.messenger.R\$drawable")
-        val infoIcon = drawables.getObjSAs<Int>("msg_info")
-        val adminIcon = drawables.getObjSAs<Int>("msg_admins")
-        val strings = findClass("org.telegram.messenger.R\$string")
-        val locale = findClass("org.telegram.messenger.LocaleController")
-        val adminTitleId = strings.getObjSAs<Int>("ChannelAdministrators")
+        val isChannelMethod = telegramApiMethod(classLoader, "org.telegram.messenger.ChatObject", "isChannel", "org.telegram.tgnet.TLRPC\$Chat")
+        val infoIcon = TelegramResources.table.id("drawable", "msg_info")
+        val adminIcon = TelegramResources.table.id("drawable", "msg_admins")
+        val locale = TelegramLocale(classLoader)
+        val adminTitleId = TelegramResources.table.id("string", "ChannelAdministrators")
         val setAdmin = methods.getValue("setAdminText")
         check(setAdmin.parameterTypes.count { CharSequence::class.java.isAssignableFrom(it) } == 2)
-        fun hasAdmin(chat: Any?) = chat != null && chatObject.callS("hasAdminRights", chat) == true
-        fun isChannel(chat: Any?) = chat != null && chatObject.callS("isChannel", chat) == true
+        fun hasAdmin(chat: Any?) = chat != null && (chat.getObj("creator") == true || (chat.getObj("admin_rights")?.getObj("flags") as? Number)?.toInt()?.let { it != 0 } == true)
+        fun isChannel(chat: Any?) = chat != null && isChannelMethod.invoke(null, chat) == true
         fun showInfo(activity: Any) {
             val chat = fields.getValue("editChat").get(activity) ?: return
             val admin = hasAdmin(chat)
@@ -54,14 +52,16 @@ class AddInfoContainer : MyDynHook("addInfoContainer") {
                 fields.getValue("adminCell").get(activity)?.let { cell ->
                     // Hook installation runs before ApplicationLoader sets its
                     // Context. Resolve localized text only when the UI is ready.
-                    val adminTitle = locale.callS("getString", "ChannelAdministrators", adminTitleId)
+                    val adminTitle = locale.string("ChannelAdministrators", adminTitleId)
                     val args = setAdmin.parameterTypes.mapIndexed { index, type ->
+                        val value: Any =
                         when {
                             CharSequence::class.java.isAssignableFrom(type) -> if (index == 0) adminTitle else "**"
                             type == Integer.TYPE -> adminIcon
                             type == java.lang.Boolean.TYPE -> index == setAdmin.parameterCount - 1
                             else -> error("Unexpected TextCell parameter $type")
                         }
+                        value
                     }.toTypedArray()
                     setAdmin.invoke(cell, *args)
                 }
@@ -73,7 +73,8 @@ class AddInfoContainer : MyDynHook("addInfoContainer") {
         fun hideManagementButtons(activity: Any, chat: Any?) {
             if (chat == null || hasAdmin(chat) || fields.getValue("usersType").getInt(activity) !in listOf(0, 3)) return
             for (key in listOf("searchItem", "doneItem")) {
-                (fields.getValue(key).get(activity) as View?)?.visibility = View.GONE
+                val owner = if (key == "doneItem") fields["doneOwner"]?.get(activity) ?: activity else activity
+                (fields.getValue(key).get(owner) as View?)?.visibility = View.GONE
             }
         }
         val installed = mutableListOf<Unhook>()

@@ -98,14 +98,14 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
             declaredClass { superClass(baseFragment) }
             usingEqStrings("avatar")
             returnType("void")
-            addInvoke { descriptor("Lorg/telegram/messenger/ImageReceiver;->getDrawable()Landroid/graphics/drawable/Drawable;") }
+            addInvoke { paramTypes(); returnType("android.graphics.drawable.Drawable") }
         }
     }.single {
         it.usingStrings.size == 1 && (it.paramTypeNames == listOf("boolean") ||
             (Modifier.isStatic(it.modifiers) && it.paramTypeNames == listOf(it.className, "boolean")))
     }
     val pa = foreground.declaredClass!!
-    val gallery = foreground.invokes.single { it.paramTypeNames == listOf("int") && it.returnTypeName == "org.telegram.messenger.ImageLocation" }.declaredClass!!
+    val gallery = foreground.invokes.single { it.paramTypeNames == listOf("int") && it.returnTypeName == telegramApiClass(bridge, "org.telegram.messenger.ImageLocation") }.declaredClass!!
     found["galleryClass"] = gallery.name
     val pager = pa.fields.single { it.typeName == gallery.name || it.type.superClass?.name == gallery.name }
     save("avatarsViewPager", pager)
@@ -113,7 +113,7 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
     val blur = bridge.findClass {
         matcher {
             superClass("android.view.View")
-            usingEqStrings("profileBlurNode", "profileActionsBlurNode")
+            usingEqStrings("profileBlurNode")
         }
     }.single()
     val draw = blur.findMethod {
@@ -153,11 +153,12 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
     val actions = topBackground.usingFields.map { it.field }.distinctBy { it.descriptor }.single {
         it.className == pa.name && it.type.superClass?.name == "android.view.View" &&
             (blurActionsType == null || it.typeName == blurActionsType) &&
+            it.type.methods.any { method -> method.isConstructor && method.paramTypeNames == listOf("android.content.Context", "int") } &&
             it.type.fields.any { f -> f.typeName == "android.graphics.RadialGradient" }
     }
     save("actionsView", actions)
     val actionsClass = actions.type
-    save("blurActionsView", blur.fields.single { it.typeName == actions.typeName })
+    save("blurActionsView", blur.fields.singleOrNull { it.typeName == actions.typeName })
     val shader = actionsClass.findMethod {
         matcher {
             paramTypes()
@@ -214,15 +215,16 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
     save("getActionsExtraHeight", actionsHeight)
 
     // setAvatarExpandProgress stores the result of lerp(expandAnimatorValues, fraction).
+    val lerp = telegramApiMethod(bridge, "org.telegram.messenger.AndroidUtilities", "lerp", "float[]", "float")
     val expand = pa.findMethod {
         matcher {
             paramTypes("float")
-            addInvoke { descriptor("Lorg/telegram/messenger/AndroidUtilities;->lerp([FF)F") }
+            addInvoke { descriptor(lerp.descriptor) }
         }
     }.single()
     save("setAvatarExpandProgress", expand)
     val progress = blurCode(bridge, expand).writes.single {
-        it.field.className == pa.name && it.resultOf?.descriptor == "Lorg/telegram/messenger/AndroidUtilities;->lerp([FF)F"
+        it.field.className == pa.name && it.resultOf?.descriptor == lerp.descriptor
     }.field
     save("currentExpandAnimatorValue", progress)
     val layout = pa.findMethod {
@@ -267,23 +269,17 @@ private fun findProfileAvatarBlur(bridge: DexKitBridge, baseFragment: String): M
         }
     }.single()
     save("playProfileAnimation", playCandidates.single { field -> animation.usingFields.any { it.field.descriptor == field.descriptor } })
-    val dpf2 = bridge.findMethod {
-        matcher {
-            declaredClass("org.telegram.messenger.AndroidUtilities")
-            name("dpf2")
-            paramTypes("float")
-            returnType("float")
-        }
-    }.single()
+    val dpf2 = telegramApiMethod(bridge, "org.telegram.messenger.AndroidUtilities", "dpf2", "float")
     save("dpf2", dpf2)
 
-    val music = blur.fields.singleOrNull { field ->
-        field.type.superClass?.name == "android.view.View" && field.type.methods.any { method ->
-            method.usingFields.any {
-                it.field.descriptor == "Lorg/telegram/messenger/R\$string;->AccDescrProfileMusic:I"
-            }
-        }
-    }
+    val music = (blur.fields + pa.fields).filter { field ->
+        field.type.superClass?.name == "android.view.View" && field.type.methods.any {
+            it.name == "setParentExpanded" && it.paramTypeNames == listOf("float")
+        } && bridge.findMethod { matcher {
+            declaredClass(field.typeName)
+            usingTelegramResource(bridge, "string", "AccDescrProfileMusic")
+        } }.isNotEmpty()
+    }.distinctBy { it.typeName }.singleOrNull()
     save("blurMusicView", music)
     found.putAll(findProfileMusicMembers(bridge, music))
     val suggestion = blur.fields.singleOrNull { it.type.superClass?.name == "android.widget.FrameLayout" }
