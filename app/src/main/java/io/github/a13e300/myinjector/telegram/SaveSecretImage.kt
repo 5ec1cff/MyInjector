@@ -5,16 +5,13 @@ package io.github.a13e300.myinjector.telegram
 import android.app.Activity
 import android.view.View
 import android.widget.Toast
-import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.callS
-import io.github.a13e300.myinjector.arch.getObj
-import io.github.a13e300.myinjector.arch.getObjSAs
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.newInstAs
 import io.github.a13e300.myinjector.logE
 import java.io.File
 import java.io.FileInputStream
+import java.lang.reflect.Modifier
 import kotlin.concurrent.thread
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
@@ -34,10 +31,14 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
         val mergeDialogField = field("mergeDialog")
         val galleryField = field("gallery")
         val gapField = field("gap")
+        val messageOwnerField = field("messageOwner")
         val messageType = method("messageType")
+        val needDrawBluredPreview = telegramApiMethod(classLoader, "org.telegram.messenger.MessageObject", "needDrawBluredPreview")
         val getInstance = method("instance")
         val setParent = method("parent")
         val getTheme = method("theme")
+        val getParentActivity = method("parentActivity")
+        val getFileLoader = method("fileLoader")
         val getTopic = method("topic")
         val openPhoto = method("open")
         val msgGalleryDrawableId = TelegramResources.table.id("drawable", "msg_gallery")
@@ -48,7 +49,11 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
 
         val getPathToMessage = telegramApiMethod(classLoader, "org.telegram.messenger.FileLoader", "getPathToMessage", "org.telegram.tgnet.TLRPC\$Message")
         fun dumpEncryptedFile(loader: Any, obj: Any?): Boolean {
-            val file = getPathToMessage.invoke(loader, obj) as File
+            val file = if (Modifier.isStatic(getPathToMessage.modifiers)) {
+                getPathToMessage.invoke(null, obj) as File
+            } else {
+                getPathToMessage.invoke(loader, obj) as File
+            }
             if (file.exists()) return true
             val enc = File(file.parentFile, file.name + ".enc")
             val keyPath = File(file.parentFile, enc.name + ".key")
@@ -77,7 +82,7 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
         method("fill").hookAfter(cond = ::isEnabled) { param ->
             val message = param.args[0] ?: return@hookAfter
             if (messageType.invoke(param.thisObject, message) == 2) return@hookAfter // not loaded
-            if (message.call("needDrawBluredPreview") != true) return@hookAfter
+            if (needDrawBluredPreview.invoke(message) != true) return@hookAfter
             val icons = param.args[1] as ArrayList<Int>
             val items = param.args[2] as ArrayList<CharSequence>
             val options = param.args[3] as ArrayList<Int>
@@ -90,17 +95,17 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
             if (param.args[0] != MY_OPTION_OPEN_AS_PHOTO) return@hookBefore
             val ca = param.thisObject
             val message = selectedField.get(ca) ?: return@hookBefore
-            val context = ca.call("getParentActivity") as? Activity ?: return@hookBefore
+            val context = getParentActivity.invoke(ca) as? Activity ?: return@hookBefore
             val viewer = getInstance.invoke(null)
             // The two-argument wrapper is inlined into the surviving implementation.
             setParent.invoke(viewer, null, ca, getTheme.invoke(ca))
-            val hasType = message.getObj("type") != 0
+            val hasType = (messageType.invoke(ca, message) as Int) != 0
             val dialogId = if (hasType) dialogField.getLong(ca) else 0L
             val mergeDialogId = if (hasType) mergeDialogField.getLong(ca) else 0L
             val topicId = if (hasType) getTopic.invoke(ca) as Long else 0L
             val provider = providerField.get(ca)
-            val loader = ca.call("getFileLoader") ?: return@hookBefore
-            val owner = message.getObj("messageOwner")
+            val loader = getFileLoader.invoke(ca) ?: return@hookBefore
+            val owner = messageOwnerField.get(message)
             thread {
                 val success = dumpEncryptedFile(loader, owner)
                 context.runOnUiThread {

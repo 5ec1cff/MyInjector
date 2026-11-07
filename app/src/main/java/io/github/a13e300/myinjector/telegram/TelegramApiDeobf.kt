@@ -151,10 +151,11 @@ internal fun telegramApiMethod(bridge: DexKitBridge, owner: String, name: String
         "MessagesController.getChat" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$Chat" }
         "MessagesController.getInputPeer" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$InputPeer" }
         "MessagesController.getInputUser" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$InputUser" }
-        "FileLoader.getPathToMessage" -> candidates.single { !Modifier.isStatic(it.modifiers) && it.returnTypeName == "java.io.File" &&
-            it.paramTypeNames == listOf("org.telegram.tgnet.TLRPC\$Message") }
+        "FileLoader.getPathToMessage" -> candidates.filter { it.returnTypeName == "java.io.File" }.let { methods ->
+            methods.singleOrNull { !Modifier.isStatic(it.modifiers) } ?: methods.first()
+        }
         "MessagesController.openChatOrProfileWith" -> candidates.single { it.returnTypeName == "void" &&
-            expected.toSet() == setOf("org.telegram.tgnet.TLRPC\$User", "org.telegram.tgnet.TLRPC\$Chat", "org.telegram.ui.ActionBar.BaseFragment", "int") }
+            expected.toSet() == setOf("org.telegram.tgnet.TLRPC\$User", "org.telegram.tgnet.TLRPC\$Chat", telegramApiClass(bridge, "org.telegram.ui.ActionBar.BaseFragment"), "int") }
         "MessagesController.putUsers", "MessagesController.putChats" -> {
             val tlType = if (name == "putUsers") "org.telegram.tgnet.TLRPC\$User" else "org.telegram.tgnet.TLRPC\$Chat"
             candidates.single { it.returnTypeName == "void" && it.invokes.any { call -> tlType in call.paramTypeNames } }
@@ -195,6 +196,11 @@ internal fun telegramApiMethod(bridge: DexKitBridge, owner: String, name: String
         } else {
             val raw = telegramApiMethod(bridge, owner, name, "org.telegram.tgnet.TLRPC\$Message")
             candidates.single { it.invokes.size == 1 && it.invokes.single().descriptor == raw.descriptor }
+        }
+        "MessageObject.needDrawBluredPreview" -> candidates.single {
+            !Modifier.isStatic(it.modifiers) && it.returnTypeName == "boolean" &&
+                it.usingFields.any { field -> field.field.typeName == "org.telegram.tgnet.TLRPC\$Message" } &&
+                it.invokes.any { call -> call.descriptor == "Ljava/lang/Math;->max(II)I" }
         }
         "MessageObject.setQuery" -> candidates.single { it.returnTypeName == "void" }
         "MediaController\$MediaEditState.reset" -> candidates.single { it.returnTypeName == "void" }

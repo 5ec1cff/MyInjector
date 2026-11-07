@@ -68,6 +68,7 @@ for name in ['TelegramFactoryFields', 'SearchStateDeobf', 'StickerStreamDeobf', 
     out.append(body(source(name)))
 for name, func in [('OpenLinkDialog', 'findOpenLinkDialog'), ('EmojiStickerMenu', 'findEmojiStickerMenu'), ('CopyPrivateChatLink', 'findCopyPrivateChatLink'), ('ShowDCInProfile', 'findProfileDataCenter'), ('HistoricalNewsOption', 'findHistoricalNews'), ('RepeatMessage', 'findRepeatMessage')]:
     out.append(function(source(name), func))
+out.append(function(source('EmojiStickerMenu'), 'findEmojiStickerMenuDynamic'))
 
 classes = ['Settings', 'ContactPermission', 'AutoCheckDeleteMessageOption', 'MutualContact', 'DisableVoiceOrCameraButton', 'DefaultSearchTab', 'HidePhoneNumber', 'AutoUncheckSharePhoneNumber', 'AlwaysShowStorySaveIcon', 'ShowMsgId', 'ProhibitChannelSwitching', 'FixHasAppToOpen', 'LongClickMention', 'AntiAntiCopy', 'AvatarPagerScrollToCurrent', 'OpenTgUserLink']
 helpers = {

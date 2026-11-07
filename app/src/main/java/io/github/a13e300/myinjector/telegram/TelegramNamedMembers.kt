@@ -84,6 +84,8 @@ internal fun namedSecretMedia(bridge: DexKitBridge): Map<String, String>? {
         method("instance", pv, "getInstance")
         method("parent", pv, "setParentActivity", "android.app.Activity", "org.telegram.ui.ActionBar.BaseFragment", "org.telegram.ui.ActionBar.Theme\$ResourcesProvider")
         method("theme", chat, "getResourceProvider")
+        method("parentActivity", "org.telegram.ui.ActionBar.BaseFragment", "getParentActivity")
+        method("fileLoader", "org.telegram.ui.ActionBar.BaseFragment", "getFileLoader")
         field("provider", chat, "photoViewerProvider")
         method("topic", chat, "getTopicId")
         field("dialog", chat, "dialog_id")
@@ -91,5 +93,6 @@ internal fun namedSecretMedia(bridge: DexKitBridge): Map<String, String>? {
         field("gallery", pv, "galleryButton")
         field("gap", pv, "searchGap")
         method("switch", pv, "setImageIndex", "int", "boolean", "boolean", "boolean")
+        field("messageOwner", "org.telegram.messenger.MessageObject")
     }.members
 }

@@ -12,9 +12,9 @@ import java.lang.reflect.Modifier
 
 internal fun deobfSaveSecretImage(creator: ObfsTableCreator): Map<String, ObfsInfo> {
     val found by lazy { findSaveSecretImage(creator.bridge, creator.obfsTable.getValue("BaseFragment").className) }
-    val fields = setOf("selected", "provider", "dialog", "mergeDialog", "gallery", "gap")
+    val fields = setOf("selected", "provider", "dialog", "mergeDialog", "gallery", "gap", "messageOwner")
     return listOf("fill", "messageType", "options", "selected", "open", "instance", "parent", "theme",
-        "provider", "topic", "dialog", "mergeDialog", "gallery", "gap", "switch").associateWith { key ->
+        "parentActivity", "fileLoader", "provider", "topic", "dialog", "mergeDialog", "gallery", "gap", "switch", "messageOwner").associateWith { key ->
         creator.create("SaveSecretImage.$key") {
             val descriptor = found.getValue(key)
             if (key in fields) {
@@ -81,12 +81,24 @@ private fun secretCode(bridge: DexKitBridge, method: MethodData): SecretCode {
 }
 
 private fun findSaveSecretImage(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
+    return findSaveSecretImageDynamic(bridge, baseFragment)
+}
+
+private fun findSaveSecretImageDynamic(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
     namedSecretMedia(bridge)?.let { return it }
     val fill = bridge.findMethod { matcher {
         paramTypes(telegramApiClass(bridge, "org.telegram.messenger.MessageObject"), "java.util.ArrayList", "java.util.ArrayList", "java.util.ArrayList")
         usingTelegramResource(bridge, "string", "SaveToGallery")
     } }.single()
     val chat = fill.declaredClass!!
+    val base = bridge.getClassData(baseFragment)!!
+    val parentActivity = base.methods.single {
+        !Modifier.isStatic(it.modifiers) && it.paramCount == 0 && it.returnTypeName == "android.app.Activity"
+    }
+    val fileLoader = base.methods.single {
+        !Modifier.isStatic(it.modifiers) && it.paramCount == 0 &&
+            it.returnTypeName == telegramApiClass(bridge, "org.telegram.messenger.FileLoader")
+    }
     val type = fill.invokes.single { it.className == chat.name && it.paramTypeNames == listOf(telegramApiClass(bridge, "org.telegram.messenger.MessageObject")) && it.returnTypeName == "int" }
     val options = chat.findMethod { matcher { paramTypes("int"); returnType("void"); usingEqStrings("tel:", "canSelectTopics", "messagesCount") } }.single()
     val selected = options.usingFields.first().field
@@ -131,7 +143,9 @@ private fun findSaveSecretImage(bridge: DexKitBridge, baseFragment: String): Map
     } }.single()
     return mapOf("fill" to fill.descriptor, "messageType" to type.descriptor, "options" to options.descriptor,
         "selected" to selected.descriptor, "open" to open.descriptor, "instance" to instance.descriptor,
-        "parent" to parent.descriptor, "theme" to theme.descriptor, "provider" to viewerProvider.descriptor,
+        "parent" to parent.descriptor, "theme" to theme.descriptor, "parentActivity" to parentActivity.descriptor,
+        "fileLoader" to fileLoader.descriptor, "provider" to viewerProvider.descriptor,
         "topic" to topic.descriptor, "dialog" to dialog.descriptor, "mergeDialog" to migration.descriptor,
-        "gallery" to galleryWrite.field.descriptor, "gap" to gapWrite.field.descriptor, "switch" to switch.descriptor)
+        "gallery" to galleryWrite.field.descriptor, "gap" to gapWrite.field.descriptor, "switch" to switch.descriptor,
+        "messageOwner" to telegramApiField(bridge, "org.telegram.messenger.MessageObject", "messageOwner").descriptor)
 }

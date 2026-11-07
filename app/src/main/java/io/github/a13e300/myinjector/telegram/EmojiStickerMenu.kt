@@ -159,6 +159,10 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
 }
 
 private fun findEmojiStickerMenu(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
+    return findEmojiStickerMenuDynamic(bridge, baseFragment)
+}
+
+private fun findEmojiStickerMenuDynamic(bridge: DexKitBridge, baseFragment: String): Map<String, String> {
     val handlers = bridge.findMethod { matcher {
         returnType("void"); usingStrings("/addemoji/", "/addstickers/")
     } }.filter { it.paramTypeNames == listOf("int") || (Modifier.isStatic(it.modifiers) && it.paramTypeNames == listOf(it.className, "int")) }
@@ -182,15 +186,18 @@ private fun findEmojiStickerMenu(bridge: DexKitBridge, baseFragment: String): Ma
             it.typeName == owner || it.typeName == "java.lang.Object"
         }.descriptor
     }
-    val initializers = bridge.findMethod { matcher {
-        usingTelegramResource(bridge, "string", "StickersShare")
-        usingTelegramResource(bridge, "string", "CopyLink")
-    } }
-    val header = initializers.single { it.isConstructor && it.declaredClass!!.fields.any { f -> f.typeName == emojiClass } }
-    val init = initializers.single { it.className == stickerClass }
+    val header = bridge.findMethod { matcher {
+        paramTypes(emojiClass, "android.content.Context", "boolean")
+        returnType("void")
+    } }.single { it.isConstructor && it.declaredClass!!.fields.any { f -> f.typeName == emojiClass } }
+    val init = bridge.getClassData(stickerClass)!!.methods.single {
+        it.paramTypeNames == listOf("android.content.Context") && it.returnTypeName == "void"
+    }
     val addMenu = header.invokes.distinctBy { it.descriptor }.single { it.paramTypeNames.take(2) == listOf("int", "int") && it.paramTypeNames.lastOrNull() in listOf("java.lang.String", "java.lang.CharSequence") && it.paramCount == 3 }
-    val addText = bridge.findMethod { matcher { declaredClass(addMenu.className); paramTypes("int", "java.lang.CharSequence") } }.singleOrNull() ?: addMenu
-    fun field(c: String, type: String) = bridge.findField { matcher { declaredClass(c); type(type) } }.single()
+    val addText = bridge.getClassData(addMenu.className)!!.methods.singleOrNull {
+        it.paramTypeNames == listOf("int", "java.lang.CharSequence")
+    } ?: addMenu
+    fun field(c: String, type: String) = bridge.getClassData(c)!!.fields.single { it.typeName == type }
     return mapOf(
         "emojiClick" to emoji.descriptor, "emojiOwner" to capturedOwner(emoji, emojiClass), "header" to header.className,
         "emojiOptions" to field(header.className, addMenu.className).descriptor,
