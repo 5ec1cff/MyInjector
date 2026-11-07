@@ -60,6 +60,8 @@ private object RepeatPermissionTest {
     private fun Class<*>.callS(name: String, vararg args: Any?): Any? = methods
         .single { it.name == name && it.parameterCount == args.size }.invoke(null, *args)
     class Gate {
+        private class BlockedPeers { fun get(owner: Any): Any? = (owner as? Controller)?.blockePeers }
+        private val blockedPeers = BlockedPeers()
         private val fields = Conversation::class.java.fields.associateBy { it.name }
         private val methods = mapOf("forumReplyRequired" to Conversation::class.java.getMethod("forumReplyRequired"))
         private val chatObject = ChatApi::class.java

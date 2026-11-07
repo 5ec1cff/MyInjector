@@ -40,26 +40,24 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
         val getTheme = method("theme")
         val getTopic = method("topic")
         val openPhoto = method("open")
-        val msgGalleryDrawableId = findClass("org.telegram.messenger.R\$drawable").getObjSAs<Int>("msg_gallery")
+        val msgGalleryDrawableId = TelegramResources.table.id("drawable", "msg_gallery")
         val MY_OPTION_OPEN_AS_PHOTO = 8989110
 
-        val fileLoader = findClass("org.telegram.messenger.FileLoader")
         val encryptedFileInputStream =
             findClass("org.telegram.messenger.secretmedia.EncryptedFileInputStream")
 
-        fun dumpEncryptedFile(account: Int, obj: Any?): Boolean {
-            val loader = fileLoader.callS("getInstance", account)
-            val file = loader.call("getPathToMessage", obj) as File
+        val getPathToMessage = telegramApiMethod(classLoader, "org.telegram.messenger.FileLoader", "getPathToMessage", "org.telegram.tgnet.TLRPC\$Message")
+        fun dumpEncryptedFile(loader: Any, obj: Any?): Boolean {
+            val file = getPathToMessage.invoke(loader, obj) as File
             if (file.exists()) return true
             val enc = File(file.parentFile, file.name + ".enc")
-            val internalDir = fileLoader.callS("getInternalCacheDir") as File
-            val keyPath = File(internalDir, enc.name + ".key")
+            val keyPath = File(file.parentFile, enc.name + ".key")
             if (!enc.exists()) {
                 logE("encrypted file not exists $obj")
                 return false
             }
             if (!keyPath.exists()) {
-                logE("dump encrypted failed: no key path $enc $keyPath $account $obj")
+                logE("dump encrypted failed: no key path $enc $keyPath $obj")
                 return false
             }
 
@@ -71,7 +69,7 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
                 }
                 return true
             } catch (t: Throwable) {
-                logE("dump encrypted failed: io $file $enc $keyPath account=$account obj=$obj", t)
+                logE("dump encrypted failed: io $file $enc $keyPath obj=$obj", t)
             }
             return false
         }
@@ -101,10 +99,10 @@ class SaveSecretImage : MyDynHook("saveSecretMedia") {
             val mergeDialogId = if (hasType) mergeDialogField.getLong(ca) else 0L
             val topicId = if (hasType) getTopic.invoke(ca) as Long else 0L
             val provider = providerField.get(ca)
-            val account = ca.getObj("currentAccount") as Int
+            val loader = ca.call("getFileLoader") ?: return@hookBefore
             val owner = message.getObj("messageOwner")
             thread {
-                val success = dumpEncryptedFile(account, owner)
+                val success = dumpEncryptedFile(loader, owner)
                 context.runOnUiThread {
                     if (success) {
                         openPhoto.invoke(viewer, message, ca, dialogId, mergeDialogId, topicId, provider)

@@ -20,6 +20,7 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAllAfter
+import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.newInst
 import io.github.a13e300.myinjector.arch.setObj
 import io.github.a13e300.myinjector.arch.toObfsInfo
@@ -849,10 +850,11 @@ class Settings : IHook() {
                     )
                 }
                 runCatching {
-                    // always before id == 1
+                    // Account is id 1; put the module between it and the
+                    // remaining settings (the first item in that section is id 2).
                     val idx =
                         items.indexOfFirst {
-                            it != null && uItemIdField.getInt(it) == 1 && uItemViewTypeField.getInt(
+                            it != null && uItemIdField.getInt(it) == 2 && uItemViewTypeField.getInt(
                                 it
                             ) == viewType
                         }
@@ -863,10 +865,11 @@ class Settings : IHook() {
                     addSettings(0)
                 }
             }
-            settingsActivity.hookAllAfter(SettingsActivityOnClick.memberName) { param ->
+            settingsActivity.hookAllBefore(SettingsActivityOnClick.memberName) { param ->
                 if (uItemIdField.getInt(param.args[onClickItemParamIdx]) == myId) {
                     val self = if (onClickMethodIsStatic) param.args[0] else param.thisObject
                     TgSettingsDialog(self.call("getContext") as Context).show()
+                    param.result = null
                 }
             }
         }

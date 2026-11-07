@@ -64,9 +64,10 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
         }
         val customEmojiClass = findClass("org.telegram.tgnet.TLRPC\$TL_documentAttributeCustomEmoji")
         val messagesController = telegramApiClass(classLoader, "org.telegram.messenger.MessagesController")
-        val getInstance = messagesController.declaredMethods.single { java.lang.reflect.Modifier.isStatic(it.modifiers) && it.parameterTypes.contentEquals(arrayOf(Integer.TYPE)) && it.returnType == messagesController }.apply { isAccessible = true }
         val getUser = telegramApiMethod(classLoader, "org.telegram.messenger.MessagesController", "getUser", "java.lang.Long")
-        val openProfile = messagesController.declaredMethods.single { it.parameterTypes.toSet() == setOf(classLoader.loadClass("org.telegram.tgnet.TLRPC\$User"), classLoader.loadClass("org.telegram.tgnet.TLRPC\$Chat"), telegramApiClass(classLoader, "org.telegram.ui.ActionBar.BaseFragment"), Integer.TYPE, java.lang.Boolean.TYPE) }.apply { isAccessible = true }
+        val openProfile = telegramApiMethod(classLoader, "org.telegram.messenger.MessagesController", "openChatOrProfileWith",
+            "org.telegram.tgnet.TLRPC\$User", "org.telegram.tgnet.TLRPC\$Chat",
+            "org.telegram.ui.ActionBar.BaseFragment", "int")
 
         fun showAdmin(alert: Any, stickerSet: Any?, fragment: Any?) {
             val id = stickerSet.getObj("set").getObj("id") as Long
@@ -75,12 +76,10 @@ class EmojiStickerMenu : MyDynHook("emojiStickerMenu") {
             if (id.shr(24).and(0xff) != 0L) userId += 0x100000000L
             if (fragment != null) {
                 // Messenger members and BottomSheet.currentAccount retain their names.
-                val controller = getInstance.invoke(null, alert.getObj("currentAccount"))
+                val controller = fragment.call("getMessagesController")
                 val user = getUser.invoke(controller, userId)
                 if (user != null) {
-                    openProfile.invoke(controller, *openProfile.parameterTypes.map { t ->
-                        when { t.isInstance(user) -> user; t.isInstance(fragment) -> fragment; t == Integer.TYPE -> 0; t == java.lang.Boolean.TYPE -> false; else -> null }
-                    }.toTypedArray())
+                    openProfile.invoke(controller, user, null, fragment, 0)
                     return
                 }
             }

@@ -151,6 +151,10 @@ internal fun telegramApiMethod(bridge: DexKitBridge, owner: String, name: String
         "MessagesController.getChat" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$Chat" }
         "MessagesController.getInputPeer" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$InputPeer" }
         "MessagesController.getInputUser" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$InputUser" }
+        "FileLoader.getPathToMessage" -> candidates.single { !Modifier.isStatic(it.modifiers) && it.returnTypeName == "java.io.File" &&
+            it.paramTypeNames == listOf("org.telegram.tgnet.TLRPC\$Message") }
+        "MessagesController.openChatOrProfileWith" -> candidates.single { it.returnTypeName == "void" &&
+            expected.toSet() == setOf("org.telegram.tgnet.TLRPC\$User", "org.telegram.tgnet.TLRPC\$Chat", "org.telegram.ui.ActionBar.BaseFragment", "int") }
         "MessagesController.putUsers", "MessagesController.putChats" -> {
             val tlType = if (name == "putUsers") "org.telegram.tgnet.TLRPC\$User" else "org.telegram.tgnet.TLRPC\$Chat"
             candidates.single { it.returnTypeName == "void" && it.invokes.any { call -> tlType in call.paramTypeNames } }
@@ -237,6 +241,14 @@ internal fun telegramApiField(bridge: DexKitBridge, owner: String, name: String)
             val entry = bridge.getClassData(telegramApiClass(bridge, "org.telegram.messenger.MediaController\$PhotoEntry"))!!
             entry.methods.filter { it.isConstructor }.flatMap { it.usingFields }.map { it.field }.distinctBy { it.descriptor }
                 .single { it.className == cls.name && it.typeName == "boolean" }
+        }
+        "MessagesController.blockePeers" -> {
+            cls.fields.single { field ->
+                field.typeName == "org.telegram.messenger.support.LongSparseIntArray" &&
+                    cls.methods.any { method -> method.usingFields.any { it.field.descriptor == field.descriptor } &&
+                        method.invokes.any { it.name == "indexOfKey" && it.paramTypeNames == listOf("long") } &&
+                        method.invokes.any { it.className == "org.telegram.tgnet.TLRPC\$TL_contacts_block" } }
+            }
         }
         else -> error("No Telegram API field rule for $owner.$name")
     }

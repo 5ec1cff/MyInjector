@@ -41,11 +41,13 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
     private val mentionName = loader.loadClass("org.telegram.tgnet.TLRPC\$TL_messageEntityMentionName")
     private val inputMention = loader.loadClass("org.telegram.tgnet.TLRPC\$TL_inputMessageEntityMentionName")
         .getDeclaredConstructor()
-    private val inputUser = loader.loadClass("org.telegram.messenger.MessagesController")
-        .getDeclaredMethod("getInputUser", java.lang.Long.TYPE)
-    private val chatObject = loader.loadClass("org.telegram.messenger.ChatObject")
-    private val userObject = loader.loadClass("org.telegram.messenger.UserObject")
-    private val verifyUser = userObject.getObjSAs<Long>("VERIFY")
+    private val messagesController = telegramApiClass(loader, "org.telegram.messenger.MessagesController")
+    private val inputUser = telegramApiMethod(loader, "org.telegram.messenger.MessagesController", "getInputUser", "long")
+    private val chatObject = telegramApiClass(loader, "org.telegram.messenger.ChatObject")
+    private val userObject = telegramApiClass(loader, "org.telegram.messenger.UserObject")
+    private val blockedPeers = runCatching {
+        telegramApiField(loader, "org.telegram.messenger.MessagesController", "blockePeers")
+    }.getOrNull()
 
     private fun canSend(chat: Any): Boolean {
         val input = fields.getValue("input").get(chat) as? View ?: return false
@@ -62,9 +64,9 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
         val user = fields.getValue("currentUser").get(chat)
         if (user != null) {
             val id = user.getObj("id") as Long
-            if (userObject.callS("isDeleted", user) == true || userObject.callS("isReplyUser", user) == true || id == verifyUser) return false
-            val blocked = chat.call("getMessagesController").getObj("blockePeers")
-            if ((blocked.call("indexOfKey", id) as Int) >= 0) return false
+            if (userObject.callS("isDeleted", user) == true || userObject.callS("isReplyUser", user) == true || id == 489000L) return false
+            val blocked = blockedPeers?.get(chat.call("getMessagesController")!!)
+            if (blocked?.let { value -> value?.let { (it.call("indexOfKey", id) as Int) >= 0 } == true } == true) return false
         }
         val currentChat = fields.getValue("currentChat").get(chat) ?: return true
         if (chatObject.callS("canSendMessages", currentChat) != true && chatObject.callS("canSendAnyMedia", currentChat) != true) return false
@@ -175,7 +177,7 @@ private class MessageRepeater(loader: ClassLoader, members: Map<String, ObfsInfo
                 inputMention.newInstance().apply {
                     setObj("offset", entity.getObj("offset"))
                     setObj("length", entity.getObj("length"))
-                    setObj("user_id", inputUser.invoke(controller, entity.getObj("user_id")))
+                    setObj("user_id", inputUser.invoke(controller, entity.getObj("user_id") as Long))
                 }
             } else entity
         }
