@@ -16,12 +16,13 @@ private fun auditKeptApi(bridge: DexKitBridge, feature: String) {
             check(field(info, "emojiIndex").typeName == "int")
             field("org.telegram.messenger.EmojiData", "data")
         }
-        "NoGoogleMaps" -> check(cls("org.telegram.messenger.AndroidUtilities").methods.any { it.name == "isMapsInstalled" })
-        "ShowExactLastSeenTime" -> check(cls("org.telegram.messenger.LocaleController").methods.count {
-            it.name == "formatDateOnline" && it.paramTypeNames.firstOrNull() == "long"
-        } >= 1)
-        "ChannelDetailNumbers" -> method("org.telegram.messenger.LocaleController", "formatShortNumber", listOf("int", "int[]"))
-        "AlwaysShowDownloadManager" -> method("org.telegram.messenger.DownloadController", "hasUnviewedDownloads", emptyList())
+        "NoGoogleMaps" -> telegramApiMethod(bridge, "org.telegram.messenger.AndroidUtilities", "isMapsInstalled", "org.telegram.ui.ActionBar.BaseFragment")
+        "ShowExactLastSeenTime" -> {
+            telegramApiMethod(bridge, "org.telegram.messenger.LocaleController", "formatDateOnline", "long", "boolean[]")
+            telegramApiMethod(bridge, "org.telegram.messenger.LocaleController", "getString", "java.lang.String", "int")
+        }
+        "ChannelDetailNumbers" -> telegramApiMethod(bridge, "org.telegram.messenger.LocaleController", "formatShortNumber", "int", "int[]")
+        "AlwaysShowDownloadManager" -> telegramApiMethod(bridge, "org.telegram.messenger.DownloadController", "hasUnviewedDownloads")
         "RemoveArchiveFolder" -> {
             method("org.telegram.messenger.MessagesController", "getDialogs", listOf("int"))
             method("org.telegram.messenger.MessagesController", "removeFolder", listOf("int"))
