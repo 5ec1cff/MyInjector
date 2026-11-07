@@ -7,11 +7,8 @@ class AlwaysShowDownloadManager : MyDynHook("alwaysShowDownloadManager") {
         TelegramHandler.settings.alwaysShowDownloadManager
 
     override fun onHook() {
-        // org.telegram.messenger.* and its members are kept by Telegram's ProGuard rules.
-        findClass("org.telegram.messenger.DownloadController").hookBefore(
-            "hasUnviewedDownloads",
-            cond = ::isEnabled
-        ) { param ->
+        telegramApiMethod(classLoader, "org.telegram.messenger.DownloadController", "hasUnviewedDownloads")
+            .hookBefore(cond = ::isEnabled) { param ->
             param.result = true
         }
     }
