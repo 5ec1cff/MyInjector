@@ -2,7 +2,6 @@ package io.github.a13e300.myinjector.telegram
 
 import android.icu.text.SimpleDateFormat
 import android.icu.util.Calendar
-import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.hookBefore
 import java.util.Locale
 
@@ -13,20 +12,21 @@ class ShowExactLastSeenTime : MyDynHook("showExactLastSeenTime") {
 
     override fun onHook() {
         // org.telegram.messenger.LocaleController#formatDateOnline
-        val kLocaleController = findClass("org.telegram.messenger.LocaleController")
-        val formatDateOnlineMethods = kLocaleController.declaredMethods.filter {
-            it.name == "formatDateOnline" && it.parameterTypes.isNotEmpty() && it.parameterTypes[0] == Long::class.java
-        }
+        val locale = TelegramLocale(classLoader)
+        val formatDateOnline = telegramApiMethod(classLoader, "org.telegram.messenger.LocaleController", "formatDateOnline", "long", "boolean[]")
+        val kLocaleController = formatDateOnline.declaringClass
+        val formatDateOnlineMethods = kLocaleController.declaredMethods.filter { it.name == formatDateOnline.name }
         require(formatDateOnlineMethods.isNotEmpty()) { "formatDateOnline not found" }
         formatDateOnlineMethods.forEach { formatDateOnline ->
             formatDateOnline.hookBefore(cond = ::isEnabled) {
-                val timeMillis = (it.args[0] as Long) * 1000L
+                val timeIndex = formatDateOnline.parameterTypes.indexOf(java.lang.Long.TYPE)
+                val timeMillis = (it.args[timeIndex] as Long) * 1000L
                 val strLastSeenFormatted =
-                    kLocaleController.callS("getString", "LastSeenFormatted") as String
+                    locale.string("LastSeenFormatted")
                 val strYesterdayAtFormatted =
-                    kLocaleController.callS("getString", "YesterdayAtFormatted") as String
+                    locale.string("YesterdayAtFormatted")
                 val strLastSeenDateFormatted =
-                    kLocaleController.callS("getString", "LastSeenDateFormatted") as String
+                    locale.string("LastSeenDateFormatted")
                 val hasLocError =
                     strLastSeenFormatted.contains("LC_ERR") || strYesterdayAtFormatted.contains("LC_ERR") || strLastSeenDateFormatted.contains(
                         "LC_ERR"
@@ -37,7 +37,7 @@ class ShowExactLastSeenTime : MyDynHook("showExactLastSeenTime") {
                     isYesterday(timeMillis) -> {
                         var shouldBeShorter = false
                         if (formatDateOnline.parameterTypes.size >= 2) {
-                            val madeShort = it.args[1] as? BooleanArray
+                            val madeShort = it.args[1 - timeIndex] as? BooleanArray
                             if (madeShort != null) {
                                 shouldBeShorter = true
                                 madeShort[0] = true
