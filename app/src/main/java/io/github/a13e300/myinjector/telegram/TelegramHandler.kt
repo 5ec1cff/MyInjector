@@ -20,7 +20,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
 
     private var _creator: ObfsTableCreator? = null
     val creator: ObfsTableCreator
-        get() = _creator ?: ObfsTableCreator("tg", 7, appInfo = loadPackageParam.appInfo)
+        get() = _creator ?: ObfsTableCreator("tg", 8, appInfo = loadPackageParam.appInfo)
             .also {
                 _creator = it
                 TelegramResources.apkPaths = listOf(loadPackageParam.appInfo.sourceDir) + loadPackageParam.appInfo.splitSourceDirs.orEmpty()
