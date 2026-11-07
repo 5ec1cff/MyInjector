@@ -31,6 +31,8 @@ import io.github.a13e300.myinjector.ui.modernInjectedScrollContent
 import io.github.a13e300.myinjector.ui.showModernInjectedDialog
 import org.luckypray.dexkit.query.enums.StringMatchType
 import java.lang.reflect.Modifier
+import java.util.Collections
+import java.util.WeakHashMap
 
 class TgSettingsDialog(context: Context) : SettingDialog(context) {
     override val dialogTitle = "Telegram 设置"
@@ -828,6 +830,7 @@ class Settings : IHook() {
             val onClickItemParamIdx = onClickMethod.parameterTypes.indexOfFirst { it == uItemClass }
             val onClickMethodIsStatic = Modifier.isStatic(onClickMethod.modifiers)
             require(onClickItemParamIdx >= 0)
+            val customItems = Collections.newSetFromMap(WeakHashMap<Any, Boolean>())
             settingsActivity.hookAllAfter(SettingsActivityFillItems.memberName) { param ->
                 val items = param.args[fillsItemsItemsParamIdx] as java.util.ArrayList<Any?>
                 fun addSettings(idx: Int) {
@@ -835,9 +838,7 @@ class Settings : IHook() {
                         val shadow = uItemClass.callS(UItemAsShadow.memberName, null as String?)
                         items.add(idx, shadow)
                     }
-                    items.add(
-                        idx,
-                        settingsCellFactoryClass.callS(
+                    val item = settingsCellFactoryClass.callS(
                             settingsActivitySettingsCellFactoryOf.memberName,
                             myId,
                             0,
@@ -847,16 +848,15 @@ class Settings : IHook() {
                             "MyInjector Settings",
                             null
                         )
-                    )
+                    customItems += item
+                    items.add(idx, item)
                 }
                 runCatching {
                     // Account is id 1; put the module between it and the
                     // remaining settings (the first item in that section is id 2).
                     val idx =
                         items.indexOfFirst {
-                            it != null && uItemIdField.getInt(it) == 2 && uItemViewTypeField.getInt(
-                                it
-                            ) == viewType
+                            it != null && uItemIdField.getInt(it) == 2
                         }
                             .let { if (it < 0) 0 else it }
                     addSettings(idx)
@@ -866,7 +866,8 @@ class Settings : IHook() {
                 }
             }
             settingsActivity.hookAllBefore(SettingsActivityOnClick.memberName) { param ->
-                if (uItemIdField.getInt(param.args[onClickItemParamIdx]) == myId) {
+                val item = param.args[onClickItemParamIdx]
+                if (customItems.contains(item) || uItemIdField.getInt(item) == myId) {
                     val self = if (onClickMethodIsStatic) param.args[0] else param.thisObject
                     TgSettingsDialog(self.call("getContext") as Context).show()
                     param.result = null
