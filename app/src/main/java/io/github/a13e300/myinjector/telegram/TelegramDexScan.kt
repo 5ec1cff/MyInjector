@@ -11,8 +11,14 @@ internal data class TgDexValue(
     val number: Int? = null,
     val string: String? = null,
     val resource: String? = null,
+    val resourceId: Int? = null,
     val bundleKey: String? = null,
+    val resultOf: MethodData? = null,
+    val arraySize: Int? = null,
+    val incremented: Boolean = false,
 )
+internal fun TgDexValue?.isResource(name: String): Boolean = this != null &&
+    (resource == name || resourceId?.let { TelegramResources.table.matches(it, name) } == true)
 internal data class TgDexCall(val offset: Int, val method: MethodData, val receiver: TgDexValue?, val args: List<TgDexValue?>)
 internal data class TgDexWrite(val offset: Int, val field: FieldData, val value: TgDexValue?)
 internal data class TgDexCompare(val offset: Int, val target: Int, val fields: List<FieldData>)
@@ -35,6 +41,13 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
         regs.remove(reg)
         value?.let { regs[reg] = it }
     }
+    fun number(value: Int): TgDexValue = TgDexValue(number = value,
+        resource = TelegramResources.table.name(value),
+        resourceId = value.takeIf { TelegramResources.table.contains(it) })
+    fun resource(values: List<TgDexValue?>): TgDexValue {
+        val value = values.firstOrNull { it?.resource != null || it?.resourceId != null }
+        return TgDexValue(resource = value?.resource, resourceId = value?.resourceId)
+    }
     while (pos < code.size) {
         val word = code[pos].code
         val op = word and 0xff
@@ -50,13 +63,19 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
             }
             in 0x0a..0x0c -> assign(aa, pending)
             in 0x0f..0x11 -> returns += TgDexReturn(pos, regs[aa])
-            0x12 -> assign(a, TgDexValue(number = b.shl(28).shr(28)))
-            0x13 -> assign(aa, TgDexValue(number = code[pos + 1].code.toShort().toInt()))
-            0x14 -> assign(aa, TgDexValue(number = code[pos + 1].code or (code[pos + 2].code shl 16)))
-            0x15 -> assign(aa, TgDexValue(number = code[pos + 1].code shl 16))
+            0x12 -> assign(a, number(b.shl(28).shr(28)))
+            0x13 -> assign(aa, number(code[pos + 1].code.toShort().toInt()))
+            0x14 -> assign(aa, number(code[pos + 1].code or (code[pos + 2].code shl 16)))
+            0x15 -> assign(aa, number(code[pos + 1].code shl 16))
             0x1a, 0x1b -> {
                 val id = code[pos + 1].code or (if (op == 0x1b) code[pos + 2].code shl 16 else 0)
                 assign(aa, TgDexValue(string = bridge.getStringByDexAndId(method.dexId, id)))
+            }
+            0x23 -> assign(a, TgDexValue(arraySize = regs[b]?.number))
+            0xd8 -> {
+                val src = code[pos + 1].code and 0xff
+                val literal = (code[pos + 1].code ushr 8).toByte().toInt()
+                assign(aa, regs[src]?.takeIf { literal == 1 }?.copy(incremented = true))
             }
             in 0x52..0x58 -> assign(a, TgDexValue(field = bridge.getFieldDataByDexAndId(method.dexId, code[pos + 1].code)!!))
             in 0x59..0x5f -> {
@@ -88,18 +107,19 @@ internal fun scanTelegramDex(bridge: DexKitBridge, method: MethodData): TgDexCod
                 }
                 calls += TgDexCall(pos, invoked, receiver, values)
                 if (invoked.className == "org.telegram.messenger.LocaleController" && invoked.name == "getString") {
-                    pending = TgDexValue(resource = values.firstNotNullOfOrNull { it?.resource })
+                    pending = resource(values)
                 } else if (invoked.className in listOf("android.os.Bundle", "android.os.BaseBundle") && invoked.name in listOf("getLong", "getInt")) {
                     pending = TgDexValue(bundleKey = values.first()?.string)
                 } else if (invoked.modifiers and 0x1000 != 0 && invoked.invokes.isEmpty()) {
                     pending = invoked.usingFields.singleOrNull { it.usingType == FieldUsingType.Read }?.field?.let { TgDexValue(field = it) }
                 } else if (invoked.returnTypeName != "void") {
-                    pending = TgDexValue(resource = values.firstNotNullOfOrNull { it?.resource })
+                    pending = resource(if (invoked.returnTypeName == invoked.className) listOf(receiver) + values else values)
                 }
+                pending = pending?.copy(resultOf = invoked)
             }
-            0x23, in 0x7b..0x8f, in 0xb0..0xd7 -> assign(a, null)
+            in 0x7b..0x8f, in 0xb0..0xd7 -> assign(a, null)
             0x0d, in 0x16..0x19, 0x1c, in 0x21..0x22, in 0x2d..0x31,
-            in 0x44..0x4a, in 0x90..0xaf, in 0xd8..0xe2 -> assign(aa, null)
+            in 0x44..0x4a, in 0x90..0xaf, in 0xd9..0xe2 -> assign(aa, null)
         }
         pos += getInsnWide(code, pos)
     }

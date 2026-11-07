@@ -71,10 +71,14 @@ fun decodeInvoke(arr: CharArray, pos: Int): Invoke? {
     val agop = arr[pos].code
     val bbbb = arr[pos + 1].code
     val fedc = arr[pos + 2].code
-    val type = when (agop.and(0xff)) {
-        0x6e -> InvokeType.Virtual
-        0x71 -> InvokeType.Static
+    val opcode = agop.and(0xff)
+    val type = when (opcode) {
+        0x6e, 0x74 -> InvokeType.Virtual
+        0x71, 0x77 -> InvokeType.Static
         else -> return null
+    }
+    if (opcode == 0x74 || opcode == 0x77) {
+        return Invoke(type, IntArray(agop.ushr(8)) { fedc + it }, bbbb)
     }
     // require(agop.and(0xff) == 0x6e)
     val ag = agop.ushr(8)
