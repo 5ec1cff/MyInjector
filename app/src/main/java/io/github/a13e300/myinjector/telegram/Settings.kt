@@ -850,13 +850,17 @@ class Settings : IHook() {
                         )
                     customItems += item
                     items.add(idx, item)
+                    runCatching {
+                        val bottomShadow = uItemClass.callS(UItemAsShadow.memberName, null as String?)
+                        items.add(idx + 1, bottomShadow)
+                    }
                 }
                 runCatching {
-                    // Account is id 1; put the module between it and the
-                    // remaining settings (the first item in that section is id 2).
+                    // Put the module below the account switcher and above the
+                    // account item, with a separator on both sides.
                     val idx =
                         items.indexOfFirst {
-                            it != null && uItemIdField.getInt(it) == 2
+                            it != null && uItemIdField.getInt(it) == 1
                         }
                             .let { if (it < 0) 0 else it }
                     addSettings(idx)
