@@ -167,3 +167,44 @@ private fun auditContactRows(bridge: DexKitBridge, base: String) {
         check(callback.usingFields.any { it.usingType == FieldUsingType.Write && it.field.descriptor == shared.getValue("ContactAddActivityCheckShare").descriptor })
     }
 }
+
+private fun auditStickerPackRefresh(bridge: DexKitBridge, members: Map<String, String>) {
+    fun method(key: String) = bridge.getMethodData(members.getValue(key))!!
+    val load = method("load")
+    val full = "org.telegram.tgnet.TLRPC\$TL_messages_stickerSet"
+    val input = "org.telegram.tgnet.TLRPC\$InputStickerSet"
+    val request = "org.telegram.tgnet.TLRPC\$TL_messages_getStickerSet"
+    check(load.paramCount == 0 || load.paramTypeNames == listOf("boolean"))
+    for (key in listOf("getName", "getId")) {
+        check(load.invokes.any { it.descriptor == members.getValue(key) })
+        check(method(key).returnTypeName == full && !Modifier.isStatic(method(key).modifiers))
+    }
+    for ((key, type) in listOf("input" to input, "set" to full)) {
+        val field = bridge.getFieldData(members.getValue(key))!!
+        check(field.className == load.className && field.typeName == type)
+    }
+    val get = method("get")
+    val fetch = method("fetch")
+    check(get.paramTypeNames.first() == input && !Modifier.isStatic(get.modifiers))
+    check(get.paramTypes.last().methods.count {
+        Modifier.isAbstract(it.modifiers) && it.paramCount == 1
+    } == 1)
+    check(fetch.paramTypeNames.first() == input && !Modifier.isStatic(fetch.modifiers))
+    check(fetch.paramTypes.last().methods.count {
+        Modifier.isAbstract(it.modifiers) && it.paramCount == 2
+    } == 1)
+    // 两条网络分支都沿用请求对象默认的 hash=0。
+    for (m in listOf(load, fetch)) {
+        check(m.usingFields.any { it.field.className == request && it.field.name == "stickerset" })
+        check(m.usingFields.none {
+            it.field.className == request && it.field.name == "hash" && it.usingType == FieldUsingType.Write
+        })
+    }
+    check(method("put").paramTypeNames == listOf(full, "boolean"))
+    val init = members.getValue("emojiInit").takeIf { it.isNotEmpty() }?.let { bridge.getMethodData(it)!! }
+    check((method("emojiShow").invokes + init?.invokes.orEmpty()).any { it.descriptor == get.descriptor })
+    val listener = method("emojiNotification")
+    check(listener.paramTypeNames == listOf("int", "int", "java.lang.Object[]"))
+    check(listener.usingFields.any { it.field.descriptor == members.getValue("event") })
+    check(bridge.getFieldData(members.getValue("event"))!!.className == method("post").className)
+}

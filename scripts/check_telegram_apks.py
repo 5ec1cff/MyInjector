@@ -9,6 +9,7 @@ import tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--dexkit', type=Path, default=Path.home() / 'DexKit')
+parser.add_argument('--feature', action='append', default=[], help='只检查指定功能，可重复传入')
 parser.add_argument('apks', nargs='+', type=Path)
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[1]
@@ -24,9 +25,13 @@ with tempfile.TemporaryDirectory(prefix='myinjector-tg-audit-') as directory:
 import org.luckypray.dexkit.DexKitBridge
 fun main(args: Array<String>) {
     System.loadLibrary("dexkit")
-    for (apk in args) {
+    val features = args.filter { it.startsWith("--feature=") }.map { it.substringAfter('=') }.toSet()
+    for (apk in args.filterNot { it.startsWith("--feature=") }) {
         println("APK $apk")
-        DexKitBridge.create(apk).use { auditAll(it) }
+        TelegramResources.apkPaths = listOf(apk) + java.io.File(apk).parentFile
+            .listFiles().orEmpty().filter { it.name.startsWith("split") && it.extension == "apk" }
+            .map { it.absolutePath }
+        DexKitBridge.create(apk).use { auditAll(it, features) }
     }
 }
 ''')
@@ -41,5 +46,6 @@ fun main(args: Array<String>) {
 ''')
     env = dict(os.environ, TELEGRAM_AUDIT_SOURCE_DIR=str(source))
     subprocess.run([str(dexkit / 'gradlew'), '-I', str(init), ':main:run', '--console=plain',
-                    '--args=' + shlex.join(str(apk.resolve()) for apk in args.apks)],
+                    '--args=' + shlex.join([*('--feature=' + name for name in args.feature),
+                                           *(str(apk.resolve()) for apk in args.apks)])],
                    cwd=dexkit, env=env, check=True)

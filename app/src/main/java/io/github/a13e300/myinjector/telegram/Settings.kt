@@ -102,6 +102,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "emojiStickerMenu" ->
                 settings.emojiStickerMenu = v
 
+            "refreshStickerPacks" ->
+                settings.refreshStickerPacks = v
+
             "useSystemEmoji" ->
                 settings.useSystemEmoji = v
 
@@ -293,6 +296,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             group("Emoji 和 Sticker") {
                 toggle(
+                    "打开贴纸包时刷新",
+                    "refreshStickerPacks",
+                    "每次打开贴纸包或自定义 Emoji 包弹窗时从服务器获取内容，需要联网"
+                )
+                toggle(
                     "自定义 emoji 映射",
                     "customEmojiMapping",
                 )
@@ -468,6 +476,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             "emojiStickerMenu" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.emojiStickerMenu
+
+            "refreshStickerPacks" -> (setting as ToggleSetting).isChecked =
+                TelegramHandler.settings.refreshStickerPacks
 
             "useSystemEmoji" -> (setting as ToggleSetting).isChecked =
                 TelegramHandler.settings.useSystemEmoji

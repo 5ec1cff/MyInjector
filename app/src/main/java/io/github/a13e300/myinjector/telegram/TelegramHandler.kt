@@ -82,6 +82,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(CustomMapPosition())
         subHook(OpenLinkDialog())
         subHook(EmojiStickerMenu())
+        subHook(RefreshStickerPacks())
         subHook(CopyPrivateChatLink())
         subHook(SaveSecretImage())
         finishDeobf()

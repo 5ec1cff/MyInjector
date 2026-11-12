@@ -64,7 +64,7 @@ class ObfsTableCreator(val bridge: DexKitBridge, base: ObfsInfo) {
 }
 ''']
 out.append(body((root / 'arch/OpcodeUtils.kt').read_text()))
-for name in ['TelegramFactoryFields', 'SearchStateDeobf', 'StickerStreamDeobf', 'EmojiDeobf', 'TelegramResources', 'TelegramApiDeobf', 'TelegramNamedMembers', 'AnchoredSearchDeobf', 'MessageSearchWindow', 'MessageSearchFilters', 'TelegramDexUtils', 'TelegramDexScan', 'ProfileAvatarBlurDeobf', 'ProfileActivityRowsDeobf', 'SecretMediaDeobf', 'ProfileMenuDeobf', 'InfoContainerDeobf']:
+for name in ['TelegramFactoryFields', 'SearchStateDeobf', 'StickerStreamDeobf', 'EmojiDeobf', 'TelegramResources', 'TelegramApiDeobf', 'TelegramNamedMembers', 'AnchoredSearchDeobf', 'MessageSearchWindow', 'MessageSearchFilters', 'TelegramDexUtils', 'TelegramDexScan', 'ProfileAvatarBlurDeobf', 'ProfileActivityRowsDeobf', 'SecretMediaDeobf', 'ProfileMenuDeobf', 'InfoContainerDeobf', 'StickerPackRefreshDeobf']:
     out.append(body(source(name)))
 for name, func in [('OpenLinkDialog', 'findOpenLinkDialog'), ('EmojiStickerMenu', 'findEmojiStickerMenu'), ('CopyPrivateChatLink', 'findCopyPrivateChatLink'), ('ShowDCInProfile', 'findProfileDataCenter'), ('HistoricalNewsOption', 'findHistoricalNews'), ('RepeatMessage', 'findRepeatMessage')]:
     out.append(function(source(name), func))
@@ -101,11 +101,12 @@ permission_methods = permission_methods.replace('private fun canSend(', 'fun can
 out.append((base / 'telegram_repeat_permissions_test.kt').read_text().replace('// PRODUCTION_METHODS', permission_methods))
 
 out.append('''
-fun auditAll(bridge: DexKitBridge) {
+fun auditAll(bridge: DexKitBridge, features: Set<String> = emptySet()) {
     val base = (bridge.getClassData("org.telegram.ui.ActionBar.BaseFragment") ?: bridge.findClass { matcher { addField { name("fragmentView"); type("android.view.View") } } }.single()).toObfsInfo()
     val failures = mutableListOf<String>()
     var passed = 0
     fun checkFeature(name: String, action: () -> Unit) {
+        if (features.isNotEmpty() && name !in features) return
         try { action(); println("PASS $name"); passed++ }
         catch (t: Throwable) { println("FAIL $name ${t.message}"); t.printStackTrace(); failures += name }
     }
@@ -133,6 +134,7 @@ for name, call in [
     ('ShowDCInProfile', 'findProfileDataCenter(bridge, bridge.getMethodData(findProfileActivityRows(bridge, base.className).getValue("updateRows"))!!.className).mapValues { it.value.descriptor }'),
     ('OpenLinkDialog', 'findOpenLinkDialog(bridge)'),
     ('EmojiStickerMenu', 'findEmojiStickerMenu(bridge, base.className)'),
+    ('RefreshStickerPacks', 'findStickerPackRefresh(bridge).also { auditStickerPackRefresh(bridge, it) }'),
     ('CopyPrivateChatLink', 'findCopyPrivateChatLink(bridge)'),
     ('SaveSecretImage', 'findSaveSecretImage(bridge, base.className)'),
     ('AddSubItemChannel', 'findProfileMenu(bridge)'),
@@ -149,6 +151,7 @@ out.append('''
     checkFeature("Reflection shapes") { auditReflectionShapes(bridge) }
     checkFeature("Repeat menu availability") { RepeatPermissionTest.run() }
     println("AUDIT $passed passed, ${failures.size} failed: $failures")
+    check(passed + failures.size > 0) { "No matching feature: $features" }
     check(failures.isEmpty()) { "Failed: $failures" }
 }
 ''')
