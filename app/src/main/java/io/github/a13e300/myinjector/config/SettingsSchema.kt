@@ -19,7 +19,8 @@ object SettingsSchema {
             "noSwipeToKillLockedProcess" to false,
             "noSwipeToKillNoRestrictProcess" to false,
             "bypassShellDexOptRestriction" to false,
-            "fixHyperOSAvoidMoveToFront" to false
+            "fixHyperOSAvoidMoveToFront" to false,
+            "fixHyperOS4GreezeFCMRestrict" to false,
         ),
         "systemui" to linkedMapOf<String, Any>(
             "showNotificationDetail" to false,

@@ -138,6 +138,7 @@ object HookConfigs {
                 }.filter { it != null }.collect(Collectors.toList())
             )
             .setForceNewTaskDebug(prefs.getBoolean("forceNewTaskDebug", false))
+            .setFixHyperOS4GreezeFCMRestrict(prefs.getBoolean("fixHyperOS4GreezeFCMRestrict", false))
             .build()
     }
 

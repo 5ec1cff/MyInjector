@@ -19,6 +19,7 @@ import io.github.a13e300.myinjector.arch.getObj
 import io.github.a13e300.myinjector.arch.getObjAs
 import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.getObjSAs
+import io.github.a13e300.myinjector.arch.hookAllAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllNopIf
@@ -35,7 +36,6 @@ import kotlin.Int
 import kotlin.String
 import kotlin.Suppress
 import kotlin.also
-import kotlin.io.startsWith
 import kotlin.lazy
 import kotlin.let
 import kotlin.onFailure
@@ -87,6 +87,7 @@ class SystemServerHandler : IHook() {
             hookStatusBarAppearance()
             hookNoSwipeToKill()
             hookHyperOSAvoidMoveToFront()
+            hookHyperOS4GreezeFCMRestrict()
             hooksReady = true
         }
         subHook(miuiHomeRuntime)
@@ -388,5 +389,24 @@ class SystemServerHandler : IHook() {
         }
     }.onFailure {
         logE("hookHyperOSAvoidMoveToFront", it)
+    }
+
+    private fun hookHyperOS4GreezeFCMRestrict() = runCatching {
+        val gmi = findClass("com.miui.server.greeze.GreezeManagerInternal")
+        findClass("com.android.server.am.BroadcastQueueImpl").hookAllAfter("shouldSkipReceiver") { param ->
+            if (!config.fixHyperOS4GreezeFCMRestrict) return@hookAllAfter
+            val result = param.result ?: return@hookAllAfter
+            val broadcastRecord = param.args[1]
+            val intent = param.args[3] as Intent
+            if (broadcastRecord.getObjAs<String>("callerPackage") == "com.google.android.gms" && intent.action == "com.google.android.c2dm.intent.RECEIVE") {
+                val app = param.args[0].getObj("app")
+                val uid = app.getObj("uid")
+                logI("allow gms broadcast uid $uid intent $intent, bypass $result")
+                // GreezeManagerService$LocalService
+                // call greezeManager to unfreeze us
+                gmi.callS("getInstance").getObj("this$0").call("thawUidAsync", uid, 1000, "myinjector")
+                param.result = null
+            }
+        }
     }
 }

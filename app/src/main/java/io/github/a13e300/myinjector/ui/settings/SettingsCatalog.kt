@@ -36,6 +36,7 @@ internal fun moduleSettingsSections(): List<SettingsSectionSpec> = listOf(
         SettingsItemSpec.Switch("system", "noSwipeToKillNoRestrictProcess", "划卡不杀无限制", "划卡不杀电量管控无限制应用（仅小米）", false),
         SettingsItemSpec.Switch("system", "bypassShellDexOptRestriction", "绕过 pm compile 限制", "绕过小米低版本的 pm compile 命令限制（允许强制编译）", false),
         SettingsItemSpec.Switch("system", "fixHyperOSAvoidMoveToFront", "修复 avoidMoveToFront", "修复 HyperOS 下快捷方式 App 拉起其他 App 后阻止该 App 拉起自身 Activity 的问题", false),
+        SettingsItemSpec.Switch("system", "fixHyperOS4GreezeFCMRestrict", "修复 HyperOS4 下的 GMS FCM 拉起", "修复 HyperOS4 下的省电策略属于智能省电的应用无法被 GMS FCM 拉起的问题", false),
     )),
     SettingsSectionSpec("systemui", "系统界面", listOf(
         SettingsItemSpec.Switch("systemui", "loopNotificationControlCenter", "通知与控制中心循环滑动", "允许向两侧连续切换通知与控制中心（HyperOS）", false),
