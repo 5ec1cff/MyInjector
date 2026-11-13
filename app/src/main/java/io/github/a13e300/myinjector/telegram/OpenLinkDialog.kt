@@ -78,7 +78,9 @@ class OpenLinkDialog : MyDynHook("openLinkDialog") {
                         arrayOf(context, Uri.parse(fix.url), inlineReturn == 0L, tryTelegraph,
                             false, progress, null, false, true, false)
                     }
-                    openUrl.invoke(null, *args)
+                    // New Browser.openUrl adds keepWebAuthTokens, false in the short overload.
+                    val openArgs = if (openUrl.parameterCount == 11) args + false else args
+                    openUrl.invoke(null, *openArgs)
                 }
             }
         }
@@ -118,7 +120,9 @@ private fun findOpenLinkDialog(bridge: DexKitBridge): Map<String, String> {
         usingTelegramResource(bridge, "string", "OpenUrlTitle")
     } }.single()
     check(alert.paramTypeNames.take(7) == listOf("android.content.Context", "java.lang.String", "boolean", "boolean", "boolean", "boolean", "long"))
-    val openFull = alert.invokes.single { it.paramCount == 10 && it.paramTypeNames.take(2) == listOf("android.content.Context", "android.net.Uri") }
+    val openParams = listOf("android.content.Context", "android.net.Uri", "boolean", "boolean", "boolean",
+        alert.paramTypeNames[7], "java.lang.String", "boolean", "boolean", "boolean")
+    val openFull = alert.invokes.single { it.paramTypeNames == openParams || it.paramTypeNames == openParams + "boolean" }
     val browserClass = openFull.className
     val open = bridge.findMethod { matcher {
         declaredClass(browserClass)

@@ -70,3 +70,24 @@ adb -s emulator-5554 logcat -d -s ProfileMusicPaintTest:I '*:S'
 ```
 
 debug、release 构建和已有单元测试通过；实际宿主账号的头像与音乐卡片效果仍需安装修复版后验证。
+
+## Telegram 13.2.2（73031）打开链接对话框适配
+
+使用设备提取的 Play 版 APK 复现 `OpenLinkDialog` 初始化失败。dexsql 确认：
+`AlertsCreator` 的实现 `org.telegram.ui.Components.x4.l0` 调用的是
+`ne.f.s(Context, Uri, boolean, boolean, boolean, ne.e, String, boolean, boolean, boolean, boolean)`，
+原规则只接受十参数方法，因此在 `OpenLinkDialog.kt` 原第 121 行找不到结果。
+
+官方 [Browser.java 第 296–297、361–365 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/messenger/browser/Browser.java#L361-L365)
+表明新增参数为 `keepWebAuthTokens`，短重载最终传入 `false`。
+APK 中保留的五参数重载 `ne.f.r` 也传入相同默认值。
+
+定位时现在匹配完整参数类型，接受原十参数版本或末尾增加一个 boolean 的十一参数版本。
+仍优先使用五参数重载；该重载不存在时，完整版本的新增参数传 `false`。
+其余对话框字段、按钮和链接修复行为不变。失败的定位没有成功缓存，无需清理已有缓存。
+
+官方 13.2.2、官方 13.1.1（72371）和 NaGram 12.10.3（1249）的
+`--feature OpenLinkDialog` 静态检查通过，三者均选中五参数重载。
+样本复用 `~/Documents/Codex/scratch/MyInjectorPriv/telegram-13.2.2-history/`，
+源码和验证日志保存在相邻的 `telegram-13.2.2-open-link/` 目录。
+尚未在真实 Xposed 宿主中验证链接点击。AyuGram 旧版本不再纳入后续适配和回归范围。
