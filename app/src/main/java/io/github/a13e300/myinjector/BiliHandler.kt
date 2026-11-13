@@ -13,6 +13,9 @@ import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookConstant
+import io.github.a13e300.myinjector.arch.hook
+import io.github.a13e300.myinjector.bili.BiliCommentLink
+import io.github.a13e300.myinjector.bili.biliCommentLinkMembers
 import io.github.a13e300.myinjector.bili.BiliNewShare
 import io.github.a13e300.myinjector.bili.biliNewShareMembers
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
@@ -105,6 +108,24 @@ class BiliHandler : IHook() {
             logD("bili new share framework forced: ${enabled.descriptor}")
             logD("bili new share local copy installed: ${share.engine}")
         }.onFailure { logE("hookNewShare", it) }
+    }
+
+    private fun hookCommentLink(creator: ObfsTableCreator) {
+        if (findClassOrNull("kntr.common.comment.page.ui.CommentMoreMenuKt") == null) return
+        runCatching {
+            val link = BiliCommentLink(classLoader, biliCommentLinkMembers(creator))
+            hooks += link.menu.hook(before = { param ->
+                runCatching { link.enter(param.args) }.onFailure { logE("bili comment link data", it) }
+            }, after = { link.leave() })
+            link.renderers.forEach { renderer ->
+                val listIndex = renderer.parameterTypes.indexOf(List::class.java)
+                hooks += renderer.hookBefore { param ->
+                    runCatching { link.addEntry(param.args, listIndex) }
+                        .onFailure { logE("bili comment link menu", it) }
+                }
+            }
+            logD("bili comment copy link installed: ${link.menu}")
+        }.onFailure { logE("hookCommentLink", it) }
     }
 
     private fun hookPauseAd(creator: ObfsTableCreator) {
@@ -220,6 +241,7 @@ class BiliHandler : IHook() {
         ObfsTableCreator("bili", 2, appInfo = loadPackageParam.appInfo).use { creator ->
             hookShare(creator)
             hookNewShare(creator)
+            hookCommentLink(creator)
             hookAd(creator)
             hookPauseAd(creator)
             hookFreeDataGuide(creator)

@@ -8,6 +8,29 @@ import org.luckypray.dexkit.DexKitBridge
 /** 可选的真实 APK 回归检查；样本不随仓库分发，环境变量见 docs/bilibili-compatibility.md。 */
 class BiliApkCompatibilityTest {
     @Test
+    fun locatesCommentMenuIn919() {
+        val apk = System.getenv("BILI_NEW_SHARE_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires the 9.19.0 APK and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            val members = locateBiliCommentLink(bridge)
+            assertEquals("kntr.common.comment.page.ui.CommentMoreMenuKt", members.getValue("menu").className)
+            assertEquals(mapOf(
+                "commentId" to "Lc1f1;->b:J",
+                "rootCommentId" to "Lc1f1;->c:J",
+                "oid" to "Lc1f1;->x:Ljava/lang/Long;",
+                "type" to "Lc1f1;->y:Ljava/lang/Integer;",
+                "entryTitle" to "Lv0f1;->a:Ljava/lang/String;",
+                "entryIcon" to "Lv0f1;->b:Landroidx/compose/ui/graphics/painter/Painter;",
+                "panel" to "Lkntr/common/comment/common/ui/moremenu/j;->a(ILandroidx/compose/runtime/Composer;Landroidx/compose/ui/Modifier;Ljava/util/List;Lkotlin/jvm/functions/Function0;)V",
+                "sheet" to "Lkntr/common/comment/common/ui/moremenu/k;->f(ILandroidx/compose/runtime/Composer;Ljava/util/List;Lkotlin/jvm/functions/Function0;)V",
+                "bubble" to "Lkntr/common/comment/common/ui/moremenu/MoreMenuBubbleKt;->c(Ljava/util/List;Landroidx/compose/ui/unit/IntRect;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+            ), members.filterKeys { it != "menu" }.mapValues { it.value.descriptor })
+        }
+    }
+
+    @Test
     fun locatesNewShareIn919() {
         val apk = System.getenv("BILI_NEW_SHARE_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")
