@@ -95,6 +95,14 @@ for name, (start, end) in prefixes.items():
     code = s[s.index(start):s.index(end)]
     out.append('private fun audit' + name + '(creator: ObfsTableCreator) {\n' + code + '\n}')
 
+# 检查运行时单独解析的 API，避免只检查 findHistoricalNews 而漏掉初始化失败。
+history_apis = set()
+for name in ['HistoricalNewsOption', 'AnchoredMessageSearch', 'SearchFiltersUi']:
+    for kind, args in re.findall(r'\b(telegramApi(?:Class|Method|Field))\((?:classLoader|loader), ("[^\n]+?)\)', source(name)):
+        history_apis.add(f'    {kind}(bridge, {args})')
+out.append('private fun auditHistoricalNewsApis(bridge: DexKitBridge) {\n' +
+           '\n'.join(sorted(history_apis)) + '\n}')
+
 out.append((base / 'telegram_audit_extra.kt').read_text())
 permission_methods = '\n'.join(function(source('RepeatMessage'), name) for name in ['canSend', 'canSendWhileSearching'])
 permission_methods = permission_methods.replace('private fun canSend(', 'fun canSend(')
@@ -140,7 +148,9 @@ for name, call in [
     ('AddSubItemChannel', 'findProfileMenu(bridge)'),
     ('AddInfoContainer', 'findInfoContainer(bridge, findProfileMenu(bridge).getValue("menu"))'),
     ('Anchored search state', 'findSearchState(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className)'),
-    ('HistoricalNewsOption', 'findHistoricalNews(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className)'),
+    ('HistoricalNewsOption', 'findHistoricalNews(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className).also { auditHistoricalNewsApis(bridge) }'),
+    ('Anchored search list', 'findAnchoredSearch(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className)'),
+    ('Search controls', 'findSearchControls(bridge, bridge.getMethodData(findCopyPrivateChatLink(bridge).getValue("createMenu"))!!.className)'),
     ('RepeatMessage', 'findCopyPrivateChatLink(bridge).let { findRepeatMessage(bridge, bridge.getMethodData(it.getValue("createMenu"))!!.className, it.getValue("createMenu"), it.getValue("options")) }')
 ]:
     out.append(f'    checkFeature("{name}") {{ validateMap({call}) }}')

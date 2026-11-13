@@ -30,10 +30,11 @@ class HistoricalNewsOption : MyDynHook("historicalNewsOption") {
             if (Modifier.isStatic(method.modifiers)) method.invoke(null, chat, *args)
             else method.invoke(chat, *args)
         }
-        val getFromPeer = telegramApiMethod(classLoader, "org.telegram.messenger.MessageObject", "getFromPeer")
+        // R8 can inline getFromPeer. Read messageOwner.from_id directly.
+        val messageOwner = telegramApiField(classLoader, "org.telegram.messenger.MessageObject", "messageOwner")
         MessageMenuHook.register("historicalNewsOption", "查看历史消息", "msg_search", ::isEnabled,
             { onHookError(it) }) { chat, message ->
-            val peer = getFromPeer.invoke(message) ?: return@register null
+            val peer = messageOwner.get(message)?.getObj("from_id") ?: return@register null
             val userId = (peer.getObj("user_id") as Number).toLong()
             val channelId = (peer.getObj("channel_id") as Number).toLong()
             val groupId = (peer.getObj("chat_id") as Number).toLong()

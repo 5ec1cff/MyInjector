@@ -78,3 +78,43 @@ DexKit 本地测试入口支持 `TELEGRAM_ANCHOR_ONLY=1`，只执行本功能的
 并模拟发送者、图片类型、日期范围同时生效时的完整双向分页。
 网络请求和手机端实际滚动效果仍需安装模块验证。
 发送者与类型组合的分页回归测试覆盖连续空页、两侧遍历、迁移群和完全无匹配。
+
+## Telegram 13.2.2（73031）初始化失败
+
+从 ADB 设备提取 Play 版 `org.telegram.messenger` 的 base APK 和 arm64、xxhdpi split。
+base APK 的 SHA-256 为 `47ebdaac21ca00b20f2872a9eebcce63f808c059f5de2fc4cd6fe3d060be1031`。
+样本和验证日志保存在 `~/Documents/Codex/scratch/MyInjectorPriv/telegram-13.2.2-history/`。
+
+报错对应 `TelegramApiDeobf.kt` 原第 188 行的 `MessageObject.getFromPeer` 规则。
+dexsql 确认新版 `MessageObject` 为 `org.telegram.messenger.mj`，已没有返回
+`TLRPC.Peer` 的方法，而消息字段 `mj.k:TLRPC.Message` 和 `Message.from_id:TLRPC.Peer` 仍在。
+官方源码的 [getFromPeer，第 10098–10103 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/messenger/MessageObject.java#L10098-L10103)
+只是判空后返回 `messageOwner.from_id`，符合 R8 内联移除 getter 后的结果。
+
+`HistoricalNewsOption` 现在通过已有字段规则解析 `messageOwner`，直接读取 `from_id`，
+保留消息为空、发送者为空时不显示菜单的行为，不改用转发来源或会话 ID。
+删除不再使用的 getter 规则。已有字段缓存仍有效，失败的 getter 也没有成功缓存，因此不调整缓存版本。
+
+静态检查从 `HistoricalNewsOption`、`AnchoredMessageSearch` 和 `SearchFiltersUi`
+提取运行时单独解析的 API 调用，补上原先只检查 `findHistoricalNews` 的遗漏。
+补齐后可在修改生产代码前复现同一 getter 定位失败，修改后通过。
+另外新增 `Anchored search list` 和 `Search controls` 两组检查，覆盖列表和筛选入口。
+
+官方 13.2.2、官方 13.1.1（72371）和 NaGram 12.10.3（1249）均通过以下四组检查：
+
+```sh
+TMPDIR="$HOME/Documents/Codex/scratch/MyInjectorPriv/telegram-13.2.2-history" \
+python3 scripts/check_telegram_apks.py \
+  --feature HistoricalNewsOption --feature 'Anchored search state' \
+  --feature 'Anchored search list' --feature 'Search controls' \
+  "$HOME/Documents/Codex/scratch/MyInjectorPriv/telegram-13.2.2-history/telegram-13.2.2.apk" \
+  ~/tg-apks/telegram-13.1.1-72371/base.apk ~/nagram-1249.apk
+```
+
+debug、release 构建和 4 项 Telegram 分页单测通过。AyuGram、exteraGram 13.0.3 的
+`HistoricalNewsOption` 成员和运行时 API 检查也通过。
+
+验证边界：AyuGram 13.0.3 的新增搜索状态和列表检查失败，属于此次扩大检查范围时发现的旧版本兼容问题，
+不能据 API 检查通过认定其完整历史搜索可用。全量单测另有 `SettingsCatalogTest` 和
+`PreferenceSyncTest` 两项失败，断言仍使用新增 `fixHyperOS4GreezeFCMRestrict` 之前的设置列表和数量。
+本次没有在真实 Xposed 宿主中验证菜单点击和网络搜索。

@@ -185,7 +185,6 @@ internal fun telegramApiMethod(bridge: DexKitBridge, owner: String, name: String
         "MessageObject.getId" -> candidates.single {
             it.returnTypeName == "int" && it.usingFields.any { field -> field.field.descriptor == "Lorg/telegram/tgnet/TLRPC\$Message;->ephemeralAnchorMsgId:I" }
         }
-        "MessageObject.getFromPeer" -> candidates.single { it.returnTypeName == "org.telegram.tgnet.TLRPC\$Peer" }
         "MessageObject.getPeerId" -> candidates.single { it.returnTypeName == "long" }
         "MessageObject.getFromChatId" -> candidates.single {
             it.returnTypeName == "long" && it.usingFields.size == 1 &&
