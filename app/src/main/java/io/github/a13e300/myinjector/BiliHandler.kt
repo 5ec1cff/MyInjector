@@ -18,6 +18,7 @@ import io.github.a13e300.myinjector.bili.biliNewShareMembers
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
 import io.github.a13e300.myinjector.bili.locateBiliFreeDataGuides
 import io.github.a13e300.myinjector.bili.locateBiliNewSplash
+import io.github.a13e300.myinjector.bili.locateBiliNewShareEnabled
 import io.github.a13e300.myinjector.bili.locateBiliPausePageConfig
 import io.github.a13e300.myinjector.bili.locateBiliShare
 import io.github.a13e300.myinjector.bili.locateBiliSplash
@@ -98,6 +99,10 @@ class BiliHandler : IHook() {
                     if (share.useLocalCopy(param.args)) logD("bili copy original link without share fetch")
                 }.onFailure { logE("bili local share fetch", it) }
             }
+            val enabled = creator.create("newShare.frameworkEnabled", ::locateBiliNewShareEnabled)
+            // 直接覆盖入口返回值，已有的 Lazy 缓存即使是 false 也不会再切回旧版。
+            hooks += DexMethod(enabled.descriptor).getMethodInstance(classLoader).hookConstant(true)
+            logD("bili new share framework forced: ${enabled.descriptor}")
             logD("bili new share local copy installed: ${share.engine}")
         }.onFailure { logE("hookNewShare", it) }
     }

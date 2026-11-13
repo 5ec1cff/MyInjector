@@ -8,14 +8,17 @@
 相同标题与正文只保留一份，正文中的换行、段落与表情保留，不主动截断。
 文本取自本地分享模型；若宿主只提供摘要，就复制已有摘要，不请求补全文本。
 视频保留分 P 等语义参数，去掉 `share_session_id`、`share_source`、`bbid`、`share_medium`。
-直播、番剧、短链、普通文本等内容保持原流程；旧框架的 `hookShare` 保留。
+直播、番剧、短链、普通文本等内容不做本地替换；旧框架的 `hookShare` 保留。
+
+将 `ff_share_kt_imp` 的分享选择入口固定返回 true，避免下发配置关闭时切回旧框架。
+作用范围是读取该开关的视频、图文等入口，不将所有业务入口强行替换为同一实现。
 
 这不是整个分享流程的断网开关。打开面板的渠道列表请求、分享完成上报仍由宿主处理。
 用户已反馈功能正常，下面的自动验证未覆盖完整界面和抓包验收。
 
 ## 实现
 
-安装两个 Hook：
+复制内容使用两个 Hook：
 
 1. 在 `ShareConfig` 的内容提供方法返回后，检查目标为 `COPY` 且结果是
    `CopyShareContent`，再读取其内容工厂闭包捕获的 `ShareBaseInfo`。
@@ -35,6 +38,10 @@
 `ShareBaseInfo` 的三个文本字段按 `toString` 读取 title、content、link 的字节码顺序定位，
 不写死字段名。所有 Hook 进入 `BiliHandler` 的卸载列表。
 
+框架选择另加一个 Hook：从 `ff_share_kt_imp` 所在 lambda 的构造调用定位初始化类，
+再找到该类读取 `Lazy` 的静态无参 boolean 方法，在入口直接返回 true。
+这覆盖首次读取和已经缓存 false 的情况，不修改配置存储或其他灰度开关；卸载 Hook 后恢复宿主逻辑。
+
 ## 9.19.0 样本
 
 设备包名 `tv.danmaku.bili`，版本 `9.19.0`（`9190400`）。
@@ -52,6 +59,7 @@ APK SHA-256：`a9a0ed372797d8310ebff3b7237ea9605eea6b41a3e2298eef6a9faae1d0fbd6`
 | 正文 | `a062.b: String` |
 | 本地原始链接 | `a062.c: String` |
 | COPY 内容 | `dr10.g: String` |
+| 新版框架选择 | `ez52.a(): boolean` |
 
 Theseus2 视频的 `playercontainer.h.a()` 会生成
 `https://www.bilibili.com/video/{BV或av}`，分 P 大于 1 时添加 `?p=`。
@@ -78,6 +86,8 @@ export DEXKIT_HOST_LIBRARY=/path/to/host/libdexkit.so
 
 9.19.0 的八个定位结果与原始字节码一致，专项测试 8 项中 7 项通过，
 1 项因缺少 9.17.0 样本跳过，Debug APK 构建通过。
+框架开关回归同时确认定位到 `ez52.a()`，该方法由视频分享及图文详情的新旧分支读取，
+内部只读取缓存的开关值。固定返回 true 后，用户反馈暂未观测到问题。
 此前全量回归的两项既有失败是 `PreferenceSyncTest.schemaExactlyMatchesEditableCatalog`
 和 `SettingsCatalogTest.preservesExistingStorageKeysAndDefaults`，其预期未包含
 已有的 `fixHyperOS4GreezeFCMRestrict` 设置项。

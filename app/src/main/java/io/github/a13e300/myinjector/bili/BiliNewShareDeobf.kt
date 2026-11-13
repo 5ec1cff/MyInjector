@@ -5,6 +5,22 @@ import io.github.a13e300.myinjector.arch.ObfsTableCreator
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.result.FieldUsingType
+import java.lang.reflect.Modifier
+
+internal fun locateBiliNewShareEnabled(bridge: DexKitBridge): ObfsInfo {
+    val flag = bridge.findMethod { matcher { usingEqStrings("ff_share_kt_imp") } }.single()
+    // R8 合并了多个配置 lambda，从构造调用找到初始化类，再定位读取 Lazy 的入口。
+    val owners = flag.declaredClass!!.methods.filter { it.isConstructor }
+        .flatMap { it.callers }.filter { it.isStaticInitializer }
+        .map { it.declaredClass!! }.distinctBy { it.name }
+    return owners.flatMap { it.methods }.single { method ->
+        Modifier.isStatic(method.modifiers) && method.paramCount == 0 && method.returnTypeName == "boolean" &&
+            method.usingFields.any {
+                it.usingType == FieldUsingType.Read && it.field.className == method.className &&
+                    it.field.typeName == "kotlin.Lazy"
+            } && method.invokes.any { it.className == "kotlin.Lazy" && it.methodName == "getValue" }
+    }.toObfsInfo()
+}
 
 internal fun locateBiliNewShare(bridge: DexKitBridge): Map<String, ObfsInfo> {
     val engine = bridge.findMethod { matcher {

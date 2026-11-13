@@ -14,6 +14,7 @@ class BiliApkCompatibilityTest {
         assumeTrue("Requires the 9.19.0 APK and a host DexKit JNI library", apk != null && library != null)
         System.load(library!!)
         DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals("Lez52;->a()Z", locateBiliNewShareEnabled(bridge).descriptor)
             assertEquals(mapOf(
                 "engine" to "Lkntr/common/share/core/ShareEngine;->a(Lwwe;Luwe;ZLkntr/common/share/core/model/ShareLocalContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
                 "contentProvider" to "Lj162;->a(Lwwe;)Luwe;",
