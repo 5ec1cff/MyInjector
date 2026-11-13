@@ -15,7 +15,9 @@ import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookConstant
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.bili.BiliCommentLink
+import io.github.a13e300.myinjector.bili.BiliCommentRoute
 import io.github.a13e300.myinjector.bili.biliCommentLinkMembers
+import io.github.a13e300.myinjector.bili.biliCommentRouteMembers
 import io.github.a13e300.myinjector.bili.BiliNewShare
 import io.github.a13e300.myinjector.bili.biliNewShareMembers
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
@@ -126,6 +128,21 @@ class BiliHandler : IHook() {
             }
             logD("bili comment copy link installed: ${link.menu}")
         }.onFailure { logE("hookCommentLink", it) }
+    }
+
+    private fun hookCommentLinkInVideo(creator: ObfsTableCreator) {
+        runCatching {
+            val route = BiliCommentRoute(classLoader, biliCommentRouteMembers(creator))
+            hooks += route.legacy.hookBefore { param ->
+                runCatching { param.args[0] = route.wrapLegacy(param.args[0]!!) }
+                    .onFailure { logE("bili comment video route (legacy)", it) }
+            }
+            hooks += route.theseus2.hookBefore { param ->
+                runCatching { param.args[0] = route.wrapTheseus2(param.args[0]!!) }
+                    .onFailure { logE("bili comment video route (Theseus2)", it) }
+            }
+            logD("bili comment links stay in video: ${route.legacy}, ${route.theseus2}")
+        }.onFailure { logE("hookCommentLinkInVideo", it) }
     }
 
     private fun hookPauseAd(creator: ObfsTableCreator) {
@@ -242,6 +259,7 @@ class BiliHandler : IHook() {
             hookShare(creator)
             hookNewShare(creator)
             hookCommentLink(creator)
+            hookCommentLinkInVideo(creator)
             hookAd(creator)
             hookPauseAd(creator)
             hookFreeDataGuide(creator)

@@ -8,6 +8,20 @@ import org.luckypray.dexkit.DexKitBridge
 /** 可选的真实 APK 回归检查；样本不随仓库分发，环境变量见 docs/bilibili-compatibility.md。 */
 class BiliApkCompatibilityTest {
     @Test
+    fun locatesCommentRoutesIn919() {
+        val apk = System.getenv("BILI_NEW_SHARE_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires the 9.19.0 APK and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "legacy" to "Ljok2;->intercept(Lcom/bilibili/lib/blrouter/RouteInterceptor\$Chain;)Lcom/bilibili/lib/blrouter/RouteResponse;",
+                "theseus2" to "Lcom/bilibili/ship/theseus2/detail/route/ugc/b;->a(Lkntr/base/router/target/RouterTargetContext;Ljava/lang/String;Lpzf2;)Lkntr/base/router/target/RouterTarget;",
+            ), locateBiliCommentRoutes(bridge).mapValues { it.value.descriptor })
+        }
+    }
+
+    @Test
     fun locatesCommentMenuIn919() {
         val apk = System.getenv("BILI_NEW_SHARE_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")

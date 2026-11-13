@@ -28,6 +28,7 @@
 文字动态的评论类型为 17，直接使用动态 ID。
 主评论的 root 为 0 或等于自身 ID 时，只保留 `comment_root_id`。
 楼中楼同时保留主评论 ID 和目标回复 ID，fragment 始终指向被长按的那条评论。
+App 内保留视频的打开行为由独立 Hook 处理，理由与实现见[评论链接路由](bilibili-comment-route.md)。
 
 ## 实现与样本
 
