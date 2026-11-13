@@ -137,6 +137,8 @@ class BetterShare : MyDynHook("betterShare") {
             // e2c.a#invoke 9.51.0
             val shareMethod = bridge.findMethod {
                 matcher {
+                    // 9.54.1 的评论复制方法也使用这两个字符串，只匹配分享回调
+                    name = "invoke"
                     usingEqStrings(
                         "TYPE_COPY_ONLY",
                         "ug-share-copy-link",
