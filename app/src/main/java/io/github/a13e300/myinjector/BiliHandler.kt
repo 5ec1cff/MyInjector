@@ -10,8 +10,11 @@ import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.getObjS
 import io.github.a13e300.myinjector.arch.hookAllCAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
+import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookConstant
+import io.github.a13e300.myinjector.bili.BiliNewShare
+import io.github.a13e300.myinjector.bili.biliNewShareMembers
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
 import io.github.a13e300.myinjector.bili.locateBiliFreeDataGuides
 import io.github.a13e300.myinjector.bili.locateBiliNewSplash
@@ -77,6 +80,26 @@ class BiliHandler : IHook() {
         }.onFailure {
             logE("hookAd", it)
         }
+    }
+
+    private fun hookNewShare(creator: ObfsTableCreator) {
+        if (findClassOrNull("kntr.common.share.core.ShareEngine") == null) return
+        runCatching {
+            val share = BiliNewShare(classLoader, biliNewShareMembers(creator))
+            hooks += share.contentProvider.hookAfter { param ->
+                if (param.throwable != null) return@hookAfter
+                runCatching {
+                    val content = share.localContent(param.thisObject, param.args[0]!!, param.result)
+                    if (content !== param.result) param.result = content
+                }.onFailure { logE("bili local share content", it) }
+            }
+            hooks += share.engine.hookBefore { param ->
+                runCatching {
+                    if (share.useLocalCopy(param.args)) logD("bili copy original link without share fetch")
+                }.onFailure { logE("bili local share fetch", it) }
+            }
+            logD("bili new share local copy installed: ${share.engine}")
+        }.onFailure { logE("hookNewShare", it) }
     }
 
     private fun hookPauseAd(creator: ObfsTableCreator) {
@@ -191,6 +214,7 @@ class BiliHandler : IHook() {
     override fun onHook() {
         ObfsTableCreator("bili", 2, appInfo = loadPackageParam.appInfo).use { creator ->
             hookShare(creator)
+            hookNewShare(creator)
             hookAd(creator)
             hookPauseAd(creator)
             hookFreeDataGuide(creator)

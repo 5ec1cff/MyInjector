@@ -8,6 +8,26 @@ import org.luckypray.dexkit.DexKitBridge
 /** 可选的真实 APK 回归检查；样本不随仓库分发，环境变量见 docs/bilibili-compatibility.md。 */
 class BiliApkCompatibilityTest {
     @Test
+    fun locatesNewShareIn919() {
+        val apk = System.getenv("BILI_NEW_SHARE_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires the 9.19.0 APK and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "engine" to "Lkntr/common/share/core/ShareEngine;->a(Lwwe;Luwe;ZLkntr/common/share/core/model/ShareLocalContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+                "contentProvider" to "Lj162;->a(Lwwe;)Luwe;",
+                "providerField" to "Lj162;->a:Lq162;",
+                "findFactory" to "Lq162;->a(Lwwe;)Lkotlin/jvm/functions/Function0;",
+                "baseInfoTitle" to "La062;->a:Ljava/lang/String;",
+                "baseInfoContent" to "La062;->b:Ljava/lang/String;",
+                "baseInfoLink" to "La062;->c:Ljava/lang/String;",
+                "copyText" to "Ldr10;->g:Ljava/lang/String;",
+            ), locateBiliNewShare(bridge).mapValues { it.value.descriptor })
+        }
+    }
+
+    @Test
     fun locatesBothPlayerImplementationsIn917() {
         val apk = System.getenv("BILI_917_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")
