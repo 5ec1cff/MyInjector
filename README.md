@@ -38,6 +38,7 @@ android
 - 允许移除某些 miui 锁定的 intent
 - <a id="noswipetokill"></a>（小米）划卡不杀最近任务中上锁应用或电量管控无限制应用
 - 绕过 MIUI 低版本对 pm compile 命令的限制，允许通过命令主动触发 AOT 编译
+- MIUI 多开修复：允许 shell 和小米推送按指定用户打开应用；关闭时恢复公共 action 列表，并保留系统原有白名单。安装更新后需对系统框架执行热更新或重启设备
 - 修复 HyperOS 下快捷方式 App （如 Anywhere）拉起其他 App 后阻止该 App 拉起自身 Activity 的问题
 - 修复 HyperOS4 下的省电策略属于智能省电的应用无法被 GMS FCM 拉起的问题
 - 其他功能详见设置

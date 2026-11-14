@@ -167,33 +167,22 @@ class SystemServerHandler : IHook() {
         logE("hookFixSync: ", it)
     }
 
-    @Suppress("UNCHECKED_CAST")
+    private var xSpaceWhitelist: XSpaceWhitelist? = null
+
     private fun setXSpace(enabled: Boolean) {
+        if (!enabled && xSpaceWhitelist == null) return
         runCatching {
-            val classXSpaceManager = findClassOrNull(
-                "com.miui.server.xspace.XSpaceManagerServiceImpl"
-            ) ?: return
-            classXSpaceManager.getObjSAs<MutableList<String>?>(
-                "sCrossUserCallingPackagesWhiteList"
-            )?.run {
-                if (enabled) {
-                    add("com.android.shell")
-                    add("com.xiaomi.xmsf")
-                    logI("add required packages to whitelist")
-                } else {
-                    remove("com.android.shell")
-                    remove("com.xiaomi.xmsf")
-                    logI("remove required packages to whitelist")
-                }
+            val whitelist = xSpaceWhitelist ?: run {
+                val manager = findClassOrNull(
+                    "com.miui.server.xspace.XSpaceManagerServiceImpl"
+                ) ?: return
+                XSpaceWhitelist(
+                    manager.getObjSAs("sCrossUserCallingPackagesWhiteList"),
+                    manager.getObjSAs("sPublicActionList"),
+                ).also { xSpaceWhitelist = it }
             }
-            if (enabled) {
-                classXSpaceManager.getObjSAs<MutableList<String>?>(
-                    "sPublicActionList"
-                )?.run {
-                    clear()
-                    logI("clear publicActionList")
-                }
-            }
+            whitelist.setEnabled(enabled)
+            logI("setXSpace $enabled")
         }.onFailure {
             logE("setXSpace $enabled", it)
         }
