@@ -18,6 +18,8 @@ import io.github.a13e300.myinjector.bili.BiliCommentLink
 import io.github.a13e300.myinjector.bili.BiliCommentRoute
 import io.github.a13e300.myinjector.bili.BiliSubtitles
 import io.github.a13e300.myinjector.bili.BiliSubtitleToolbar
+import io.github.a13e300.myinjector.bili.BiliCover
+import io.github.a13e300.myinjector.bili.biliCoverMembers
 import io.github.a13e300.myinjector.bili.biliCommentLinkMembers
 import io.github.a13e300.myinjector.bili.biliCommentRouteMembers
 import io.github.a13e300.myinjector.bili.biliSubtitleMembers
@@ -153,7 +155,11 @@ class BiliHandler : IHook() {
         runCatching {
             val members = biliSubtitleMembers(creator)
             val subtitles = BiliSubtitles(classLoader, members)
-            hooks += BiliSubtitleToolbar(classLoader, members, subtitles).install()
+            val cover = BiliCover(classLoader, biliCoverMembers(creator), members.getValue("toolbarContainer"))
+            hooks += cover.onCreate.hookAfter { param ->
+                if (param.throwable == null) cover.onCreated(param.thisObject as android.app.Activity)
+            }
+            hooks += BiliSubtitleToolbar(classLoader, members, subtitles, cover).install()
             hooks += subtitles.subtitleService.hookAllCAfter { param ->
                 if (param.throwable == null) runCatching { subtitles.attach(param.thisObject) }
                     .onFailure { logE("bili subtitle service", it) }

@@ -22,6 +22,7 @@ internal class BiliSubtitleToolbar(
     private val loader: ClassLoader,
     private val members: Map<String, ObfsInfo>,
     private val subtitles: BiliSubtitles,
+    private val cover: BiliCover,
 ) {
     private fun method(key: String) = DexMethod(members.getValue(key).descriptor).getMethodInstance(loader)
     private val group = method("toolbarGroup")
@@ -48,32 +49,58 @@ internal class BiliSubtitleToolbar(
     private val stateFlow = loader.loadClass("kotlinx.coroutines.flow.StateFlowKt").getMethod("MutableStateFlow", Any::class.java)
     private val alpha = loader.loadClass("androidx.compose.ui.draw.AlphaKt")
         .getMethod("alpha", clickable.returnType, Float::class.javaPrimitiveType)
-    private data class Action(val toolbar: WeakReference<Any>, val menu: BiliSubtitles.Menu)
+    private data class Action(val toolbar: WeakReference<Any>, val menu: BiliSubtitles.Menu, val enabled: Boolean, val coverUrl: String? = null)
     private data class Group(val toolbar: Any, var added: Boolean = false)
     private val scope = ThreadLocal<Group>()
     private val disabled = ThreadLocal<Boolean>()
     private val actions = Collections.synchronizedMap(WeakHashMap<Any, Action>())
     private val items = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
     private var iconPath: String? = null
+    private var coverIconPath: String? = null
 
     @Synchronized
-    private fun icon(activity: Activity): String {
-        iconPath?.let { return it }
-        val file = activity.cacheDir.resolve("myinjector_subtitle_icon.png")
+    private fun icon(activity: Activity, isCover: Boolean = false): String {
+        (if (isCover) coverIconPath else iconPath)?.let { return it }
+        val file = activity.cacheDir.resolve(if (isCover) "myinjector_cover_icon.png" else "myinjector_subtitle_icon.png")
         val bitmap = Bitmap.createBitmap(48, 48, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             textSize = 26f
             textAlign = Paint.Align.CENTER
         }
-        Canvas(bitmap).drawText("CC", 24f, 33f, paint)
+        val canvas = Canvas(bitmap)
+        if (isCover) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 3f
+            canvas.drawRoundRect(6f, 8f, 42f, 40f, 3f, 3f, paint)
+            canvas.drawLine(7f, 32f, 20f, 20f, paint)
+            canvas.drawLine(20f, 20f, 40f, 38f, paint)
+            paint.style = Paint.Style.FILL
+            canvas.drawCircle(33f, 17f, 4f, paint)
+        } else {
+            canvas.drawText("CC", 24f, 33f, paint)
+        }
         try {
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         } finally {
             bitmap.recycle()
         }
         // 宿主图片加载器接受本地路径，不支持 data URL。
-        return file.absolutePath.also { iconPath = it }
+        return file.absolutePath.also { if (isCover) coverIconPath = it else iconPath = it }
+    }
+
+    private fun item(toolbar: Any, menu: BiliSubtitles.Menu, label: String, enabled: Boolean, isCover: Boolean = false, coverUrl: String? = null): Any {
+        // 宿主把点击字段收窄为具体 lambda 类，独立实例用作标记，在 invoke 前处理。
+        val action = clickType.declaredConstructors.single().newInstance(*arrayOfNulls<Any>(6))
+        val badge = itemConstructor.parameterTypes[2].declaredConstructors.single().let { constructor ->
+            constructor.newInstance(*constructor.parameterTypes.map { if (it == String::class.java) "" else 0 }.toTypedArray<Any>())
+        }
+        val expose = itemConstructor.parameterTypes[6].getConstructor(function0).newInstance(noAction)
+        val item = itemConstructor.newInstance(icon(menu.activity.get()!!, isCover), false,
+            badge, stateFlow.invoke(null, label), action, noAction, expose)
+        actions[action] = Action(WeakReference(toolbar), menu, enabled, coverUrl)
+        items[item] = !enabled
+        return item
     }
 
     fun install() = buildList {
@@ -82,28 +109,25 @@ internal class BiliSubtitleToolbar(
             val current = scope.get() ?: return@hookAllCBefore
             if (current.added) return@hookAllCBefore
             val menu = subtitles.toolbarSnapshot(current.toolbar)
-            // 宿主把点击字段收窄为具体 lambda 类，独立实例用作标记，在 invoke 前处理。
-            val action = clickType.declaredConstructors.single().newInstance(*arrayOfNulls<Any>(6))
-            val badge = itemConstructor.parameterTypes[2].declaredConstructors.single().let { constructor ->
-                constructor.newInstance(*constructor.parameterTypes.map { if (it == String::class.java) "" else 0 }.toTypedArray<Any>())
-            }
-            val expose = itemConstructor.parameterTypes[6].getConstructor(function0).newInstance(noAction)
-            val item = itemConstructor.newInstance(icon(menu.activity.get()!!), false, badge, stateFlow.invoke(null, menu.label), action, noAction, expose)
-            actions[action] = Action(WeakReference(current.toolbar), menu)
-            items[item] = menu.tracks.isEmpty()
-            param.args[0] = listOf(item) + (param.args[0] as List<*>)
+            val subtitleItem = item(current.toolbar, menu, menu.label, menu.tracks.isNotEmpty())
+            val coverUrl = cover.snapshot(current.toolbar)
+            val coverItem = item(current.toolbar, menu, "查看封面", coverUrl != null, true, coverUrl)
+            param.args[0] = listOf(subtitleItem, coverItem) + (param.args[0] as List<*>)
             current.added = true
             logI("bili subtitle toolbar inserted: tracks=${menu.tracks.size}, label=${menu.label}")
         })
         add(click.hookBefore { param ->
             val action = actions[param.thisObject] ?: return@hookBefore
             val activity = action.menu.activity.get()
-            if (action.menu.tracks.isNotEmpty() && activity != null) {
+            if (action.enabled && activity != null) {
                 val toolbar = action.toolbar.get()
                 val close = toolbar?.javaClass?.declaredFields?.single { it.type == function0 }
                     ?.apply { isAccessible = true }?.get(toolbar)
                 if (close != null) function0.getMethod("invoke").invoke(close)
-                activity.window.decorView.post { showBiliSubtitleDialog(activity, action.menu.tracks) }
+                activity.window.decorView.post {
+                    if (action.coverUrl != null) cover.show(activity, action.coverUrl)
+                    else showBiliSubtitleDialog(activity, action.menu.tracks)
+                }
             }
             param.result = unit
         })
