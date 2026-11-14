@@ -8,6 +8,42 @@ import org.luckypray.dexkit.DexKitBridge
 /** 可选的真实 APK 回归检查；样本不随仓库分发，环境变量见 docs/bilibili-compatibility.md。 */
 class BiliApkCompatibilityTest {
     @Test
+    fun locatesSubtitlesIn919() {
+        val apk = System.getenv("BILI_NEW_SHARE_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires the 9.19.0 APK and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            val members = locateBiliSubtitles(bridge)
+            assertEquals("c", members.getValue("menu").memberName)
+            assertEquals("a", members.getValue("click").memberName)
+            assertEquals("e", members.getValue("dismiss").memberName)
+            assertEquals("Lyud2;->a:Z", members.getValue("loading").descriptor)
+            assertEquals("Lyud2;->n:Ljava/lang/Throwable;", members.getValue("error").descriptor)
+            assertEquals("Lcom/bilibili/ship/theseus2/united/page/subtitle/TheseusSubtitleService;->d:Luqr1;",
+                members.getValue("serviceMedia").descriptor)
+            assertEquals("Lo062\$a;->a:Ljava/lang/String;", members.getValue("target").descriptor)
+            assertEquals("e762", members.getValue("content").className)
+            assertEquals("clickable-O2vRcR0\$default", members.getValue("clickable").memberName)
+            assertEquals("Lt062;->a(Lo062;Ljava/util/List;)Lo062;", members.getValue("filter").descriptor)
+            assertEquals("Lo062;->a:Ljava/util/List;", members.getValue("channelItems").descriptor)
+            assertEquals("Lcom/bilibili/ship/theseus/united/page/toolbar/MenuService;->b:Landroidx/fragment/app/FragmentActivity;",
+                members.getValue("toolbarContext").descriptor)
+            assertEquals("Lcom/bilibili/ship/theseus/united/page/toolbar/MenuService;->n:Ltv/danmaku/biliplayerv2/PlayerContainer;",
+                members.getValue("toolbarContainer").descriptor)
+            assertEquals("Lcom/bilibili/ship/theseus/united/page/toolbar/MenuService\$createSettingGroup\$2;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;",
+                members.getValue("toolbarGroup").descriptor)
+            assertEquals("Lcom/bilibili/ship/theseus/united/page/toolbar/MenuService\$createSettingGroup\$2;->this$0:Lcom/bilibili/ship/theseus/united/page/toolbar/MenuService;",
+                members.getValue("toolbarGroupOwner").descriptor)
+            assertEquals("Lcom/bilibili/playerbizcommonv2/widget/setting/channel/VideoSettingButtonComponent;->a(Lgyo2;Landroidx/compose/runtime/Composer;I)V",
+                members.getValue("toolbarItem").descriptor)
+            assertEquals("clickableNoInteraction\$default", members.getValue("toolbarClickable").memberName)
+            assertEquals("Ltv/danmaku/biliplayerv2/service/interact/biz/InteractLayerService;->g:Ltv/danmaku/biliplayerv2/PlayerContainer;",
+                members.getValue("legacyContainer").descriptor)
+        }
+    }
+
+    @Test
     fun locatesCommentRoutesIn919() {
         val apk = System.getenv("BILI_NEW_SHARE_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")

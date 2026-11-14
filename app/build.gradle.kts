@@ -190,6 +190,7 @@ dependencies {
     implementation(libs.savedstate)
     implementation(libs.navigation3.ui)
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20231013")
 
     // prebuilt fork of dexkit
     // https://github.com/5ec1cff/DexKit/commit/494cf312b09ae2f4e2f6924e7d2b12e224a3ff15

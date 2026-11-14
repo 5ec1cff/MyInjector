@@ -16,8 +16,11 @@ import io.github.a13e300.myinjector.arch.hookConstant
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.bili.BiliCommentLink
 import io.github.a13e300.myinjector.bili.BiliCommentRoute
+import io.github.a13e300.myinjector.bili.BiliSubtitles
+import io.github.a13e300.myinjector.bili.BiliSubtitleToolbar
 import io.github.a13e300.myinjector.bili.biliCommentLinkMembers
 import io.github.a13e300.myinjector.bili.biliCommentRouteMembers
+import io.github.a13e300.myinjector.bili.biliSubtitleMembers
 import io.github.a13e300.myinjector.bili.BiliNewShare
 import io.github.a13e300.myinjector.bili.biliNewShareMembers
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
@@ -145,6 +148,64 @@ class BiliHandler : IHook() {
         }.onFailure { logE("hookCommentLinkInVideo", it) }
     }
 
+    private fun hookViewSubtitles(creator: ObfsTableCreator) {
+        if (findClassOrNull("com.bilibili.ship.theseus2.united.page.subtitle.TheseusSubtitleService") == null) return
+        runCatching {
+            val members = biliSubtitleMembers(creator)
+            val subtitles = BiliSubtitles(classLoader, members)
+            hooks += BiliSubtitleToolbar(classLoader, members, subtitles).install()
+            hooks += subtitles.subtitleService.hookAllCAfter { param ->
+                if (param.throwable == null) runCatching { subtitles.attach(param.thisObject) }
+                    .onFailure { logE("bili subtitle service", it) }
+            }
+            val sharingBundle = findClass("tv.danmaku.biliplayerv2.PlayerSharingBundle")
+            hooks += subtitles.legacyService.getMethod("onStart", sharingBundle).hookAfter { param ->
+                if (param.throwable == null) runCatching { subtitles.attachLegacy(param.thisObject) }
+                    .onFailure { logE("bili legacy subtitle service", it) }
+            }
+            val legacyReply = findClass("com.bapis.bilibili.subtitle.SubtitleViewReply")
+            hooks += subtitles.legacyService.getMethod("setSubtitleReply", legacyReply, Boolean::class.javaPrimitiveType)
+                .hookAfter { param ->
+                    if (param.throwable == null) runCatching { subtitles.attachLegacy(param.thisObject) }
+                        .onFailure { logE("bili legacy subtitle reply", it) }
+                }
+            subtitles.menuMethods.forEach { menu ->
+                hooks += menu.hookAfter { param ->
+                    if (param.throwable != null) return@hookAfter
+                    val callback = subtitles.menuCallback(param.thisObject) ?: return@hookAfter
+                    runCatching {
+                        @Suppress("UNCHECKED_CAST")
+                        val groups = param.result as List<List<Any>>
+                        param.result = subtitles.insert(callback, groups)
+                    }.onFailure { logE("bili subtitle menu", it) }
+                }
+            }
+            subtitles.clickMethods.forEach { click ->
+                hooks += click.hookBefore { param ->
+                    if (subtitles.onClick(param.thisObject, param.args[0]!!)) param.result = true
+                }
+            }
+            hooks += subtitles.filter.hookBefore { param ->
+                runCatching { subtitles.allowChannels(param.args) }.onFailure { logE("bili subtitle channel", it) }
+            }
+            subtitles.dismissMethods.forEach { dismiss ->
+                hooks += dismiss.hookAfter { param ->
+                    val callback = subtitles.dismissCallback(param.thisObject) ?: return@hookAfter
+                    runCatching { subtitles.onDismiss(callback) }.onFailure { logE("bili subtitle dialog", it) }
+                }
+            }
+            hooks += subtitles.content.hook(before = { param -> subtitles.enterItem(param.args[0]!!) },
+                after = { subtitles.leaveItem() })
+            hooks += subtitles.clickable.hook(before = { param -> subtitles.disableClick(param.args) }, after = { param ->
+                if (param.throwable == null) {
+                    val dimmed = subtitles.dim(param.result)
+                    if (dimmed !== param.result) param.result = dimmed
+                }
+            })
+            logI("bili view subtitles installed: ${subtitles.menuMethods}")
+        }.onFailure { logE("hookViewSubtitles", it) }
+    }
+
     private fun hookPauseAd(creator: ObfsTableCreator) {
         // Disable the pause-ad flow before it requests an ad or starts the countdown.
         runCatching {
@@ -260,6 +321,7 @@ class BiliHandler : IHook() {
             hookNewShare(creator)
             hookCommentLink(creator)
             hookCommentLinkInVideo(creator)
+            hookViewSubtitles(creator)
             hookAd(creator)
             hookPauseAd(creator)
             hookFreeDataGuide(creator)
