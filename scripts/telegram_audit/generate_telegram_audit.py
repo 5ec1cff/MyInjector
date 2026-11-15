@@ -69,6 +69,7 @@ for name in ['TelegramFactoryFields', 'SearchStateDeobf', 'StickerStreamDeobf', 
 for name, func in [('OpenLinkDialog', 'findOpenLinkDialog'), ('EmojiStickerMenu', 'findEmojiStickerMenu'), ('CopyPrivateChatLink', 'findCopyPrivateChatLink'), ('ShowDCInProfile', 'findProfileDataCenter'), ('HistoricalNewsOption', 'findHistoricalNews'), ('RepeatMessage', 'findRepeatMessage')]:
     out.append(function(source(name), func))
 out.append(function(source('EmojiStickerMenu'), 'findEmojiStickerMenuDynamic'))
+out.append(function(source('FixAccessibilityNodeClassName'), 'findAccessibilityNodeProviders'))
 
 classes = ['Settings', 'ContactPermission', 'AutoCheckDeleteMessageOption', 'MutualContact', 'DisableVoiceOrCameraButton', 'DefaultSearchTab', 'HidePhoneNumber', 'AutoUncheckSharePhoneNumber', 'AlwaysShowStorySaveIcon', 'ShowMsgId', 'ProhibitChannelSwitching', 'FixHasAppToOpen', 'LongClickMention', 'AntiAntiCopy', 'AvatarPagerScrollToCurrent', 'OpenTgUserLink']
 helpers = {
@@ -143,6 +144,7 @@ for name, call in [
     ('OpenLinkDialog', 'findOpenLinkDialog(bridge)'),
     ('EmojiStickerMenu', 'findEmojiStickerMenu(bridge, base.className)'),
     ('RefreshStickerPacks', 'findStickerPackRefresh(bridge).also { auditStickerPackRefresh(bridge, it) }'),
+    ('FixAccessibilityNodeClassName', 'findAccessibilityNodeProviders(bridge)'),
     ('CopyPrivateChatLink', 'findCopyPrivateChatLink(bridge)'),
     ('SaveSecretImage', 'findSaveSecretImage(bridge, base.className)'),
     ('AddSubItemChannel', 'findProfileMenu(bridge)'),

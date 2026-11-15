@@ -114,6 +114,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
             "fixHasAppToOpen" ->
                 settings.fixHasAppToOpen = v
 
+            "fixAccessibilityNodeClassName" ->
+                settings.fixAccessibilityNodeClassName = v
+
             "longClickMention" ->
                 settings.longClickMention = v
 
@@ -343,6 +346,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
 
             group("其他") {
                 toggle(
+                    "修复无障碍节点类名",
+                    "fixAccessibilityNodeClassName",
+                    "默认开启，为缺少类名的节点补上类名，避免 fooView 取词失败；即时生效"
+                )
+                toggle(
                     "打开关联频道",
                     "addSubItemChannel",
                     "在关联讨论群的资料页菜单增加「打开频道」；重新打开资料页生效"
@@ -411,6 +419,11 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
     override fun loadSetting(setting: SettingItem) {
 
         when (setting.key) {
+            "fixAccessibilityNodeClassName" -> (setting as ToggleSetting).isChecked =
+                TelegramHandler.settings.run {
+                    !hasFixAccessibilityNodeClassName() || fixAccessibilityNodeClassName
+                }
+
             "enabled" -> (setting as ToggleSetting).isChecked =
                 !TelegramHandler.settings.disabled
 

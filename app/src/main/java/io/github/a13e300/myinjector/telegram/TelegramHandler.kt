@@ -69,6 +69,7 @@ object TelegramHandler : DynHookManager<TelegramSettings>() {
         subHook(AddSubItemChannel())
         subHook(AddInfoContainer())
         subHook(StickerLoadGuard())
+        subHook(FixAccessibilityNodeClassName())
         subHook(OpenTgUserLink())
         subHook(FixHasAppToOpen())
         subHook(LongClickMention())

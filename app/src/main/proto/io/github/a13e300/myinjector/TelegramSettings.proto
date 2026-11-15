@@ -49,4 +49,6 @@ message TelegramSettings {
   optional bool addSubItemChannel = 40;
   optional bool addInfoContainer = 41;
   optional bool refreshStickerPacks = 42;
+  // 未设置时默认启用，保留旧版本行为。
+  optional bool fixAccessibilityNodeClassName = 43;
 }

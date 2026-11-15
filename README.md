@@ -102,6 +102,7 @@ fork.risin42.nagramx
 - 假装拥有请求安装权限（适用于你有别的安装器但是不想给请求安装权限的场景）
 - 无需安装 Google 地图即可使用定位功能（为啥非要安？）
 - 修复打开外部链接时可能会触发两次打开（后一次使用 chrome custom tab）的问题
+- 为类名为空的无障碍节点补上 `android.view.View`，避免回复引用等节点使 fooView 取词失败，见[说明](docs/telegram-accessibility-class-name.md)
 - 支持导入表情名字到 tg emoji 的映射（长按输入框的 emoji 按钮以导入），当输入框粘贴文本（必须通过长按菜单的粘贴）的时候替换为
   tg 表情（可用于映射 b 站等平台的表情文本），具体说明参见[文档](tg-custom-emoji-mapping.md)
 - 查看贴纸包 / emoji 包作者（如果能访问则打开 profile ，否则复制用户 id）
