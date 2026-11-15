@@ -1,11 +1,14 @@
 package io.github.a13e300.myinjector
 
 import android.os.Process
+import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
 import io.github.a13e300.myinjector.arch.callS
 import io.github.a13e300.myinjector.arch.createObfsTable
 import io.github.a13e300.myinjector.arch.createPackageResources
+import io.github.a13e300.myinjector.arch.hookAfter
 import io.github.a13e300.myinjector.arch.hookAllBefore
 import io.github.a13e300.myinjector.arch.hookAllReplace
 import io.github.a13e300.myinjector.arch.toObfsInfo
@@ -28,8 +31,19 @@ class FvXposedHandler : IHook() {
             logE("failed to bypass", t)
         }
 
-        if (loadPackageParam.processName.endsWith(":fv"))
+        if (loadPackageParam.processName.endsWith(":fv")) {
+            hookAccessibilityNodeClassName()
             hookNoTipNotificationPerm()
+        }
+    }
+
+    private fun hookAccessibilityNodeClassName() {
+        AccessibilityNodeInfo::class.java.getDeclaredMethod("getClassName").hookAfter { param ->
+            // fooView 会直接对类名调用 toString，只补正常返回的空值。
+            if (param.throwable == null && param.result == null) {
+                param.result = View::class.java.name
+            }
+        }
     }
 
     // 阻止 FV 发现系统的悬浮窗通知时弹出授权提示
