@@ -16,8 +16,6 @@ import android.widget.Toast
 import io.github.a13e300.myinjector.MiuiHomeConfig
 import io.github.a13e300.myinjector.arch.IHook
 import io.github.a13e300.myinjector.arch.call
-import io.github.a13e300.myinjector.arch.callS
-import io.github.a13e300.myinjector.arch.getObjAsN
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.logE
 import io.github.a13e300.myinjector.logI
@@ -113,35 +111,20 @@ class MiuiHomeRuntime : IHook() {
     }.getOrDefault(false)
 
     private data class Request(
-        val pid: Int, val operation: Int, val generation: Long, val taskId: Int,
+        val pid: Int, val operation: Int, val generation: Long,
         val userId: Int, val packageName: String, val durationMs: Long
     )
 
     private fun readRequest(intent: Intent, pid: Int): Request? = runCatching {
         val op = intent.getIntExtra("operation", 0)
         val gen = intent.getLongExtra("generation", 0)
-        val task = intent.getIntExtra("taskId", -1)
         val user = intent.getIntExtra("userId", -1)
         val pkg = intent.getStringExtra("package") ?: return null
         val duration = intent.getLongExtra("durationMs", 0)
-        if (op !in 1..3 || gen <= 0 || task < 0 || user < 0 ||
+        if (op !in 1..3 || gen <= 0 || user < 0 ||
             pkg.length !in 1..255 || !pkg.matches(Regex("[A-Za-z0-9_.]+"))) return null
-        Request(pid, op, gen, task, user, pkg, duration)
+        Request(pid, op, gen, user, pkg, duration)
     }.getOrNull()
-
-    private fun isCurrentTask(request: Request): Boolean {
-        val atm = findClass("android.app.IActivityTaskManager\$Stub")
-            .callS("asInterface", ServiceManager.getService("activity_task")) ?: return false
-        val tasks = atm.call("getRecentTasks", 200, 1, request.userId)
-            ?.call("getList") as? List<*> ?: return false
-        return tasks.any { task ->
-            task != null && task.getObjAsN<Int>("taskId") == request.taskId &&
-                (task.getObjAsN<Int>("userId") ?: request.userId) == request.userId &&
-                listOf(task.getObjAsN<ComponentName>("topActivity"),
-                    task.getObjAsN<ComponentName>("baseActivity"))
-                    .any { it?.packageName == request.packageName }
-        }
-    }
 
     private fun execute(request: Request) = runCatching {
         // Handler execution has system_server's identity, not the launcher's Binder identity.
@@ -160,8 +143,8 @@ class MiuiHomeRuntime : IHook() {
                 Toast.makeText(systemContext, "killed ${request.packageName}", Toast.LENGTH_SHORT).show()
             }
             2 -> {
-                if (!config.openAospSettings || request.durationMs < 500 ||
-                    !isCurrentTask(request)) return@runCatching
+                if (!config.openAospSettings || request.durationMs < 500) return@runCatching
+                // 重启后恢复的最近任务也能打开应用信息，不要求任务仍有运行实例。
                 val user = androidUser(request.userId)
                 val context = systemContext.call("createContextAsUser", user, 0) as Context
                 TaskStackBuilder.create(context).addNextIntentWithParentStack(
@@ -172,7 +155,7 @@ class MiuiHomeRuntime : IHook() {
                 ).startActivities()
             }
             3 -> {
-                if (config.dragKill && request.durationMs >= 700 && isCurrentTask(request))
+                if (config.dragKill && request.durationMs >= 700)
                     Toast.makeText(systemContext, "停止进程", Toast.LENGTH_SHORT).show()
             }
         }

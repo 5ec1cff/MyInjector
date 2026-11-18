@@ -20,9 +20,11 @@ SHA 白名单放行。支持的 Dart VM ABI、入口参数和 Arc/Mutex 布局�
 - **拖动强停**：native 观察 Dart 的拖动开始、纵横向结束、指针取消和真实清理提交。
   松手时冻结时长，达到 700ms 且提交的 taskId、userId、包名均匹配时，请求
   system_server 执行 `forceStopPackage`。取消、换卡和配置变化会撤销标记；
-  不把删除动画计入拖动时间。准备强停时显示“停止进程”Toast，未修改 Flutter 卡片标题。
+  不把删除动画计入拖动时间。准备强停时显示“停止进程”Toast，不查询系统最近任务列表；
+  未修改 Flutter 卡片标题。
 - **长按应用信息**：按住最近任务菜单的信息按钮 500ms，通过 system_server 的
   `TaskStackBuilder` 打开 AOSP `SubSettings / AppInfoDashboardFragment`。
+  使用请求中的包名和用户打开设置，不要求任务仍在运行，重启后恢复的最近任务也可使用。
   短按保留原行为，移动超过阈值或取消指针会撤销长按。只消费该按钮的 void
   `onPressed` 闭包，异步 Dart 方法仍执行原逻辑。
 
@@ -60,7 +62,9 @@ native 拒绝未知协议、非法位和过期版本；worker 切换配置并使
 原 inline/PLT hook 与 madvise guard 不变；不再包含 native 103 头文件或远程订阅代码。
 
 配置握手和强停等上行命令仍通过专用 marker Intent 进入 AMS.preStartProcess。
-system_server 按调用 UID、Android 用户、任务身份及同组配置校验，再交给自己的线程执行。
+system_server 校验调用者是对应 Android 用户的桌面，检查请求参数和同组配置，
+再交给自己的线程执行。上行请求携带操作、手势代次、用户、包名和时长，
+taskId 仅在 native 内部用于任务身份匹配。
 marker 使用不存在的包名，避免桥接失效时变成对普通应用的预启动请求。
 预启动、AOSP 信息页及 Toast 保持原有实现。
 

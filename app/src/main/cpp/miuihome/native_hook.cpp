@@ -334,7 +334,7 @@ void sendCommand(const Event &event) {
     bool ok = addI32(bundle, "operation", event.operation) && addI32(bundle, "protocol", 1);
     if (event.operation != 0)
         ok = ok && addI64(bundle, "generation", int64_t(event.generation)) &&
-             addI32(bundle, "taskId", event.task.id) && addI32(bundle, "userId", event.task.user) &&
+             addI32(bundle, "userId", event.task.user) &&
              addI64(bundle, "durationMs", int64_t(event.duration)) &&
              addString(bundle, "package", event.task.package);
     if (!ok) {
