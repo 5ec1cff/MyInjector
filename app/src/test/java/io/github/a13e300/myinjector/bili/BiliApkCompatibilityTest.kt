@@ -8,6 +8,23 @@ import org.luckypray.dexkit.DexKitBridge
 /** 可选的真实 APK 回归检查；样本不随仓库分发，环境变量见 docs/bilibili-compatibility.md。 */
 class BiliApkCompatibilityTest {
     @Test
+    fun locatesAvHeadlineIn919() {
+        val apk = System.getenv("BILI_NEW_SHARE_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires the 9.19.0 APK and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "render" to "Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/u;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V",
+                "helper" to "Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/u;->c:Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/r;",
+                "aid" to "Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/r;->c()J",
+                "bvid" to "Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/r;->d()Ljava/lang/String;",
+                "item" to "Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/y;-><init>(Ljava/lang/String;Lcom/bilibili/ship/theseus2/ugc/intro/ugcheadline/UgcMetaIcon;Ljava/lang/String;Landroidx/compose/ui/graphics/Color;I)V",
+            ), locateBiliAvHeadline(bridge).mapValues { it.value.descriptor })
+        }
+    }
+
+    @Test
     fun locatesCoverViewerIn919() {
         val apk = System.getenv("BILI_NEW_SHARE_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")

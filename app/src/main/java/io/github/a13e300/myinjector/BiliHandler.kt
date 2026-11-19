@@ -21,6 +21,9 @@ import io.github.a13e300.myinjector.bili.BiliCommentRoute
 import io.github.a13e300.myinjector.bili.BiliSubtitles
 import io.github.a13e300.myinjector.bili.BiliSubtitleToolbar
 import io.github.a13e300.myinjector.bili.BiliCover
+import io.github.a13e300.myinjector.bili.BiliAvHeadline
+import io.github.a13e300.myinjector.bili.biliAvHeadlineMembers
+import io.github.a13e300.myinjector.bili.biliAvSelector
 import io.github.a13e300.myinjector.bili.BiliFeature
 import io.github.a13e300.myinjector.bili.BiliHookConfig
 import io.github.a13e300.myinjector.bili.BiliSettingsDialog
@@ -149,6 +152,30 @@ class BiliHandler : IHook() {
         }.onFailure {
             reportError(BiliFeature.REMOVE_UNDER_PLAYER_AD, "hookAd", it)
         }
+    }
+
+    private fun hookShowAv(creator: ObfsTableCreator) {
+        listOf("com.bilibili.droid.BVCompat", "kntr.base.utils.compat.BVCompat").forEach { name ->
+            runCatching {
+                val selector = biliAvSelector(findClass(name))
+                // 两个参数分别是已格式化的 AV 和 BV，直接选用宿主提供的 AV 文案。
+                hooks += selector.hookBefore { param ->
+                    if (settings.isEnabled(BiliFeature.SHOW_AV)) param.result = param.args[0]
+                }
+                logI("bili AV selector installed: $selector")
+            }.onFailure { reportError(BiliFeature.SHOW_AV, "AV 选择器 ($name)", it) }
+        }
+        runCatching {
+            val headline = BiliAvHeadline(classLoader, biliAvHeadlineMembers(creator))
+            hooks += headline.render.hook(before = { param ->
+                runCatching { headline.scope.enter(param.thisObject, settings.isEnabled(BiliFeature.SHOW_AV)) }
+                    .onFailure { reportError(BiliFeature.SHOW_AV, "读取新版视频 ID", it) }
+            }, after = { headline.scope.leave() })
+            hooks += headline.item.hookBefore { param ->
+                param.args[0] = headline.scope.text(param.args[0])
+            }
+            logI("bili AV headline installed: ${headline.render}")
+        }.onFailure { reportError(BiliFeature.SHOW_AV, "新版标题区显示 AV", it) }
     }
 
     private fun hookNewShare(creator: ObfsTableCreator) {
@@ -422,6 +449,7 @@ class BiliHandler : IHook() {
                 .onFailure { reportError(null, "打开设置", it) }
         }.onFailure { reportError(null, "安装设置入口", it) }
         ObfsTableCreator("bili", 2, appInfo = loadPackageParam.appInfo).use { creator ->
+            hookShowAv(creator)
             hookShare(creator)
             hookNewShare(creator)
             hookForceNewShare(creator)
