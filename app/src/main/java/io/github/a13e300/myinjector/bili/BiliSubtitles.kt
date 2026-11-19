@@ -16,7 +16,11 @@ import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
 
-internal class BiliSubtitles(private val classLoader: ClassLoader, private val members: Map<String, ObfsInfo>) {
+internal class BiliSubtitles(
+    private val classLoader: ClassLoader,
+    private val members: Map<String, ObfsInfo>,
+    private val onError: (Throwable) -> Unit,
+) {
     private fun field(key: String) = DexField(members.getValue(key).descriptor)
         .getFieldInstance(classLoader).apply { isAccessible = true }
     private fun method(key: String) = DexMethod(members.getValue(key).descriptor)
@@ -145,7 +149,9 @@ internal class BiliSubtitles(private val classLoader: ClassLoader, private val m
     fun onDismiss(callback: Any) {
         val snapshot = pending.remove(callback) ?: return
         snapshot.activity.get()?.let { activity ->
-            activity.runOnUiThread { showBiliSubtitleDialog(activity, snapshot.tracks) }
+            activity.runOnUiThread {
+                runCatching { showBiliSubtitleDialog(activity, snapshot.tracks) }.onFailure(onError)
+            }
         }
     }
 

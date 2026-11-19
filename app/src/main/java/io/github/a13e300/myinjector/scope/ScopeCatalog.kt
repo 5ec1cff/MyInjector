@@ -12,7 +12,7 @@ object ScopeCatalog {
     val components = mapOf("system" to "system", "systemui" to "com.android.systemui",
         "miuihome" to "com.miui.home", "market" to "com.xiaomi.market")
     val settingsApps = setOf(
-        "com.xingin.xhs", "com.kiwibrowser.browser", "com.android.chrome",
+        "com.xingin.xhs", "com.kiwibrowser.browser", "com.android.chrome", "tv.danmaku.bili",
         "org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.messenger.beta",
         "org.telegram.plus", "com.exteragram.messenger", "com.radolyn.ayugram",
         "uz.unnarsx.cherrygram", "xyz.nextalone.nagram", "nu.gpu.nagram",

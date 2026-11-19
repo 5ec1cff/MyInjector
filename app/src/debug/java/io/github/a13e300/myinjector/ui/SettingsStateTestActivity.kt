@@ -43,6 +43,7 @@ class SettingsStateTestActivity : ComponentActivity() {
                         val applications = if (intent.getBooleanExtra("scope_test", false)) listOf(
                             ScopeApplication("com.termux", "Termux", false),
                             ScopeApplication("com.android.chrome", "Chrome", false),
+                            ScopeApplication("tv.danmaku.bili", "哔哩哔哩", false),
                             ScopeApplication("com.android.settings", "A SysApp Settings", true),
                             ScopeApplication("org.telegram.messenger", "Z SysApp Telegram", true),
                         ) else emptyList()
@@ -53,7 +54,10 @@ class SettingsStateTestActivity : ComponentActivity() {
                             AppSettingsDestination(it, ImageBitmap(48, 48))
                         }
                     },
-                    openApp = { scope = scope.copy(message = "已打开应用内设置") },
+                    openApp = { pkg ->
+                        prefs.edit().putString("lastOpenedSettingsPackage", pkg).apply()
+                        scope = scope.copy(message = "已打开应用内设置")
+                    },
                     onToggle = { _, _ -> },
                     onEdit = {},
                     onAction = {},

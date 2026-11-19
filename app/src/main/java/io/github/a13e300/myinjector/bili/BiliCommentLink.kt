@@ -30,6 +30,7 @@ internal fun biliCommentUrl(oid: Long, type: Int, commentId: Long, rootCommentId
 internal class BiliCommentLink(
     private val classLoader: ClassLoader,
     private val members: Map<String, ObfsInfo>,
+    private val onError: (Throwable) -> Unit,
 ) {
     private fun field(key: String) = DexField(members.getValue(key).descriptor)
         .getFieldInstance(classLoader).apply { isAccessible = true }
@@ -53,10 +54,12 @@ internal class BiliCommentLink(
     private data class Menu(val url: String, val dismiss: Any)
     private val menus = ThreadLocal.withInitial { mutableListOf<Menu?>() }
 
-    fun enter(args: Array<Any?>) {
+    fun enter(args: Array<Any?>, enabled: Boolean = true) {
         // Compose 子菜单也可能单独重组，仅在评论菜单调用范围内插入新项。
         val stack = menus.get()!!
         stack.add(null)
+        // 关闭时也保留空栈帧，让 after 清理本次调用，而不是外层评论。
+        if (!enabled) return
         val model = args[0]!!
         val url = biliCommentUrl(
             (oid.get(model) as? Long) ?: 0,
@@ -82,11 +85,13 @@ internal class BiliCommentLink(
         val action = Proxy.newProxyInstance(function0.classLoader, arrayOf(function0)) { proxy, method, values ->
             when (method.name) {
                 "invoke" -> {
-                    val context = currentApplication()
-                    context.getSystemService(ClipboardManager::class.java)
-                        .setPrimaryClip(ClipData.newPlainText(COPY_LINK, menu.url))
-                    invoke.invoke(menu.dismiss)
-                    Toast.makeText(context, "已复制评论链接", Toast.LENGTH_SHORT).show()
+                    runCatching {
+                        val context = currentApplication()
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newPlainText(COPY_LINK, menu.url))
+                        invoke.invoke(menu.dismiss)
+                        Toast.makeText(context, "已复制评论链接", Toast.LENGTH_SHORT).show()
+                    }.onFailure(onError)
                     unit
                 }
                 "toString" -> COPY_LINK

@@ -11,6 +11,9 @@ class ScopeCatalogTest {
         assertEquals(listOf("system", "com.android.systemui", "com.miui.home", "com.termux", "com.android.chrome"), apps)
         assertFalse("com.termux" in ScopeCatalog.settingsApps)
         assertTrue("com.android.chrome" in ScopeCatalog.settingsApps)
+        val bili = ScopeApplication("tv.danmaku.bili", "哔哩哔哩", false)
+        assertTrue(bili.hasSettings)
+        assertNull(bili.sectionKey)
         assertEquals("system", ScopeCatalog.components["system"])
     }
     @Test fun packagedListIncludesEverySettingsEntryAndNewTelegramVariants() {

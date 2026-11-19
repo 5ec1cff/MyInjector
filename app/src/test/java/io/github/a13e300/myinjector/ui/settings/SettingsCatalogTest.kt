@@ -10,7 +10,7 @@ class SettingsCatalogTest {
             "checkHotUpdate", "noWakePath", "noMiuiIntent", "clipboardWhitelist", "clipboardWhitelistPackages",
             "fixSync", "xSpace", "forceNewTask", "forceNewTaskRules", "forceNewTaskDebug", "overrideStatusBar",
             "overrideStatusBarRules", "noSwipeToKillLockedProcess", "noSwipeToKillNoRestrictProcess",
-            "bypassShellDexOptRestriction", "fixHyperOSAvoidMoveToFront", "showNotificationDetail",
+            "bypassShellDexOptRestriction", "fixHyperOSAvoidMoveToFront", "fixHyperOS4GreezeFCMRestrict", "showNotificationDetail",
             "noDndNotification", "alwaysExpandNotification", "fixWhiteSplash", "loopNotificationControlCenter",
             "topPullSwitchNotificationControlCenter",
             "marketRemoveSplashAd",

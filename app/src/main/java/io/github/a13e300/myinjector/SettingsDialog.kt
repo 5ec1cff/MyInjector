@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.res.Resources
 import android.os.Bundle
 import io.github.a13e300.myinjector.arch.*
+import io.github.a13e300.myinjector.bridge.Unhook
 import io.github.a13e300.myinjector.ui.ModernInjectedDialogAction
 import io.github.a13e300.myinjector.ui.InjectedDialogContext
 import io.github.a13e300.myinjector.ui.modernInjectedMessageView
@@ -62,7 +63,10 @@ abstract class SettingDialog(val activityCtx: Context) {
     }
 }
 
-fun IHook.addSettingsIntentInterceptor(callback: (activity: Activity) -> Unit) = runCatching {
+fun IHook.addSettingsIntentInterceptor(
+    onHookRegistered: (Unhook) -> Unit = {},
+    callback: (activity: Activity) -> Unit,
+) = runCatching {
     Activity::class.java.hookAllAfter("performNewIntent") { param ->
         val activity = param.thisObject as Activity
         val intent = param.args[0] as Intent
@@ -70,7 +74,7 @@ fun IHook.addSettingsIntentInterceptor(callback: (activity: Activity) -> Unit) =
         if (intent.action == "io.github.a13e300.myinjector.SHOW_SETTINGS" || intent.hasCategory("io.github.a13e300.myinjector.SHOW_SETTINGS")) {
             callback(activity)
         }
-    }
+    }.forEach(onHookRegistered)
 
     Activity::class.java.hookAfter("performCreate", Bundle::class.java) { param ->
         val activity = param.thisObject as Activity
@@ -79,7 +83,7 @@ fun IHook.addSettingsIntentInterceptor(callback: (activity: Activity) -> Unit) =
         if (intent.action == "io.github.a13e300.myinjector.SHOW_SETTINGS" || intent.hasCategory("io.github.a13e300.myinjector.SHOW_SETTINGS")) {
             callback(activity)
         }
-    }
+    }.also(onHookRegistered)
 
     Instrumentation::class.java.deoptimize("callActivityOnCreate")
     Instrumentation::class.java.deoptimize("callActivityOnNewIntent")

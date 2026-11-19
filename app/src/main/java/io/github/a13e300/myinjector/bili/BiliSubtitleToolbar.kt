@@ -5,11 +5,14 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.app.Activity
+import android.content.Context
 import io.github.a13e300.myinjector.arch.ObfsInfo
+import io.github.a13e300.myinjector.arch.findBaseActivity
 import io.github.a13e300.myinjector.arch.hook
 import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookAllCBefore
 import io.github.a13e300.myinjector.logI
+import io.github.a13e300.myinjector.bridge.Unhook
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
 import java.lang.ref.WeakReference
@@ -21,12 +24,16 @@ import java.util.WeakHashMap
 internal class BiliSubtitleToolbar(
     private val loader: ClassLoader,
     private val members: Map<String, ObfsInfo>,
-    private val subtitles: BiliSubtitles,
-    private val cover: BiliCover,
+    private val subtitles: BiliSubtitles?,
+    private val cover: BiliCover?,
+    private val isEnabled: (BiliFeature) -> Boolean,
+    private val onError: (BiliFeature, String, Throwable) -> Unit,
 ) {
     private fun method(key: String) = DexMethod(members.getValue(key).descriptor).getMethodInstance(loader)
     private val group = method("toolbarGroup")
     private val groupOwner = DexField(members.getValue("toolbarGroupOwner").descriptor).getFieldInstance(loader)
+        .apply { isAccessible = true }
+    private val toolbarContext = DexField(members.getValue("toolbarContext").descriptor).getFieldInstance(loader)
         .apply { isAccessible = true }
     private val render = method("toolbarItem")
     private val itemType = render.parameterTypes[0]
@@ -49,7 +56,7 @@ internal class BiliSubtitleToolbar(
     private val stateFlow = loader.loadClass("kotlinx.coroutines.flow.StateFlowKt").getMethod("MutableStateFlow", Any::class.java)
     private val alpha = loader.loadClass("androidx.compose.ui.draw.AlphaKt")
         .getMethod("alpha", clickable.returnType, Float::class.javaPrimitiveType)
-    private data class Action(val toolbar: WeakReference<Any>, val menu: BiliSubtitles.Menu, val enabled: Boolean, val coverUrl: String? = null)
+    private data class Action(val toolbar: WeakReference<Any>, val menu: BiliSubtitles.Menu, val enabled: Boolean, val feature: BiliFeature, val coverUrl: String? = null)
     private data class Group(val toolbar: Any, var added: Boolean = false)
     private val scope = ThreadLocal<Group>()
     private val disabled = ThreadLocal<Boolean>()
@@ -98,47 +105,71 @@ internal class BiliSubtitleToolbar(
         val expose = itemConstructor.parameterTypes[6].getConstructor(function0).newInstance(noAction)
         val item = itemConstructor.newInstance(icon(menu.activity.get()!!, isCover), false,
             badge, stateFlow.invoke(null, label), action, noAction, expose)
-        actions[action] = Action(WeakReference(toolbar), menu, enabled, coverUrl)
+        actions[action] = Action(WeakReference(toolbar), menu, enabled,
+            if (isCover) BiliFeature.VIEW_COVER else BiliFeature.VIEW_SUBTITLES, coverUrl)
         items[item] = !enabled
         return item
     }
 
-    fun install() = buildList {
-        add(group.hook(before = { scope.set(Group(groupOwner.get(it.thisObject)!!)) }, after = { scope.remove() }))
-        addAll(row.hookAllCBefore { param ->
+    private fun <T> menuAction(stage: String, action: () -> T): T? = runCatching(action).onFailure { error ->
+        if (subtitles != null) onError(BiliFeature.VIEW_SUBTITLES, stage, error)
+        if (cover != null) onError(BiliFeature.VIEW_COVER, stage, error)
+    }.getOrNull()
+
+    fun install(hooks: MutableList<Unhook>) {
+        hooks += group.hook(before = { param ->
+            scope.remove()
+            menuAction("读取视频操作菜单") { scope.set(Group(groupOwner.get(param.thisObject)!!)) }
+        }, after = { scope.remove() })
+        hooks += row.hookAllCBefore { param ->
             val current = scope.get() ?: return@hookAllCBefore
             if (current.added) return@hookAllCBefore
-            val menu = subtitles.toolbarSnapshot(current.toolbar)
-            val subtitleItem = item(current.toolbar, menu, menu.label, menu.tracks.isNotEmpty())
-            val coverUrl = cover.snapshot(current.toolbar)
-            val coverItem = item(current.toolbar, menu, "查看封面", coverUrl != null, true, coverUrl)
-            param.args[0] = listOf(subtitleItem, coverItem) + (param.args[0] as List<*>)
             current.added = true
-            logI("bili subtitle toolbar inserted: tracks=${menu.tracks.size}, label=${menu.label}")
-        })
-        add(click.hookBefore { param ->
+            val added = buildList {
+                if (subtitles != null && isEnabled(BiliFeature.VIEW_SUBTITLES)) runCatching {
+                    val menu = subtitles.toolbarSnapshot(current.toolbar)
+                    add(item(current.toolbar, menu, menu.label, menu.tracks.isNotEmpty()))
+                    logI("bili subtitle toolbar inserted: tracks=${menu.tracks.size}, label=${menu.label}")
+                }.onFailure { onError(BiliFeature.VIEW_SUBTITLES, "插入字幕按钮", it) }
+                if (cover != null && isEnabled(BiliFeature.VIEW_COVER)) runCatching {
+                    val activity = (toolbarContext.get(current.toolbar) as Context).findBaseActivity()
+                    val menu = BiliSubtitles.Menu(WeakReference(activity), emptyList(), "")
+                    val url = cover.snapshot(current.toolbar)
+                    add(item(current.toolbar, menu, "查看封面", url != null, true, url))
+                }.onFailure { onError(BiliFeature.VIEW_COVER, "插入封面按钮", it) }
+            }
+            if (added.isNotEmpty()) menuAction("更新视频操作菜单") {
+                param.args[0] = added + (param.args[0] as List<*>)
+            }
+        }
+        hooks += click.hookBefore { param ->
             val action = actions[param.thisObject] ?: return@hookBefore
+            // 自定义点击实例不具备宿主 lambda 的捕获字段，即使失败也不能执行原始 invoke。
+            param.result = unit
             val activity = action.menu.activity.get()
-            if (action.enabled && activity != null) {
+            if (action.enabled && activity != null) runCatching {
                 val toolbar = action.toolbar.get()
                 val close = toolbar?.javaClass?.declaredFields?.single { it.type == function0 }
                     ?.apply { isAccessible = true }?.get(toolbar)
                 if (close != null) function0.getMethod("invoke").invoke(close)
                 activity.window.decorView.post {
-                    if (action.coverUrl != null) cover.show(activity, action.coverUrl)
-                    else showBiliSubtitleDialog(activity, action.menu.tracks)
+                    runCatching {
+                        if (action.feature == BiliFeature.VIEW_COVER) cover!!.show(activity, action.coverUrl!!)
+                        else showBiliSubtitleDialog(activity, action.menu.tracks)
+                    }.onFailure { onError(action.feature, "打开视频工具", it) }
                 }
-            }
-            param.result = unit
-        })
-        add(render.hook(before = { disabled.set(items[it.args[0]] == true) }, after = { disabled.remove() }))
-        add(clickable.hook(before = { param ->
-            if (disabled.get() == true) {
+            }.onFailure { onError(action.feature, "关闭视频操作菜单", it) }
+        }
+        hooks += render.hook(before = { disabled.set(items[it.args[0]] == true) }, after = { disabled.remove() })
+        hooks += clickable.hook(before = { param ->
+            if (disabled.get() == true) menuAction("禁用视频工具按钮") {
                 param.args[1] = false
                 param.args[3] = (param.args[3] as Int) and 1.inv()
             }
         }, after = { param ->
-            if (disabled.get() == true && param.throwable == null) param.result = alpha.invoke(null, param.result, 0.38f)
-        }))
+            if (disabled.get() == true && param.throwable == null) menuAction("显示按钮禁用状态") {
+                param.result = alpha.invoke(null, param.result, 0.38f)
+            }
+        })
     }
 }
