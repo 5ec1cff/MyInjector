@@ -29,6 +29,10 @@ import io.github.a13e300.myinjector.bili.BiliHookConfig
 import io.github.a13e300.myinjector.bili.BiliSettingsDialog
 import io.github.a13e300.myinjector.bili.BiliSettingsEntry
 import io.github.a13e300.myinjector.bili.BiliStoryVideo
+import io.github.a13e300.myinjector.bili.BiliTaskPlayback
+import io.github.a13e300.myinjector.bili.BiliVideoCardTask
+import io.github.a13e300.myinjector.bili.BiliOpusTaskToolbar
+import io.github.a13e300.myinjector.bili.biliTaskPlaybackMembers
 import io.github.a13e300.myinjector.bili.biliCoverMembers
 import io.github.a13e300.myinjector.bili.biliCommentLinkMembers
 import io.github.a13e300.myinjector.bili.biliCommentRouteMembers
@@ -246,7 +250,7 @@ class BiliHandler : IHook() {
     }
 
     private fun hookViewActions(creator: ObfsTableCreator) {
-        val features = listOf(BiliFeature.VIEW_SUBTITLES, BiliFeature.VIEW_COVER)
+        val features = listOf(BiliFeature.VIEW_SUBTITLES, BiliFeature.VIEW_COVER, BiliFeature.OPEN_VIDEO_IN_NEW_TASK)
         val members = runCatching { biliSubtitleMembers(creator) }.onFailure { error ->
             features.forEach { reportError(it, "定位视频操作菜单", error) }
         }.getOrNull() ?: return
@@ -261,7 +265,6 @@ class BiliHandler : IHook() {
                 }
             }
         }.onFailure { reportError(BiliFeature.VIEW_COVER, "安装封面 Hook", it) }.getOrNull()
-        if (subtitles == null && cover == null) return
         runCatching {
             BiliSubtitleToolbar(classLoader, members, subtitles, cover,
                 { settings.isEnabled(it) }, ::reportError).install(hooks)
@@ -449,6 +452,14 @@ class BiliHandler : IHook() {
             { stage, error -> reportError(BiliFeature.REPLACE_STORY_VIDEO, stage, error) }).install(hooks)
     }
 
+    private fun hookNewTaskBackgroundPlay(creator: ObfsTableCreator) {
+        runCatching {
+            BiliTaskPlayback(classLoader, biliTaskPlaybackMembers(creator),
+                { settings.isEnabled(BiliFeature.NEW_TASK_BACKGROUND_PLAY) },
+                { stage, error -> reportError(BiliFeature.NEW_TASK_BACKGROUND_PLAY, stage, error) }).install(hooks)
+        }.onFailure { reportError(BiliFeature.NEW_TASK_BACKGROUND_PLAY, "安装独立任务后台播放 Hook", it) }
+    }
+
     override fun onHook() {
         readSettings()
         addSettingsIntentInterceptor(onHookRegistered = { hooks += it }) { activity ->
@@ -459,6 +470,13 @@ class BiliHandler : IHook() {
             BiliSettingsEntry(classLoader, { BiliSettingsDialog(it, this).show() },
                 { stage, error -> reportError(null, stage, error) }).install(creator, hooks)
             hookReplaceStoryVideo()
+            hookNewTaskBackgroundPlay(creator)
+            BiliVideoCardTask(classLoader, { settings.isEnabled(BiliFeature.OPEN_VIDEO_IN_NEW_TASK) },
+                { stage, error -> reportError(BiliFeature.OPEN_VIDEO_IN_NEW_TASK, stage, error) })
+                .install(creator, hooks)
+            BiliOpusTaskToolbar(classLoader, { settings.isEnabled(BiliFeature.OPEN_VIDEO_IN_NEW_TASK) },
+                { stage, error -> reportError(BiliFeature.OPEN_VIDEO_IN_NEW_TASK, stage, error) })
+                .install(creator, hooks)
             hookShowAv(creator)
             hookShare(creator)
             hookNewShare(creator)

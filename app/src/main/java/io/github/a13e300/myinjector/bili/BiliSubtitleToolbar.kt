@@ -62,13 +62,13 @@ internal class BiliSubtitleToolbar(
     private val disabled = ThreadLocal<Boolean>()
     private val actions = Collections.synchronizedMap(WeakHashMap<Any, Action>())
     private val items = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
-    private var iconPath: String? = null
-    private var coverIconPath: String? = null
+    private val iconPaths = mutableMapOf<BiliFeature, String>()
 
     @Synchronized
-    private fun icon(activity: Activity, isCover: Boolean = false): String {
-        (if (isCover) coverIconPath else iconPath)?.let { return it }
-        val file = activity.cacheDir.resolve(if (isCover) "myinjector_cover_icon.png" else "myinjector_subtitle_icon.png")
+    private fun icon(activity: Activity, feature: BiliFeature): String {
+        if (feature == BiliFeature.OPEN_VIDEO_IN_NEW_TASK) return biliVideoTaskIcon(activity)
+        iconPaths[feature]?.let { return it }
+        val file = activity.cacheDir.resolve("myinjector_${feature.key}_icon.png")
         val bitmap = Bitmap.createBitmap(48, 48, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
@@ -76,7 +76,7 @@ internal class BiliSubtitleToolbar(
             textAlign = Paint.Align.CENTER
         }
         val canvas = Canvas(bitmap)
-        if (isCover) {
+        if (feature == BiliFeature.VIEW_COVER) {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 3f
             canvas.drawRoundRect(6f, 8f, 42f, 40f, 3f, 3f, paint)
@@ -93,20 +93,19 @@ internal class BiliSubtitleToolbar(
             bitmap.recycle()
         }
         // 宿主图片加载器接受本地路径，不支持 data URL。
-        return file.absolutePath.also { if (isCover) coverIconPath = it else iconPath = it }
+        return file.absolutePath.also { iconPaths[feature] = it }
     }
 
-    private fun item(toolbar: Any, menu: BiliSubtitles.Menu, label: String, enabled: Boolean, isCover: Boolean = false, coverUrl: String? = null): Any {
+    private fun item(toolbar: Any, menu: BiliSubtitles.Menu, label: String, enabled: Boolean, feature: BiliFeature = BiliFeature.VIEW_SUBTITLES, coverUrl: String? = null): Any {
         // 宿主把点击字段收窄为具体 lambda 类，独立实例用作标记，在 invoke 前处理。
         val action = clickType.declaredConstructors.single().newInstance(*arrayOfNulls<Any>(6))
         val badge = itemConstructor.parameterTypes[2].declaredConstructors.single().let { constructor ->
             constructor.newInstance(*constructor.parameterTypes.map { if (it == String::class.java) "" else 0 }.toTypedArray<Any>())
         }
         val expose = itemConstructor.parameterTypes[6].getConstructor(function0).newInstance(noAction)
-        val item = itemConstructor.newInstance(icon(menu.activity.get()!!, isCover), false,
+        val item = itemConstructor.newInstance(icon(menu.activity.get()!!, feature), false,
             badge, stateFlow.invoke(null, label), action, noAction, expose)
-        actions[action] = Action(WeakReference(toolbar), menu, enabled,
-            if (isCover) BiliFeature.VIEW_COVER else BiliFeature.VIEW_SUBTITLES, coverUrl)
+        actions[action] = Action(WeakReference(toolbar), menu, enabled, feature, coverUrl)
         items[item] = !enabled
         return item
     }
@@ -114,6 +113,7 @@ internal class BiliSubtitleToolbar(
     private fun <T> menuAction(stage: String, action: () -> T): T? = runCatching(action).onFailure { error ->
         if (subtitles != null) onError(BiliFeature.VIEW_SUBTITLES, stage, error)
         if (cover != null) onError(BiliFeature.VIEW_COVER, stage, error)
+        onError(BiliFeature.OPEN_VIDEO_IN_NEW_TASK, stage, error)
     }.getOrNull()
 
     fun install(hooks: MutableList<Unhook>) {
@@ -135,8 +135,13 @@ internal class BiliSubtitleToolbar(
                     val activity = (toolbarContext.get(current.toolbar) as Context).findBaseActivity()
                     val menu = BiliSubtitles.Menu(WeakReference(activity), emptyList(), "")
                     val url = cover.snapshot(current.toolbar)
-                    add(item(current.toolbar, menu, "查看封面", url != null, true, url))
+                    add(item(current.toolbar, menu, "查看封面", url != null, BiliFeature.VIEW_COVER, url))
                 }.onFailure { onError(BiliFeature.VIEW_COVER, "插入封面按钮", it) }
+                if (isEnabled(BiliFeature.OPEN_VIDEO_IN_NEW_TASK)) runCatching {
+                    val activity = (toolbarContext.get(current.toolbar) as Context).findBaseActivity()
+                    val menu = BiliSubtitles.Menu(WeakReference(activity), emptyList(), "")
+                    add(item(current.toolbar, menu, "在新任务打开", true, BiliFeature.OPEN_VIDEO_IN_NEW_TASK))
+                }.onFailure { onError(BiliFeature.OPEN_VIDEO_IN_NEW_TASK, "插入新任务按钮", it) }
             }
             if (added.isNotEmpty()) menuAction("更新视频操作菜单") {
                 param.args[0] = added + (param.args[0] as List<*>)
@@ -154,8 +159,11 @@ internal class BiliSubtitleToolbar(
                 if (close != null) function0.getMethod("invoke").invoke(close)
                 activity.window.decorView.post {
                     runCatching {
-                        if (action.feature == BiliFeature.VIEW_COVER) cover!!.show(activity, action.coverUrl!!)
-                        else showBiliSubtitleDialog(activity, action.menu.tracks)
+                        when (action.feature) {
+                            BiliFeature.VIEW_COVER -> cover!!.show(activity, action.coverUrl!!)
+                            BiliFeature.OPEN_VIDEO_IN_NEW_TASK -> openBiliVideoInNewTask(activity)
+                            else -> showBiliSubtitleDialog(activity, action.menu.tracks)
+                        }
                     }.onFailure { onError(action.feature, "打开视频工具", it) }
                 }
             }.onFailure { onError(action.feature, "关闭视频操作菜单", it) }
