@@ -27,6 +27,7 @@ import io.github.a13e300.myinjector.bili.biliAvSelector
 import io.github.a13e300.myinjector.bili.BiliFeature
 import io.github.a13e300.myinjector.bili.BiliHookConfig
 import io.github.a13e300.myinjector.bili.BiliSettingsDialog
+import io.github.a13e300.myinjector.bili.BiliSettingsEntry
 import io.github.a13e300.myinjector.bili.biliCoverMembers
 import io.github.a13e300.myinjector.bili.biliCommentLinkMembers
 import io.github.a13e300.myinjector.bili.biliCommentRouteMembers
@@ -449,6 +450,8 @@ class BiliHandler : IHook() {
                 .onFailure { reportError(null, "打开设置", it) }
         }.onFailure { reportError(null, "安装设置入口", it) }
         ObfsTableCreator("bili", 2, appInfo = loadPackageParam.appInfo).use { creator ->
+            BiliSettingsEntry(classLoader, { BiliSettingsDialog(it, this).show() },
+                { stage, error -> reportError(null, stage, error) }).install(creator, hooks)
             hookShowAv(creator)
             hookShare(creator)
             hookNewShare(creator)
