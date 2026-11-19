@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MyInjector</string>
+    <string name="asex_title">Manter inicialização automática</string>
+    <string name="asex_summary">Impede que a inicialização automática deste app seja desativada automaticamente</string>
+</resources>
