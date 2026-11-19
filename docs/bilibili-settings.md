@@ -33,6 +33,7 @@ Release 编译通过，用户已验证设置入口可用。
 | copyCommentLink | 评论菜单复制直达评论链接 | 下一次打开评论菜单 |
 | commentLinkInVideo | 视频评论链接在视频页内定位 | 下一次处理评论链接跳转 |
 | showAv | 视频详情显示 AV 号 | 新页面或后续标题渲染 |
+| replaceStoryVideo | 替换竖版视频为普通详情页，关闭自动进入 Story | 下一次路由跳转或读取自动 Story 配置 |
 | viewSubtitles | 视频菜单查看字幕 | 下一次构建视频菜单 |
 | viewCover | 视频菜单查看封面 | 下一次构建视频菜单 |
 | removeUnderPlayerAd | 移除播放器下方广告 | 后续广告渲染回调 |
