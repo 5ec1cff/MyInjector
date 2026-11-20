@@ -29,6 +29,7 @@ import io.github.a13e300.myinjector.bili.BiliHookConfig
 import io.github.a13e300.myinjector.bili.BiliSettingsDialog
 import io.github.a13e300.myinjector.bili.BiliSettingsEntry
 import io.github.a13e300.myinjector.bili.BiliStoryVideo
+import io.github.a13e300.myinjector.bili.BiliSearchPurify
 import io.github.a13e300.myinjector.bili.BiliTaskPlayback
 import io.github.a13e300.myinjector.bili.BiliVideoCardTask
 import io.github.a13e300.myinjector.bili.BiliOpusTaskToolbar
@@ -470,6 +471,8 @@ class BiliHandler : IHook() {
             BiliSettingsEntry(classLoader, { BiliSettingsDialog(it, this).show() },
                 { stage, error -> reportError(null, stage, error) }).install(creator, hooks)
             hookReplaceStoryVideo()
+            BiliSearchPurify(classLoader, { settings.isEnabled(BiliFeature.PURIFY_SEARCH) },
+                { stage, error -> reportError(BiliFeature.PURIFY_SEARCH, stage, error) }).install(creator, hooks)
             hookNewTaskBackgroundPlay(creator)
             BiliVideoCardTask(classLoader, { settings.isEnabled(BiliFeature.OPEN_VIDEO_IN_NEW_TASK) },
                 { stage, error -> reportError(BiliFeature.OPEN_VIDEO_IN_NEW_TASK, stage, error) })
