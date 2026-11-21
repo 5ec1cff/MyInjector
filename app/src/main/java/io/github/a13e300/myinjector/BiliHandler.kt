@@ -26,6 +26,8 @@ import io.github.a13e300.myinjector.bili.biliAvHeadlineMembers
 import io.github.a13e300.myinjector.bili.biliAvSelector
 import io.github.a13e300.myinjector.bili.BiliFeature
 import io.github.a13e300.myinjector.bili.BiliHookConfig
+import io.github.a13e300.myinjector.bili.BiliInterfaceState
+import io.github.a13e300.myinjector.bili.BiliInterfaceVersions
 import io.github.a13e300.myinjector.bili.BiliSettingsDialog
 import io.github.a13e300.myinjector.bili.BiliSettingsEntry
 import io.github.a13e300.myinjector.bili.BiliStoryVideo
@@ -43,7 +45,6 @@ import io.github.a13e300.myinjector.bili.biliNewShareMembers
 import io.github.a13e300.myinjector.bili.locateBiliActivityMetaField
 import io.github.a13e300.myinjector.bili.locateBiliFreeDataGuides
 import io.github.a13e300.myinjector.bili.locateBiliNewSplash
-import io.github.a13e300.myinjector.bili.locateBiliNewShareEnabled
 import io.github.a13e300.myinjector.bili.locateBiliPausePageConfig
 import io.github.a13e300.myinjector.bili.locateBiliShare
 import io.github.a13e300.myinjector.bili.locateBiliSplash
@@ -59,6 +60,8 @@ class BiliHandler : IHook() {
     private val hooks = mutableListOf<Unhook>()
     private lateinit var configFile: AtomicFile
     @Volatile var settings = BiliHookConfig()
+        private set
+    internal lateinit var interfaceState: BiliInterfaceState
         private set
     private val hookErrors = ConcurrentHashMap<Pair<BiliFeature?, String>, String>()
 
@@ -203,15 +206,6 @@ class BiliHandler : IHook() {
             }
             logD("bili new share local copy installed: ${share.engine}")
         }.onFailure { reportError(BiliFeature.BETTER_SHARE, "hookNewShare", it) }
-    }
-
-    private fun hookForceNewShare(creator: ObfsTableCreator) {
-        runCatching {
-            val enabled = creator.create("newShare.frameworkEnabled", ::locateBiliNewShareEnabled)
-            // 启用时覆盖入口返回值，关闭后让宿主读取原有的灰度结果。
-            hooks += DexMethod(enabled.descriptor).getMethodInstance(classLoader).hookConstantIf(true) { settings.isEnabled(BiliFeature.FORCE_NEW_SHARE) }
-            logD("bili new share framework forced: ${enabled.descriptor}")
-        }.onFailure { reportError(BiliFeature.FORCE_NEW_SHARE, "固定新版分享框架", it) }
     }
 
     private fun hookCommentLink(creator: ObfsTableCreator) {
@@ -463,11 +457,15 @@ class BiliHandler : IHook() {
 
     override fun onHook() {
         readSettings()
+        interfaceState = BiliInterfaceState(settings)
         addSettingsIntentInterceptor(onHookRegistered = { hooks += it }) { activity ->
             runCatching { BiliSettingsDialog(activity, this).show() }
                 .onFailure { reportError(null, "打开设置", it) }
         }.onFailure { reportError(null, "安装设置入口", it) }
         ObfsTableCreator("bili", 2, appInfo = loadPackageParam.appInfo).use { creator ->
+            BiliInterfaceVersions(classLoader, interfaceState) { component, stage, error ->
+                reportError(null, "界面版本/${component.title}/$stage", error)
+            }.install(creator, hooks)
             BiliSettingsEntry(classLoader, { BiliSettingsDialog(it, this).show() },
                 { stage, error -> reportError(null, stage, error) }).install(creator, hooks)
             hookReplaceStoryVideo()
@@ -483,7 +481,6 @@ class BiliHandler : IHook() {
             hookShowAv(creator)
             hookShare(creator)
             hookNewShare(creator)
-            hookForceNewShare(creator)
             hookCommentLink(creator)
             hookCommentLinkInVideo(creator)
             hookViewActions(creator)

@@ -4,7 +4,6 @@ import org.json.JSONObject
 
 enum class BiliFeature(val key: String, val title: String, val summary: String, val group: String) {
     BETTER_SHARE("betterShare", "复制原始分享链接", "新版分享在本地生成视频、动态原链接，保留标题和图文内容；旧版替换分享文本中的短链接", "分享与评论"),
-    FORCE_NEW_SHARE("forceNewShare", "固定新版分享框架", "覆盖灰度开关，使用新版分享框架", "分享与评论"),
     COPY_COMMENT_LINK("copyCommentLink", "复制评论链接", "在评论长按菜单增加复制直达评论链接的操作，不请求短链接", "分享与评论"),
     COMMENT_LINK_IN_VIDEO("commentLinkInVideo", "在视频中定位评论", "打开带 #reply 的视频评论链接时保留视频页面，避免进入独立评论页", "分享与评论"),
     SHOW_AV("showAv", "显示 AV 号", "视频详情用 AV 号替代 BV 号，切换后对新打开的页面生效", "视频工具"),
@@ -22,18 +21,41 @@ enum class BiliFeature(val key: String, val title: String, val summary: String, 
 }
 
 /** 默认保持原有功能全部开启，新增或无效的配置项使用默认值。 */
-data class BiliHookConfig(val enabledFeatures: Set<BiliFeature> = BiliFeature.entries.toSet()) {
+data class BiliHookConfig(
+    val enabledFeatures: Set<BiliFeature> = BiliFeature.entries.toSet(),
+    val interfaceVersions: Map<BiliInterfaceComponent, BiliInterfaceMode> =
+        BiliInterfaceComponent.entries.associateWith { it.defaultMode },
+) {
     fun isEnabled(feature: BiliFeature): Boolean = feature in enabledFeatures
 
     fun withFeature(feature: BiliFeature, enabled: Boolean): BiliHookConfig =
         copy(enabledFeatures = if (enabled) enabledFeatures + feature else enabledFeatures - feature)
 
+    fun interfaceMode(component: BiliInterfaceComponent): BiliInterfaceMode =
+        interfaceVersions[component] ?: component.defaultMode
+
+    fun withInterfaceMode(component: BiliInterfaceComponent, mode: BiliInterfaceMode): BiliHookConfig =
+        copy(interfaceVersions = interfaceVersions + (component to mode))
+
     fun toJson(): JSONObject = JSONObject().apply {
         BiliFeature.entries.forEach { put(it.key, isEnabled(it)) }
+        put("interfaceVersions", JSONObject().apply {
+            BiliInterfaceComponent.entries.forEach { put(it.key, interfaceMode(it).key) }
+        })
     }
 
     companion object {
-        fun readFromJson(obj: JSONObject): BiliHookConfig =
-            BiliHookConfig(BiliFeature.entries.filterTo(linkedSetOf()) { obj.optBoolean(it.key, true) })
+        fun readFromJson(obj: JSONObject): BiliHookConfig {
+            val versions = obj.optJSONObject("interfaceVersions")
+            return BiliHookConfig(
+                BiliFeature.entries.filterTo(linkedSetOf()) { obj.optBoolean(it.key, true) },
+                BiliInterfaceComponent.entries.associateWith { component ->
+                    BiliInterfaceMode.entries.find { it.key == versions?.opt(component.key) }
+                        ?: if (component == BiliInterfaceComponent.SHARE && !obj.optBoolean("forceNewShare", true)) {
+                            BiliInterfaceMode.FOLLOW
+                        } else component.defaultMode
+                },
+            )
+        }
     }
 }
