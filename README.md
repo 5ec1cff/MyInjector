@@ -188,6 +188,14 @@ Rust/Flutter 桌面通过 LSPosed 的 HYOS native 注入支持，初始适配版
 配置由 system_server 通过广播下发，native 观察 Flutter 手势并把强停请求交给系统框架执行。
 版本限制、构建与验证方式见 [HYOS 桌面说明](docs/miuihome-hyos.md)。
 
+### 抖音
+
+```
+com.ss.android.ugc.aweme
+```
+
+- 评论表情使用普通单图预览，支持播放和保存动图。优先下载模型提供的下载资源，HEIF、GIF、WebP、PNG、JPEG 均直接保存源文件，不转码或缩放。作用域开启后直接生效，暂不提供功能开关。适配抖音 41.2.0，见[实现说明](docs/douyin-comment-emoji.md)。
+
 ### FV 悬浮球
 
 ```
