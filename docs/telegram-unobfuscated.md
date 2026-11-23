@@ -91,3 +91,28 @@ APK 中保留的五参数重载 `ne.f.r` 也传入相同默认值。
 样本复用 `~/Documents/Codex/scratch/MyInjectorPriv/telegram-13.2.2-history/`，
 源码和验证日志保存在相邻的 `telegram-13.2.2-open-link/` 目录。
 尚未在真实 Xposed 宿主中验证链接点击。AyuGram 旧版本不再纳入后续适配和回归范围。
+
+## Telegram 13.3.1（73461）设置入口适配
+
+从当前 ADB 设备提取 Play 版 base APK 和 arm64、xxhdpi split，保存在
+`~/Documents/Codex/scratch/MyInjectorPriv/telegram-13.3.1-settings/`。
+base APK 的 SHA-256 为 `d8e1bcbb8899c80a6308d9dbb449cecccae26076a40b357902054fc605ed11ea`。
+
+修改前运行 `scripts/check_telegram_apks.py --feature Settings` 可复现
+`UItemAsShadow: query did not return a unique result: 2`。
+dexsql 确认设置页 `v41.f0` 同时调用 `k51.C(CharSequence)` 和 `k51.u(CharSequence)`，
+两者都符合原有的静态方法、参数和调用者约束。前者以类型 7 创建普通分隔行，后者以类型 0 创建标题行。
+
+官方 [UniversalAdapter.java 第 71–80 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/ui/Components/UniversalAdapter.java#L71-L80)
+定义 `VIEW_TYPE_SHADOW = 7`、`VIEW_TYPE_HEADER = 0`，
+[UItem.java 第 351–355 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/ui/Components/UItem.java#L351-L355)
+的 `asShadow` 使用前者。
+现在在原查询中增加数值 7 的约束，唯一选中 `k51.C`；未混淆版本继续按 `asShadow` 名称解析。
+失败项不会缓存，无需调整缓存版本。
+
+官方 13.3.1、13.2.2、13.1.1（72371）、NaGram 12.10.3（1249）和 exteraGram 13.0.3
+均通过 `--feature Settings` 静态检查，debug、release 构建通过。
+本地 DexKit 检查使用 JDK 21，并设置
+`GRADLE_OPTS=-Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process`，
+避免复用由 JDK 25 启动、旧 Kotlin 编译器无法识别的编译守护进程。
+尚未在真实 Xposed 宿主中验证设置入口的显示和点击。

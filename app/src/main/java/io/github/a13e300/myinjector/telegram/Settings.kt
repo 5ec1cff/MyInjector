@@ -761,6 +761,8 @@ class Settings : IHook() {
                     declaredClass(uItemOfFactory.className)
                     modifiers(Modifier.STATIC)
                     paramTypes("java.lang.CharSequence")
+                    // VIEW_TYPE_SHADOW is 7. asHeader has the same parameter type.
+                    usingNumbers(7)
                 }
             }.single().toObfsInfo()
         }
