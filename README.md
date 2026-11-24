@@ -195,6 +195,7 @@ com.ss.android.ugc.aweme
 ```
 
 - 评论表情使用普通单图预览，支持播放和保存动图。优先下载模型提供的下载资源，HEIF、GIF、WebP、PNG、JPEG 均直接保存源文件，不转码或缩放。作用域开启后直接生效，暂不提供功能开关。适配抖音 41.2.0，见[实现说明](docs/douyin-comment-emoji.md)。
+- 普通评论图片保存使用 `origin_url` 中的无水印原图，沿用抖音原生保存流程。
 
 ### FV 悬浮球
 

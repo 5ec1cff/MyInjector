@@ -19,6 +19,7 @@ import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.douyin.DouyinImageSave
 import io.github.a13e300.myinjector.douyin.DouyinImageSource
 import io.github.a13e300.myinjector.douyin.locateDouyinEmojiDetail
+import io.github.a13e300.myinjector.douyin.locateDouyinImageDownload
 import java.io.Serializable
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
@@ -148,6 +149,16 @@ class DouyinHandler : IHook() {
                 Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             ).apply { bottomMargin = dp(48) })
             save.requestApplyInsets()
+        }
+
+        val imageDownload = ObfsTableCreator("douyin_image_save", 1,
+            appInfo = loadPackageParam.appInfo).use { creator ->
+            creator.create("download") { locateDouyinImageDownload(it, imageUrls.last().name) }
+                .also { creator.persist() }
+        }
+        // 原生保存只通过此方法读取下载地址，改用无水印原图，不修改评论模型。
+        DexMethod(imageDownload.descriptor).getMethodInstance(classLoader).hookBefore { param ->
+            param.result = imageUrls.first().get(param.thisObject)
         }
     }
 
