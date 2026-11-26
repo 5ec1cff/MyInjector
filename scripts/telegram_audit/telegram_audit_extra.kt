@@ -21,6 +21,23 @@ private fun auditKeptApi(bridge: DexKitBridge, feature: String) {
     }
 }
 
+private fun auditTopicSwitching(bridge: DexKitBridge, members: ObfsTable) {
+    val update = bridge.getMethodData(members.getValue("ChatPullingDownUpdateTopic").descriptor)!!
+    val next = bridge.getFieldData(members.getValue("ChatPullingDownNextTopic").descriptor)!!
+    val empty = bridge.getFieldData(members.getValue("ChatPullingDownEmptyStub").descriptor)!!
+    check(update.paramCount == 0 && update.returnTypeName == "void" && !Modifier.isStatic(update.modifiers))
+    check(next.className == update.className && next.typeName == "org.telegram.tgnet.TLRPC\$TL_forumTopic")
+    check(empty.className == update.className && empty.typeName == "boolean")
+    check(next.writers.any { it.descriptor == update.descriptor })
+    // The field must guard touch release, not just the preview's visibility.
+    check(empty.readers.any { method ->
+        method.name == "onTouchEvent" && method.paramTypeNames == listOf("android.view.MotionEvent") &&
+            scanTelegramDex(bridge, method).compares.any { compare ->
+                compare.fields.any { it.descriptor == empty.descriptor }
+            }
+    })
+}
+
 private fun auditProfileBlurMembers(bridge: DexKitBridge, members: Map<String, String>) {
     val actions = bridge.getFieldData(members.getValue("actionsView"))!!
     val blurActions = members.getValue("blurActionsView").takeIf { it.isNotEmpty() }?.let { bridge.getFieldData(it)!! }

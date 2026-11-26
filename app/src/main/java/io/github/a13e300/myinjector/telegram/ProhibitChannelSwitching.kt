@@ -3,15 +3,18 @@ package io.github.a13e300.myinjector.telegram
 import android.graphics.Canvas
 import io.github.a13e300.myinjector.arch.ObfsTable
 import io.github.a13e300.myinjector.arch.ObfsTableCreator
+import io.github.a13e300.myinjector.arch.hookBefore
 import io.github.a13e300.myinjector.arch.hookConstantIf
 import io.github.a13e300.myinjector.arch.toObfsInfo
 import io.github.a13e300.myinjector.logD
+import org.luckypray.dexkit.wrap.DexField
+import org.luckypray.dexkit.wrap.DexMethod
 
 class ProhibitChannelSwitching : MyDynHook("prohibitChannelSwitching") {
     override fun isFeatureEnabled(): Boolean = TelegramHandler.settings.prohibitChannelSwitching
 
     private fun deobf(creator: ObfsTableCreator): ObfsTable {
-        creator.create("ChatPullingDownDrawable") { bridge ->
+        val drawable = creator.create("ChatPullingDownDrawable") { bridge ->
             bridge.getClassData("org.telegram.ui.ChatPullingDownDrawable")?.let { return@create it.toObfsInfo() }
             bridge.findMethod {
                 matcher {
@@ -19,12 +22,51 @@ class ProhibitChannelSwitching : MyDynHook("prohibitChannelSwitching") {
                 }
             }.single().toObfsInfo()
         }
+        val updateTopic = creator.create("ChatPullingDownUpdateTopic") { bridge ->
+            bridge.findMethod {
+                matcher {
+                    declaredClass(drawable.className)
+                    paramTypes()
+                    returnType("void")
+                    addUsingField {
+                        declaredClass("org.telegram.tgnet.TLRPC\$TL_forumTopic")
+                        name("icon_emoji_id")
+                    }
+                }
+            }.single().toObfsInfo()
+        }
+        creator.create("ChatPullingDownNextTopic") { bridge ->
+            bridge.getClassData(drawable.className)!!.fields.single {
+                it.typeName == "org.telegram.tgnet.TLRPC\$TL_forumTopic"
+            }.toObfsInfo()
+        }
+        creator.create("ChatPullingDownEmptyStub") { bridge ->
+            val writes = scanTelegramDex(bridge, bridge.getMethodData(updateTopic.descriptor)!!).writes
+                .filter { it.field.className == drawable.className && it.field.typeName == "boolean" }
+            // emptyStub is false with a next topic and true without one.
+            writes.map { it.field }.distinctBy { it.descriptor }.single { field ->
+                writes.any { it.field == field && it.value?.number == 0 } &&
+                    writes.any { it.field == field && it.value?.number == 1 }
+            }.toObfsInfo()
+        }
         return creator.obfsTable
     }
 
     override fun onHook() {
         val table = deobf(TelegramHandler.creator)
         val ChatPullingDownDrawable = table["ChatPullingDownDrawable"]!!
+
+        val nextTopic = DexField(table.getValue("ChatPullingDownNextTopic").descriptor)
+            .getFieldInstance(classLoader).apply { isAccessible = true }
+        val emptyStub = DexField(table.getValue("ChatPullingDownEmptyStub").descriptor)
+            .getFieldInstance(classLoader).apply { isAccessible = true }
+        // R8 can inline the topic lookup and getter. Set the state read by the touch handler.
+        DexMethod(table.getValue("ChatPullingDownUpdateTopic").descriptor)
+            .getMethodInstance(classLoader).apply { isAccessible = true }.hookBefore(cond = ::isEnabled) { param ->
+                nextTopic.set(param.thisObject, null)
+                emptyStub.setBoolean(param.thisObject, true)
+                param.result = null
+            }
 
         findClass(ChatPullingDownDrawable.className).declaredMethods.forEach {
             if (

@@ -116,3 +116,26 @@ dexsql 确认设置页 `v41.f0` 同时调用 `k51.C(CharSequence)` 和 `k51.u(Ch
 `GRADLE_OPTS=-Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process`，
 避免复用由 JDK 25 启动、旧 Kotlin 编译器无法识别的编译守护进程。
 尚未在真实 Xposed 宿主中验证设置入口的显示和点击。
+
+## 阻止上拉切换群聊话题
+
+原“阻止切换频道”扩展为“阻止上拉切换频道或话题”，沿用 `prohibitChannelSwitching` 设置键。
+说明改为“阻止在消息列表底部上拉时切换到其他频道或群聊话题”。
+
+话题切换使用同一个 `ChatPullingDownDrawable`，但官方 13.3.1 已将下一话题查询和 getter 内联。
+仅隐藏预览绘制不能阻止跳转：[ChatActivity 第 5162–5164 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java#L5162-L5164)
+在松手时检查 `emptyStub`，而 [第 11655–11670 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java#L11655-L11670)
+读取下一话题并打开会话。
+
+新增对 `updateTopic` 的拦截，启用开关时清空 `nextTopic`、设置 `emptyStub = true`，并跳过原方法。
+这对应原生 [updateTopic 无结果分支，第 233–235 行](https://github.com/DrKLO/Telegram/blob/21f7d109da6ab3506c9e9577f98c6a38771ab335/TMessagesProj/src/main/java/org/telegram/ui/ChatPullingDownDrawable.java#L233-L235)
+的状态。关闭开关后继续执行原生更新方法，频道拦截继续使用原有逻辑。
+通过 `TL_forumTopic.icon_emoji_id` 定位更新方法，通过话题字段类型定位 `nextTopic`，
+再从更新方法对布尔字段的 0/1 写入定位 `emptyStub`，不依赖混淆名称。
+
+官方 13.3.1、13.2.2、13.1.1（72371）、NaGram 12.10.3（1249）和 exteraGram 13.0.3
+均通过 `--feature ProhibitChannelSwitching` 静态回归。检查还确认定位出的 `emptyStub`
+直接参与 `onTouchEvent` 的条件判断，避免选中只控制预览显示的其他布尔字段。
+debug、release 构建通过。
+源码与日志保存在 `~/Documents/Codex/scratch/MyInjectorPriv/telegram-topic-switch/`。
+用户实测反馈话题上拉拦截有效。

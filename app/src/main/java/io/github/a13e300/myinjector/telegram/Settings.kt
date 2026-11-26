@@ -212,9 +212,9 @@ class TgSettingsDialog(context: Context) : SettingDialog(context) {
                     "允许在禁止复制的群聊复制和保存内容，并仍然阻止转发（因为不可能成功）"
                 )
                 toggle(
-                    "阻止切换频道",
+                    "阻止上拉切换频道或话题",
                     "prohibitChannelSwitching",
-                    "阻止在频道底部上拉时切换到其他频道"
+                    "阻止在消息列表底部上拉时切换到其他频道或群聊话题"
                 )
                 toggle(
                     "消息编辑框禁用语音或相机按钮",

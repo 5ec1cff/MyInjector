@@ -134,7 +134,8 @@ fun auditAll(bridge: DexKitBridge, features: Set<String> = emptySet()) {
     }
 ''')
 for name in classes:
-    out.append(f'    checkFeature("{name}") {{ Audit{name}.deobf(creator()) }}')
+    validation = '.also { auditTopicSwitching(bridge, it) }' if name == 'ProhibitChannelSwitching' else ''
+    out.append(f'    checkFeature("{name}") {{ Audit{name}.deobf(creator()){validation} }}')
 for name in prefixes:
     out.append(f'    checkFeature("{name}") {{ audit{name}(creator()) }}')
 for name, call in [
