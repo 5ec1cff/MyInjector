@@ -7,6 +7,33 @@ import org.luckypray.dexkit.DexKitBridge
 
 /** 可选的真实 APK 检查，XHS_APK 提供 9.55.0 样本，DEXKIT_HOST_LIBRARY 提供主机 JNI 库。 */
 class XhsApkCompatibilityTest {
+    @Test fun locatesCommentShareIn955() {
+        val apk = System.getenv("XHS_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires XHS 9.55.0 and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "copy" to "Ltb5/g;->c(Landroid/app/Activity;Lcom/xingin/entities/NoteItemBean;Lcom/xingin/entities/CommentCommentInfo;)V",
+                "baseUrl" to "Ltb5/g;->g(Lcom/xingin/entities/NoteItemBean;)Ljava/lang/String;",
+                "commentId" to "Lcom/xingin/entities/CommentCommentInfo;->x()Ljava/lang/String;",
+                "noteType" to "Lcom/xingin/entities/MultiItemBean;->w()Ljava/lang/String;",
+                "content" to "Lae9/x0;->n(Lcom/xingin/entities/CommentCommentInfo;)Ljava/lang/String;",
+                "author" to "Lcom/xingin/entities/CommentCommentInfo;->A0()Lcom/xingin/entities/CommentCommentUser;",
+                "authorName" to "Lcom/xingin/entities/CommentCommentUser;->g()Ljava/lang/String;",
+                "menuItemConstructor" to "Lid9/r;-><init>(Ljava/lang/String;ILjava/lang/String;ILkotlin/jvm/functions/Function0;)V",
+                "action" to "Ln65/i;->a(Landroid/content/Context;Lk65/a;)V",
+                "bind" to "Lm65/g;->a(Li65/b;Lio/reactivex/Observer;)Landroid/view/View;",
+            ), locateXhsCommentShare(bridge).mapValues { it.value.descriptor })
+            assertEquals("java.lang.String", bridge.getClassData("com.xingin.entities.NoteItemBean")!!
+                .fields.single { it.fieldName == "xsecToken" }.typeName)
+            val binding = bridge.getClassData("com.xingin.matrix.comment.databinding.CommentOperateItemLayoutBinding")!!
+                .methods.single { it.isConstructor }
+            assertEquals("android.widget.LinearLayout", binding.paramTypeNames.first())
+            assertEquals("android.widget.TextView", binding.paramTypeNames.last())
+        }
+    }
+
     @Test fun locatesHomeTabScrollIn955() {
         val apk = System.getenv("XHS_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")

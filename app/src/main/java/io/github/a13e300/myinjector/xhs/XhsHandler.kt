@@ -278,7 +278,7 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
             toggle("保存原图", "saveOriginalImage")
             toggle("移除保存图片限制", "forceSaveImage")
             toggle("用打开图片方式打开表情", "openStickerAsImage")
-            toggle("增强分享", "betterShare")
+            toggle("增强分享", "betterShare", summary = "评论复制链接使用长链接，长按可连同全文复制，支持 HTML")
             toggle(
                 "冷启动保留首页缓存",
                 "keepHomeCache",
@@ -452,6 +452,7 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         subHook(OpenStickerAsImage())
         subHook(ForceSaveImage())
         subHook(BetterShare())
+        subHook(BetterCommentShare())
         subHook(ExtractVideoLink())
         subHook(DisableDoubleTapLike())
         subHook(KeepHomeCache())
