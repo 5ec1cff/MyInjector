@@ -7,6 +7,32 @@ import org.luckypray.dexkit.DexKitBridge
 
 /** 可选的真实 APK 检查，XHS_APK 提供 9.55.0 样本，DEXKIT_HOST_LIBRARY 提供主机 JNI 库。 */
 class XhsApkCompatibilityTest {
+    @Test fun locatesHomeAdPathsIn955() {
+        val apk = System.getenv("XHS_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires XHS 9.55.0 and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "process" to "Lmmd/t;->Sd(ZLjava/util/List;ZZ)Lkotlin/Pair;",
+                "store" to "Lmmd/t;->fe(Ljava/util/List;Z)V",
+                "cache" to "Lind/h;->Id(Ljava/lang/String;)Ljava/util/List;",
+                "restore" to "Lsmd/m0;->B0(Ljava/util/List;Ljava/util/List;Landroid/os/Parcelable;Z)Z",
+                "view" to "Lmmd/t;->e:Lsmd/m0;",
+                "channel" to "Lsmd/m0;->B:Lcom/xingin/entities/BaseChannelData;",
+            ), locateXhsHomeAds(bridge).mapValues { it.value.descriptor })
+            for (name in listOf("com.xingin.entities.NoteItemBean", "com.xingin.entities.NativeMediaBean",
+                "com.xingin.entities.explorefeed.MediaBean")) {
+                val fields = bridge.getClassData(name)!!.fields
+                assertEquals("boolean", fields.single { it.fieldName == "isAd" }.typeName)
+                val tipName = if (name.endsWith("NoteItemBean")) "isShowAdTips" else "isShowAdsTip"
+                assertEquals("boolean", fields.single { it.fieldName == tipName }.typeName)
+            }
+            assertEquals("java.lang.String", bridge.getClassData("com.xingin.entities.ad.AdsInfo")!!
+                .fields.single { it.fieldName == "adsDesc" }.typeName)
+        }
+    }
+
     @Test fun locatesCommentShareIn955() {
         val apk = System.getenv("XHS_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")
