@@ -59,6 +59,7 @@ data class XhsHookConfig(
     val betterShare: Boolean = true,
     val extractVideoLink: Boolean = true,
     val disableDoubleTapLike: Boolean = true,
+    val keepHomeCache: Boolean = true,
 ) {
     companion object {
         fun readFromJson(obj: JSONObject): XhsHookConfig {
@@ -69,6 +70,7 @@ data class XhsHookConfig(
                 betterShare = obj.boolOrDefault("betterShare", true),
                 extractVideoLink = obj.boolOrDefault("extractVideoLink", true),
                 disableDoubleTapLike = obj.boolOrDefault("disableDoubleTapLike", true),
+                keepHomeCache = obj.boolOrDefault("keepHomeCache", true),
             )
         }
     }
@@ -80,6 +82,7 @@ data class XhsHookConfig(
         obj.put("betterShare", betterShare)
         obj.put("extractVideoLink", extractVideoLink)
         obj.put("disableDoubleTapLike", disableDoubleTapLike)
+        obj.put("keepHomeCache", keepHomeCache)
     }
 }
 
@@ -120,6 +123,10 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
 
             "disableDoubleTapLike" -> {
                 settings.copy(disableDoubleTapLike = newValue as Boolean)
+            }
+
+            "keepHomeCache" -> {
+                settings.copy(keepHomeCache = newValue as Boolean)
             }
 
             else -> return false
@@ -235,6 +242,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.disableDoubleTapLike
             }
+
+            "keepHomeCache" -> {
+                (setting as ToggleSetting).isChecked =
+                    XhsHandler.settings.keepHomeCache
+            }
         }
 
         if (setting.key in XhsHandler.hookErrors) {
@@ -255,6 +267,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
             toggle("移除保存图片限制", "forceSaveImage")
             toggle("用打开图片方式打开表情", "openStickerAsImage")
             toggle("增强分享", "betterShare")
+            toggle(
+                "冷启动保留首页缓存",
+                "keepHomeCache",
+                summary = "首页推荐有缓存时不自动刷新，仍可手动刷新和加载更多"
+            )
             toggle(
                 "禁用双击爱心",
                 "disableDoubleTapLike",
@@ -420,6 +437,7 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         subHook(BetterShare())
         subHook(ExtractVideoLink())
         subHook(DisableDoubleTapLike())
+        subHook(KeepHomeCache())
 
         _creator?.let {
             it.persist()

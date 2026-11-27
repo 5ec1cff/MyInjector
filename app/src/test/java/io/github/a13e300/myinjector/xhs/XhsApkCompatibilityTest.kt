@@ -7,6 +7,30 @@ import org.luckypray.dexkit.DexKitBridge
 
 /** 可选的真实 APK 检查，XHS_APK 提供 9.55.0 样本，DEXKIT_HOST_LIBRARY 提供主机 JNI 库。 */
 class XhsApkCompatibilityTest {
+    @Test fun locatesHomeCachePathsIn955() {
+        val apk = System.getenv("XHS_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires XHS 9.55.0 and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "showCache" to "Lsmd/m0;->E0(Ljava/lang/String;)V",
+                "refresh" to "Lsmd/m0;->v0(Lcom/xingin/entities/e2;ZLn2/g;Ln2/f;Ljava/lang/Integer;)V",
+                "aheadLoad" to "Lmmd/t;->M4(Ljava/lang/String;IZ)V",
+                "modelGetter" to "Lsmd/m0;->getMExplorePresenter()Lmmd/t;",
+                "cachedNotes" to "Lmmd/t;->g:Ljava/util/ArrayList;",
+                "view" to "Lmmd/t;->e:Lsmd/m0;",
+                "channel" to "Lsmd/m0;->B:Lcom/xingin/entities/BaseChannelData;",
+            ), locateXhsHomeCache(bridge).mapValues { it.value.descriptor })
+            assertEquals("boolean", bridge.getClassData("com.xingin.entities.NoteItemBean")!!
+                .fields.single { it.fieldName == "isFromCache" }.typeName)
+            for (name in listOf("setHasLoadData", "setLoadFinish")) {
+                assertEquals(listOf("boolean"), bridge.getClassData("smd.m0")!!
+                    .methods.single { it.methodName == name }.paramTypeNames)
+            }
+        }
+    }
+
     @Test fun locatesDoubleTapLikePathsIn955() {
         val apk = System.getenv("XHS_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")
