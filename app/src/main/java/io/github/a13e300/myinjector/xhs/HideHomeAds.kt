@@ -8,6 +8,7 @@ import io.github.a13e300.myinjector.arch.toObfsInfo
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
+import java.util.concurrent.atomic.AtomicLong
 
 internal fun locateXhsHomeAds(bridge: DexKitBridge): Map<String, ObfsInfo> {
     val process = bridge.findMethod {
@@ -53,7 +54,23 @@ internal fun locateXhsHomeAds(bridge: DexKitBridge): Map<String, ObfsInfo> {
 internal fun isXhsHomeAd(isAd: Boolean, modelType: String?, adsDesc: String?, showAdTips: Boolean = false): Boolean =
     isAd || showAdTips || modelType == "advertisement" || !adsDesc.isNullOrEmpty()
 
+internal class HomeAdCounter {
+    private val filteredCount = AtomicLong()
+    val count: Long get() = filteredCount.get()
+
+    fun <T> filter(items: List<T>, countFiltered: Boolean = true, isAd: (T) -> Boolean): List<T> {
+        val result = items.filterNot(isAd)
+        if (countFiltered) filteredCount.addAndGet((items.size - result.size).toLong())
+        return result
+    }
+}
+
 class HideHomeAds : MyDynHook("hideHomeAds") {
+    companion object {
+        private val counter = HomeAdCounter()
+        val filteredCount: Long get() = counter.count
+    }
+
     override fun isFeatureEnabled(): Boolean = XhsHandler.settings.hideHomeAds
 
     override fun onHook() {
@@ -98,14 +115,16 @@ class HideHomeAds : MyDynHook("hideHomeAds") {
         }
 
         fun isRecommend(view: Any) = channelField.get(view).getObjAs<String>("channelId") == "homefeed_recommend"
-        fun filtered(items: Any) = (items as List<*>).filterNot(::isAd)
+        fun filtered(items: Any, countFiltered: Boolean = true) =
+            counter.filter(items as List<*>, countFiltered, ::isAd)
 
         // 先过滤原始笔记，再由宿主转换和计算位置，避免留下空卡片
         method("process").hookBefore(cond = ::isEnabled) { param ->
             if (isRecommend(viewField.get(param.thisObject)!!)) param.args[1] = filtered(param.args[1])
         }
         method("store").hookBefore(cond = ::isEnabled) { param ->
-            if (isRecommend(viewField.get(param.thisObject)!!)) param.args[0] = filtered(param.args[0])
+            // 同批笔记还会进入 process，只在展示路径计数
+            if (isRecommend(viewField.get(param.thisObject)!!)) param.args[0] = filtered(param.args[0], false)
         }
         // 磁盘缓存和页面重建的内存缓存都有直接恢复列表的路径
         method("cache").hookAfter(cond = ::isEnabled) { param ->
@@ -115,7 +134,8 @@ class HideHomeAds : MyDynHook("hideHomeAds") {
         }
         method("restore").hookBefore(cond = ::isEnabled) { param ->
             if (isRecommend(param.thisObject)) {
-                param.args[0] = filtered(param.args[0])
+                // 第一份是原始笔记，第二份才是恢复到列表的卡片
+                param.args[0] = filtered(param.args[0], false)
                 param.args[1] = filtered(param.args[1])
             }
         }

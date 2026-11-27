@@ -291,7 +291,10 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
             toggle("移除保存图片限制", "forceSaveImage")
             toggle("用打开图片方式打开表情", "openStickerAsImage")
             toggle("增强分享", "betterShare", summary = "评论复制链接使用长链接，长按可连同全文复制，支持 HTML")
-            toggle("屏蔽首页广告", "hideHomeAds", summary = "过滤首页推荐中的广告笔记和广告卡片，包含缓存内容")
+            toggle(
+                "屏蔽首页广告", "hideHomeAds",
+                summary = "过滤首页推荐中的广告笔记和广告卡片，包含缓存内容\n当前启动过滤了 ${HideHomeAds.filteredCount} 条广告"
+            )
             toggle(
                 "冷启动保留首页缓存",
                 "keepHomeCache",
