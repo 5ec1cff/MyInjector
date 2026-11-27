@@ -58,6 +58,7 @@ data class XhsHookConfig(
     val openStickerAsImage: Boolean = true,
     val betterShare: Boolean = true,
     val extractVideoLink: Boolean = true,
+    val disableDoubleTapLike: Boolean = true,
 ) {
     companion object {
         fun readFromJson(obj: JSONObject): XhsHookConfig {
@@ -67,6 +68,7 @@ data class XhsHookConfig(
                 openStickerAsImage = obj.boolOrDefault("openStickerAsImage", true),
                 betterShare = obj.boolOrDefault("betterShare", true),
                 extractVideoLink = obj.boolOrDefault("extractVideoLink", true),
+                disableDoubleTapLike = obj.boolOrDefault("disableDoubleTapLike", true),
             )
         }
     }
@@ -77,6 +79,7 @@ data class XhsHookConfig(
         obj.put("openStickerAsImage", openStickerAsImage)
         obj.put("betterShare", betterShare)
         obj.put("extractVideoLink", extractVideoLink)
+        obj.put("disableDoubleTapLike", disableDoubleTapLike)
     }
 }
 
@@ -113,6 +116,10 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
 
             "extractVideoLink" -> {
                 settings.copy(extractVideoLink = newValue as Boolean)
+            }
+
+            "disableDoubleTapLike" -> {
+                settings.copy(disableDoubleTapLike = newValue as Boolean)
             }
 
             else -> return false
@@ -223,6 +230,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.extractVideoLink
             }
+
+            "disableDoubleTapLike" -> {
+                (setting as ToggleSetting).isChecked =
+                    XhsHandler.settings.disableDoubleTapLike
+            }
         }
 
         if (setting.key in XhsHandler.hookErrors) {
@@ -243,6 +255,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
             toggle("移除保存图片限制", "forceSaveImage")
             toggle("用打开图片方式打开表情", "openStickerAsImage")
             toggle("增强分享", "betterShare")
+            toggle(
+                "禁用双击爱心",
+                "disableDoubleTapLike",
+                summary = "禁止双击笔记图片、正文或视频触发点赞，保留手动点击爱心"
+            )
             toggle(
                 "提取视频链接",
                 "extractVideoLink",
@@ -402,6 +419,7 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         subHook(ForceSaveImage())
         subHook(BetterShare())
         subHook(ExtractVideoLink())
+        subHook(DisableDoubleTapLike())
 
         _creator?.let {
             it.persist()
