@@ -7,6 +7,21 @@ import org.luckypray.dexkit.DexKitBridge
 
 /** 可选的真实 APK 检查，XHS_APK 提供 9.55.0 样本，DEXKIT_HOST_LIBRARY 提供主机 JNI 库。 */
 class XhsApkCompatibilityTest {
+    @Test fun locatesHomeTabScrollIn955() {
+        val apk = System.getenv("XHS_APK")
+        val library = System.getenv("DEXKIT_HOST_LIBRARY")
+        assumeTrue("Requires XHS 9.55.0 and a host DexKit JNI library", apk != null && library != null)
+        System.load(library!!)
+        DexKitBridge.create(apk!!).use { bridge ->
+            assertEquals(mapOf(
+                "scrollAndRefresh" to "Lsmd/m0;->D0(Lsmd/m0;ZLcom/xingin/entities/e2;Ln2/g;Ln2/f;Ljava/lang/Integer;ILjava/lang/Object;)V",
+                "scroll" to "Lyld/a;->b(Lyld/a;ZILjava/lang/Object;)V",
+                "helper" to "Lsmd/m0;->H0:Lyld/a;",
+                "recycler" to "Lyld/a;->a:Landroidx/recyclerview/widget/RecyclerView;",
+            ), locateXhsHomeTabScroll(bridge).mapValues { it.value.descriptor })
+        }
+    }
+
     @Test fun locatesHomeCachePathsIn955() {
         val apk = System.getenv("XHS_APK")
         val library = System.getenv("DEXKIT_HOST_LIBRARY")

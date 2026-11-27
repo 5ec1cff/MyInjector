@@ -60,6 +60,7 @@ data class XhsHookConfig(
     val extractVideoLink: Boolean = true,
     val disableDoubleTapLike: Boolean = true,
     val keepHomeCache: Boolean = true,
+    val homeTabScrollFirst: Boolean = true,
 ) {
     companion object {
         fun readFromJson(obj: JSONObject): XhsHookConfig {
@@ -71,6 +72,7 @@ data class XhsHookConfig(
                 extractVideoLink = obj.boolOrDefault("extractVideoLink", true),
                 disableDoubleTapLike = obj.boolOrDefault("disableDoubleTapLike", true),
                 keepHomeCache = obj.boolOrDefault("keepHomeCache", true),
+                homeTabScrollFirst = obj.boolOrDefault("homeTabScrollFirst", true),
             )
         }
     }
@@ -83,6 +85,7 @@ data class XhsHookConfig(
         obj.put("extractVideoLink", extractVideoLink)
         obj.put("disableDoubleTapLike", disableDoubleTapLike)
         obj.put("keepHomeCache", keepHomeCache)
+        obj.put("homeTabScrollFirst", homeTabScrollFirst)
     }
 }
 
@@ -127,6 +130,10 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
 
             "keepHomeCache" -> {
                 settings.copy(keepHomeCache = newValue as Boolean)
+            }
+
+            "homeTabScrollFirst" -> {
+                settings.copy(homeTabScrollFirst = newValue as Boolean)
             }
 
             else -> return false
@@ -247,6 +254,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 (setting as ToggleSetting).isChecked =
                     XhsHandler.settings.keepHomeCache
             }
+
+            "homeTabScrollFirst" -> {
+                (setting as ToggleSetting).isChecked =
+                    XhsHandler.settings.homeTabScrollFirst
+            }
         }
 
         if (setting.key in XhsHandler.hookErrors) {
@@ -276,6 +288,11 @@ class XhsSettingsDialog(ctx: Context) : SettingDialog(ctx) {
                 "禁用双击爱心",
                 "disableDoubleTapLike",
                 summary = "禁止双击笔记图片、正文或视频触发点赞，保留手动点击爱心"
+            )
+            toggle(
+                "首页按钮先回顶",
+                "homeTabScrollFirst",
+                summary = "推荐页未到顶部时点底栏首页只回顶，已在顶部时刷新"
             )
             toggle(
                 "提取视频链接",
@@ -438,6 +455,7 @@ object XhsHandler : DynHookManager<XhsHookConfig>() {
         subHook(ExtractVideoLink())
         subHook(DisableDoubleTapLike())
         subHook(KeepHomeCache())
+        subHook(HomeTabScrollFirst())
 
         _creator?.let {
             it.persist()
