@@ -17,6 +17,7 @@ class BaiduIMEHandler : IHook() {
     override fun onHook() {
         hookSplash()
         hookContactSuggestion()
+        subHook(BaiduEditUndoHook())
     }
 
     private fun hookSplash() = runCatching {
