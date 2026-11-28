@@ -25,7 +25,10 @@ class BaiduIMEHandler : IHook() {
             val activity = param.thisObject as Activity
             val intent = activity.intent
                 ?: Intent().also { activity.intent = it }
-            intent.putExtra("is_no_ads", true)
+            disableSplashAds(intent)
+        }
+        splash.hookAllBefore("onNewIntent") { param ->
+            disableSplashAds(param.args[0] as Intent)
         }
 
         splash.hookAllAfter("endAd") { param ->
@@ -37,6 +40,12 @@ class BaiduIMEHandler : IHook() {
         }
     }.onFailure {
         logE("doHookSplash: ", it)
+    }
+
+    private fun disableSplashAds(intent: Intent) {
+        intent.putExtra("is_no_ads", true)
+        // 13.3.23.25 使用 ad_mode=0 关闭首屏广告。
+        intent.putExtra("ad_mode", 0)
     }
 
     private fun hookContactSuggestion() = runCatching {
